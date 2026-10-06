@@ -3,6 +3,8 @@
 import { lazy } from "react";
 import { Route } from "react-router-dom";
 
+import PwaAwareLandingPage from "../pages/public/PwaAwareLandingPage";
+
 const AICreditCompletePage = lazy(() => import("../pages/public/AICreditCompletePage"));
 const AccountRegisterPage = lazy(() => import("../pages/public/AccountRegisterPage"));
 const ForgotPasswordPage = lazy(() => import("../pages/public/ForgotPasswordPage"));
@@ -13,7 +15,6 @@ const MaintenanceModePage = lazy(() => import("../pages/public/MaintenanceModePa
 const NetworkBlockedPage = lazy(() => import("../pages/public/NetworkBlockedPage"));
 const OTPValidationPage = lazy(() => import("../pages/public/otp_validationPage"));
 const PricingPage = lazy(() => import("../pages/public/PricingPage"));
-const PwaAwareLandingPage = lazy(() => import("../pages/public/PwaAwareLandingPage"));
 const RegisterPage = lazy(() => import("../pages/public/RegisterPage"));
 
 export const publicRoutes = (
