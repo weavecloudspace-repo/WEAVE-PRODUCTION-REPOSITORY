@@ -415,6 +415,7 @@ export function RecordList({
   canEdit,
   showDefaultEditAction = true,
   actions,
+  toolbar,
   listClassName,
   showInspector = true,
   loading = false,
@@ -451,6 +452,7 @@ export function RecordList({
 
   return (
     <WorkspacePanel title={title} description={description} actions={actions}>
+      {toolbar}
       <div className="mb-3 flex items-end gap-3">
         <Input label={`Search ${title}`} value={query} onChange={(event) => setQuery(event.target.value)} />
         <span className="shrink-0 pb-3 text-xs text-text-muted" role="status">{items.length} of {records.length}</span>
