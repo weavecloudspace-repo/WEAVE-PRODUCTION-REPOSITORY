@@ -890,37 +890,35 @@ export default function CurriculumWorkspace({ activeTab = "subjects" }) {
                 : "Curriculum"
             }
             description="The persistent level subject set used by teacher assignments, results, CBT, and report cards."
-            actions={
-              <div className="flex w-full min-w-0 flex-col gap-3 sm:w-72">
-                <div className="w-full min-w-0">{levelControl}</div>
-                {!editorOpen ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={loading || Boolean(loadError) || !curriculum}
-                      onClick={() => setEditorMode("elective-groups")}
-                    >
-                      Manage Elective Groups
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={loading || Boolean(loadError) || !curriculum}
-                      onClick={() => setEditorMode("copy")}
-                    >
-                      Copy curriculum
-                    </Button>
-                    <Button
-                      type="button"
-                      disabled={loading || Boolean(loadError) || !curriculum}
-                      onClick={() => setEditorMode("subject")}
-                    >
-                      Add subjects
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
+            actions={<div className="w-full min-w-0 sm:w-72">{levelControl}</div>}
+            toolbar={
+              !editorOpen ? (
+                <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-border/70 pb-4">
+                  <Button
+                    type="button"
+                    disabled={loading || Boolean(loadError) || !curriculum}
+                    onClick={() => setEditorMode("subject")}
+                  >
+                    Add subjects
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={loading || Boolean(loadError) || !curriculum}
+                    onClick={() => setEditorMode("copy")}
+                  >
+                    Copy curriculum
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={loading || Boolean(loadError) || !curriculum}
+                    onClick={() => setEditorMode("elective-groups")}
+                  >
+                    Manage Elective Groups
+                  </Button>
+                </div>
+              ) : null
             }
             loading={loading}
             error={loadError}
