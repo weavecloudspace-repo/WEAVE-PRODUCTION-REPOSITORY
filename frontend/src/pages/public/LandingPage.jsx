@@ -145,6 +145,9 @@ function LandingPage() {
           <img
             src={previewImage}
             alt="Weave dashboard preview"
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
             className="absolute inset-0 h-full w-full object-cover opacity-35"
           />
           <div className="absolute inset-0 bg-slate-950/70" />
