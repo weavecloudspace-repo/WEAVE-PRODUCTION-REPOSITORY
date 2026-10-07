@@ -192,6 +192,7 @@ class BulkResultLifecycleService:
         }[target]
 
         for result in results:
+            result_id = result.id
             try:
                 async with db.begin_nested():
                     StudentAcademicService._ensure_forward_result_transition(
@@ -229,7 +230,7 @@ class BulkResultLifecycleService:
                     )
                 processed += 1
             except Exception as exc:
-                skipped.append(BulkSkippedItem(id=result.id, reason=str(exc)))
+                skipped.append(BulkSkippedItem(id=result_id, reason=str(exc)))
 
         await db.commit()
         return BulkResultActionResponse(

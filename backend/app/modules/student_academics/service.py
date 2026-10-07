@@ -2546,6 +2546,21 @@ class StudentAcademicService:
         if not rows or any(score is None for _, score in rows):
             raise BadRequestException("Every configured assessment component is required.")
 
+        total_score = sum(
+            (score.score for _, score in rows if score is not None),
+            Decimal("0"),
+        )
+        scale = await StudentAcademicRepository.find_grade_for_score(
+            db, result.tenant_id, total_score
+        )
+        if scale is None:
+            raise ConflictException("An active grading scale must cover the final numeric score.")
+
+        result.total_score = total_score
+        result.grade = scale.grade
+        result.remark = scale.remark
+        result.grading_scale_id = scale.id
+
     @staticmethod
     def _apply_result_lifecycle_metadata(
         result: StudentSubjectResult,
