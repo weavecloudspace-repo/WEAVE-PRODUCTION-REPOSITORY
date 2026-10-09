@@ -331,14 +331,14 @@ def run_migrations_online() -> None:
     database_url = (settings.DATABASE_URL or "").replace("%", "%%")
     config.set_main_option("sqlalchemy.url", database_url)
 
-    def do_run_migrations(sync_connection: Any) -> None:
+    def do_run_migrations(sync_connection: Any, *, externally_managed: bool = False) -> None:
         # FK reflection opens an implicit read transaction. Close it before
         # Alembic begins its migration transaction so DDL is not rolled back when
         # the async connection context exits.
         database_fk_signatures, database_named_fk_signatures = _database_fk_signatures(
             sync_connection
         )
-        if sync_connection.in_transaction():
+        if not externally_managed and sync_connection.in_transaction():
             sync_connection.commit()
 
         _configure_context(
@@ -353,10 +353,10 @@ def run_migrations_online() -> None:
 
             # Persist both transactional DDL and the alembic_version update when
             # Alembic joins SQLAlchemy's implicit transaction on an async bridge.
-            if sync_connection.in_transaction():
+            if not externally_managed and sync_connection.in_transaction():
                 sync_connection.commit()
         except Exception:
-            if sync_connection.in_transaction():
+            if not externally_managed and sync_connection.in_transaction():
                 sync_connection.rollback()
             raise
 
@@ -372,6 +372,13 @@ def run_migrations_online() -> None:
             await connection.run_sync(do_run_migrations)
 
         await connectable.dispose()
+
+    # Railway's deployment runner owns this connection, transaction and advisory
+    # lock. Never commit or roll back a transaction managed by that caller.
+    provided_connection = config.attributes.get("connection")
+    if provided_connection is not None:
+        do_run_migrations(provided_connection, externally_managed=True)
+        return
 
     asyncio.run(run_async_migrations())
 
