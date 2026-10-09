@@ -12,7 +12,7 @@ from sqlalchemy import CheckConstraint
 from sqlalchemy.orm import configure_mappers
 
 import app.models  # noqa: F401
-from app.config.database_bootstrap import BASELINE_REVISION
+from app.config.schema_baseline import BASELINE_REVISION, BASELINE_TABLES
 from app.modules.student_academics.models import StudentProgressionRun
 from app.shared.base_model import Base
 
@@ -78,11 +78,12 @@ def test_alembic_has_one_current_schema_head_and_one_root_baseline() -> None:
     config = Config(str(backend_root / "alembic.ini"))
     script = ScriptDirectory.from_config(config)
 
-    assert script.get_heads() == [BASELINE_REVISION]
+    # Later migrations must not force changes to the immutable initial revision.
+    assert len(script.get_heads()) == 1
     head = script.get_revision(BASELINE_REVISION)
     assert head is not None
     assert head.down_revision is None
-    assert len(list(script.walk_revisions())) == 1
+    assert any(rev.revision == BASELINE_REVISION for rev in script.walk_revisions())
 
     roots = [
         revision
@@ -174,8 +175,7 @@ def test_frozen_baseline_emits_all_registered_tables_without_database_access() -
         baseline.module.upgrade()
     sql = output.getvalue()
     created_tables = set(re.findall(r"CREATE TABLE (?:public\.)?(\w+)", sql))
-    expected_tables = {table.name for table in Base.metadata.tables.values()}
-    assert created_tables == expected_tables
+    assert created_tables == BASELINE_TABLES
     assert "CREATE EXTENSION IF NOT EXISTS btree_gist" in sql
     assert "CREATE TRIGGER trg_comment_templates_no_distinct_range_overlap" in sql
     assert "'student_elective_selection'" in sql

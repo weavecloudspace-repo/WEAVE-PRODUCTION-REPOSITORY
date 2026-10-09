@@ -159,8 +159,14 @@ jobs:
       - name: Alembic history
         run: uv run --with alembic alembic history
 
-      - name: Upgrade fresh database
-        run: uv run --with alembic alembic upgrade head
+      - name: Migrate fresh database using deploy entrypoint
+        run: uv run python -m app.config.schema_migrations
+
+      - name: Repeat migration on versioned database
+        run: uv run python -m app.config.schema_migrations
+
+      - name: Verify Alembic revision after repeat deployment
+        run: uv run --with alembic alembic current --check-heads
 
       - name: Alembic drift check
         shell: bash
