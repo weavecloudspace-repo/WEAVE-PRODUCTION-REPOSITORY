@@ -67,8 +67,7 @@ async def upgrade_database(database_engine: AsyncEngine = engine) -> None:
             if missing:
                 raise RuntimeError(
                     "Versioned Weave database is missing frozen baseline tables; "
-                    "refusing automatic repair. Missing: "
-                    + ", ".join(sorted(missing)[:12])
+                    "refusing automatic repair. Missing: " + ", ".join(sorted(missing)[:12])
                 )
             revisions = await connection.run_sync(
                 lambda sync: MigrationContext.configure(
