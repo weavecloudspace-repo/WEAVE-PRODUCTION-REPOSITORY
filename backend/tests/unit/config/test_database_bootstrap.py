@@ -92,7 +92,11 @@ async def test_api_rejects_outdated_revision(monkeypatch) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "tables",
-    [lambda: {"alembic_version"}, lambda: _expected_tables(), lambda: {next(iter(_expected_tables()))}],
+    [
+        lambda: {"alembic_version"},
+        lambda: _expected_tables(),
+        lambda: {next(iter(_expected_tables()))},
+    ],
 )
 async def test_partial_or_unversioned_schema_is_rejected(tables) -> None:
     connection = _Connection(tables())
