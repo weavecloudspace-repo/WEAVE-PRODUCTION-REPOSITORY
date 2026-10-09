@@ -1,1 +1,42 @@
-Generic single-database configuration.
+Weave schema migrations
+=======================
+
+Alembic is the only supported schema creation and upgrade mechanism.
+The API never calls SQLAlchemy metadata.create_all() and never stamps revisions.
+The root revision 20260911_initial_schema is a frozen historical snapshot;
+do not edit or regenerate it from application models. Use a new Alembic
+revision for every subsequent schema change.
+
+Railway deployment
+------------------
+
+For the Weave API service in EACH environment (staging and production), set
+its Pre-Deploy Command to:
+
+    python -m app.config.schema_migrations
+
+The Railway root directory for these API services is /backend. The command
+runs in the backend container and uses the environment's DATABASE_URL.
+Normal API startup only verifies a complete, versioned schema at Alembic head.
+Missing migrations block readiness instead of silently repairing or stamping.
+
+The deployment entrypoint takes a PostgreSQL transaction-scoped advisory lock
+shared with the startup schema gate. It rejects partial/unversioned schemas,
+unknown Alembic revisions and missing frozen-baseline tables, runs 'upgrade
+head' on the locked connection, and checks for model/schema drift before
+committing. PostgreSQL DDL and revision updates remain in the same transaction.
+If migration or drift validation fails, the transaction rolls back and Railway
+must not start the new deployment. Existing API deployments can continue.
+
+Existing databases
+------------------
+
+Do not use 'alembic stamp' to adopt an existing database automatically. Before
+first activating the Railway command on a live environment, inspect its
+alembic_version row, actual schema, backup/recovery status, and service target.
+If it reports the historical root revision but has schema drift, stop and
+reconcile explicitly; the revision number alone does not prove equivalence.
+
+Run migrations in staging, verify health and CI, then promote the same
+code to master/production separately. Expand-and-contract migrations are
+required while previous and new API deployments may overlap.
