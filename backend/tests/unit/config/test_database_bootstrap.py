@@ -56,8 +56,7 @@ def test_fresh_database_detection_requires_no_tables_or_marker() -> None:
     assert classify_schema_state({"alembic_version"}, expected) is SchemaState.PARTIAL
     assert classify_schema_state(expected, expected) is SchemaState.PARTIAL
     assert (
-        classify_schema_state(expected | {"alembic_version"}, expected)
-        is SchemaState.INITIALIZED
+        classify_schema_state(expected | {"alembic_version"}, expected) is SchemaState.INITIALIZED
     )
 
 
