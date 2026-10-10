@@ -22,7 +22,7 @@ from app.core.exceptions import (
 )
 
 from app.modules.cbt.models import CBTPairingCode, CBTServer, CBTServerCredential
-from app.modules.cbt.dns.hostname import hostname_prefix
+from app.modules.cbt.dns.hostname import collision_label, hostname_prefix, school_label
 
 from app.modules.cbt.enums import CBTServerStatus
 from app.modules.cbt.pairing.schemas import (
@@ -302,11 +302,28 @@ class CBTPairingService:
         )
 
         server_id = uuid4()
+        # Freeze the school's DNS namespace on first pairing, even if its
+        # display name or tenant slug changes later.
+        dns_school_slug = await CBTServerRepository.get_school_dns_slug(
+            db, tenant_id=pairing_code.tenant_id
+        )
+        if dns_school_slug is None:
+            dns_school_slug = school_label(tenant.slug)
+            if await CBTServerRepository.dns_school_slug_owned_by_other(
+                db, school_slug=dns_school_slug, tenant_id=pairing_code.tenant_id
+            ):
+                dns_school_slug = f"{school_label(tenant.slug)[:54].strip('-')}-{tenant.id.hex[:8]}"
+        dns_prefix = hostname_prefix(normalized_server_name)
+        if await CBTServerRepository.dns_name_exists(
+            db, school_slug=dns_school_slug, server_label=dns_prefix
+        ):
+            dns_prefix = collision_label(normalized_server_name, server_id)
         server_record = CBTServer(
             id=server_id,
             tenant_id=pairing_code.tenant_id,
             name=normalized_server_name,
-            hostname_prefix=hostname_prefix(normalized_server_name, server_id),
+            hostname_prefix=dns_prefix,
+            dns_school_slug=dns_school_slug,
             paired_at=now,
             paired_by_admin_id=pairing_code.created_by_admin_id,
             client_version=payload.client_version,

@@ -23,6 +23,7 @@ async def test_revoked_server_name_does_not_block_reuse(
         tenant_id=tenant.id,
         name="Main Examination Server",
         paired_at=now,
+        dns_school_slug=tenant.slug,
         revoked_at=now,
     )
     old_server.id = uuid4()
@@ -48,6 +49,7 @@ async def test_non_revoked_server_name_still_blocks_duplicate(
         tenant_id=tenant.id,
         name="Science Lab Server",
         paired_at=datetime.now(timezone.utc),
+        dns_school_slug=tenant.slug,
     )
     server.id = uuid4()
     server.hostname_prefix = hostname_prefix(server.name, server.id)
