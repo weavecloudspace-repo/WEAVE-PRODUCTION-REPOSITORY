@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.core.exceptions import BadRequestException, ConflictException
+from app.modules.cbt.dns.hostname import hostname_for_server, hostname_prefix
 from app.modules.cbt.pairing.schemas import (
     CBT_SERVER_REVOKE_CONFIRMATION_LITERAL,
     PairingRequest,
@@ -101,6 +102,11 @@ async def test_pair_server_queues_correlated_event_for_code_creator(monkeypatch)
     server = SimpleNamespace(
         id=server_id,
         name="ICT CBT Lab",
+        hostname=hostname_for_server(
+            prefix=hostname_prefix("ICT CBT Lab", server_id),
+            school_slug="weave-school",
+            environment="staging",
+        ),
         paired_at=datetime.now(timezone.utc),
     )
     queued = []
@@ -117,10 +123,26 @@ async def test_pair_server_queues_correlated_event_for_code_creator(monkeypatch)
     monkeypatch.setattr(
         CBTPairingService,
         "_get_pairable_tenant",
-        AsyncMock(return_value=SimpleNamespace(id=tenant_id, school_name="Weave School")),
+        AsyncMock(
+            return_value=SimpleNamespace(
+                id=tenant_id, school_name="Weave School", slug="weave-school"
+            )
+        ),
     )
     monkeypatch.setattr(CBTPairingService, "_ensure_cbt_pairing_allowed", AsyncMock())
     monkeypatch.setattr(CBTPairingService, "_ensure_server_name_available", AsyncMock())
+    monkeypatch.setattr(
+        "app.modules.cbt.pairing.service.CBTServerRepository.get_school_dns_slug",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        "app.modules.cbt.pairing.service.CBTServerRepository.dns_school_slug_owned_by_other",
+        AsyncMock(return_value=False),
+    )
+    monkeypatch.setattr(
+        "app.modules.cbt.pairing.service.CBTServerRepository.dns_name_exists",
+        AsyncMock(return_value=False),
+    )
     monkeypatch.setattr(
         "app.modules.cbt.pairing.service.CBTServerRepository.create",
         AsyncMock(return_value=server),
@@ -142,6 +164,7 @@ async def test_pair_server_queues_correlated_event_for_code_creator(monkeypatch)
     )
 
     assert result.server_id == server_id
+    assert result.hostname == server.hostname
     assert queued == [
         {
             "event_type": "cbt.pairing.completed",

@@ -16,6 +16,7 @@ from app.core.exceptions import UnauthorizedException
 from app.core.rate_limits.auth_rate_limits import AuthRateLimitService
 from app.modules.cbt.auth.schemas import (
     AuthenticatedCBTServer,
+    CBTServerHostnameResponse,
     CBTActorRefreshRequest,
     CBTActorTokenPair,
     CBTStaffAuthResponse,
@@ -26,6 +27,8 @@ from app.modules.cbt.auth.service import (
     CBTStaffAuthService,
 )
 from app.modules.cbt.dependencies import CurrentCBTServer
+from app.modules.cbt.repository import CBTServerRepository
+from app.core.exceptions import NotFoundException
 
 
 router = APIRouter(
@@ -50,6 +53,19 @@ async def get_current_server(
     current_server: CurrentCBTServer,
 ) -> AuthenticatedCBTServer:
     return current_server
+
+
+@router.get("/server/hostname", response_model=CBTServerHostnameResponse)
+async def get_current_server_hostname(
+    db: DbSession, current_server: CurrentCBTServer
+) -> CBTServerHostnameResponse:
+    """No user-controlled tenant or server identifier is accepted."""
+    server = await CBTServerRepository.get_by_tenant_and_id(
+        db, tenant_id=current_server.tenant_id, server_id=current_server.server_id
+    )
+    if server is None:
+        raise NotFoundException(detail="CBT server not found")
+    return CBTServerHostnameResponse(server_id=server.id, hostname=server.hostname)
 
 
 @router.post(

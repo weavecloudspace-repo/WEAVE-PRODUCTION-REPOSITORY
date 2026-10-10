@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import Button from "./Button";
 import { cn } from "../../utils/cn";
+import { modalWidthClass } from "../../utils/modalSizing";
 
 const MODAL_LOCKS_KEY = "__weaveModalScrollLocks";
 const MODAL_LOCK_COUNT_KEY = "__weaveModalLockCount";
@@ -231,7 +232,8 @@ function Modal({
         aria-modal="true"
         tabIndex={-1}
         className={cn(
-          "flex min-h-0 w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-surface animate-fadein",
+          "flex min-h-0 min-w-0 w-full flex-col overflow-hidden rounded-2xl border border-border bg-surface animate-fadein",
+          modalWidthClass(className),
           bottomPlacement
             ? "max-h-[min(90dvh,100%)] rounded-b-none border-b-0 shadow-none sm:max-h-full sm:rounded-2xl sm:border-b sm:shadow-premium"
             : "max-h-[min(82dvh,calc(100%_-_1rem))] shadow-premium sm:max-h-[min(90dvh,100%)]",

@@ -30,6 +30,15 @@ class AuthenticatedCBTServer(BaseModel):
     status: CBTServerStatus
 
 
+class CBTServerHostnameResponse(BaseModel):
+    """Public DNS hostname belonging to the authenticated CBT machine."""
+
+    model_config = ConfigDict(frozen=True)
+
+    server_id: UUID
+    hostname: str
+
+
 class CBTStaffLoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
