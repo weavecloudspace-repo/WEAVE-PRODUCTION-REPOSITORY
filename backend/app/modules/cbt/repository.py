@@ -98,9 +98,7 @@ class CBTServerRepository:
         )
 
     @staticmethod
-    async def dns_name_exists(
-        db: AsyncSession, *, school_slug: str, server_label: str
-    ) -> bool:
+    async def dns_name_exists(db: AsyncSession, *, school_slug: str, server_label: str) -> bool:
         return (
             await db.scalar(
                 select(CBTServer.id)

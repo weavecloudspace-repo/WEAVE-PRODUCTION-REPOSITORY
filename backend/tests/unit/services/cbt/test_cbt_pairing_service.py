@@ -124,7 +124,9 @@ async def test_pair_server_queues_correlated_event_for_code_creator(monkeypatch)
         CBTPairingService,
         "_get_pairable_tenant",
         AsyncMock(
-            return_value=SimpleNamespace(id=tenant_id, school_name="Weave School", slug="weave-school")
+            return_value=SimpleNamespace(
+                id=tenant_id, school_name="Weave School", slug="weave-school"
+            )
         ),
     )
     monkeypatch.setattr(CBTPairingService, "_ensure_cbt_pairing_allowed", AsyncMock())

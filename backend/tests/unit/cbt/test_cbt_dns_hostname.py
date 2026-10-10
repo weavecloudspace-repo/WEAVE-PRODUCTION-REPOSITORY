@@ -22,9 +22,7 @@ def test_readable_hostname_and_production_env_alias() -> None:
     prod = hostname_for_server(prefix=prefix, school_slug=school, environment="prod")
     assert staging == "main-cbt-server.greenfield-lagos.cbt-staging.weavecloudspace.com"
     assert prod == "main-cbt-server.greenfield-lagos.cbt.weavecloudspace.com"
-    assert prod == hostname_for_server(
-        prefix=prefix, school_slug=school, environment="production"
-    )
+    assert prod == hostname_for_server(prefix=prefix, school_slug=school, environment="production")
     assert challenge_record_name(staging) == (
         "_acme-challenge.main-cbt-server.greenfield-lagos.cbt-staging"
     )
