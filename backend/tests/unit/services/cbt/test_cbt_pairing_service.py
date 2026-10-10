@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.core.exceptions import BadRequestException, ConflictException
+from app.modules.cbt.dns.hostname import hostname_for_server, hostname_prefix
 from app.modules.cbt.pairing.schemas import (
     CBT_SERVER_REVOKE_CONFIRMATION_LITERAL,
     PairingRequest,
@@ -101,6 +102,11 @@ async def test_pair_server_queues_correlated_event_for_code_creator(monkeypatch)
     server = SimpleNamespace(
         id=server_id,
         name="ICT CBT Lab",
+        hostname=hostname_for_server(
+            prefix=hostname_prefix("ICT CBT Lab", server_id),
+            tenant_id=tenant_id,
+            environment="staging",
+        ),
         paired_at=datetime.now(timezone.utc),
     )
     queued = []
@@ -142,6 +148,7 @@ async def test_pair_server_queues_correlated_event_for_code_creator(monkeypatch)
     )
 
     assert result.server_id == server_id
+    assert result.hostname == server.hostname
     assert queued == [
         {
             "event_type": "cbt.pairing.completed",
