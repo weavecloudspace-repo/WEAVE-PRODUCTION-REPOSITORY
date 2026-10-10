@@ -37,6 +37,7 @@ from app.modules.cbt.ai.router import router as cbt_ai_router
 from app.modules.cbt.auth.router import router as cbt_auth_router
 from app.modules.cbt.branding.router import router as cbt_branding_router
 from app.modules.cbt.pairing.router import router as cbt_pairing_router
+from app.modules.cbt.dns.router import router as cbt_dns_router
 from app.modules.cbt.results.router import (
     router as cbt_results_router,
     superadmin_router as cbt_result_superadmin_router,
@@ -294,6 +295,7 @@ def create_app() -> FastAPI:
     app.include_router(student_attendance_router, prefix=API_V1_PREFIX)
     app.include_router(parent_attendance_router, prefix=API_V1_PREFIX)
     app.include_router(cbt_pairing_router, prefix=f"{API_V1_PREFIX}/cbt")
+app.include_router(cbt_dns_router, prefix=f"{API_V1_PREFIX}/cbt")
     app.include_router(cbt_auth_router, prefix=f"{API_V1_PREFIX}/cbt")
     app.include_router(cbt_ai_router, prefix=f"{API_V1_PREFIX}/cbt")
     app.include_router(cbt_academics_router, prefix=f"{API_V1_PREFIX}/cbt")

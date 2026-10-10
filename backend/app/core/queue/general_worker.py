@@ -20,6 +20,7 @@ from app.core.queue.arq import (  # noqa: E402
     get_arq_redis_settings,
 )
 from app.modules.attendance.repository import AttendanceRepository  # noqa: E402
+from app.modules.cbt.dns.service import CBTDNSChallengeService  # noqa: E402
 from app.modules.email_outbox.worker import process_email_outbox_batch  # noqa: E402
 from app.modules.subscriptions.service import (  # noqa: E402
     SubscriptionLifecycleService,
@@ -92,6 +93,17 @@ async def poll_subscription_lifecycle(ctx: dict[str, Any]) -> dict[str, int]:
     return await process_subscription_lifecycle_job(ctx)
 
 
+@capture_worker_exceptions(queue_name=GENERAL_QUEUE_NAME)
+async def poll_cbt_dns_cleanup(ctx: dict[str, Any]) -> dict[str, int]:
+    """Remove expired Bunny TXT challenges using the existing shared worker."""
+
+    _ = ctx
+    async with AsyncSessionLocal() as db:
+        result = await CBTDNSChallengeService.cleanup_expired(db)
+        await db.commit()
+    return result
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     """Initialize optional monitoring for this worker process."""
 
@@ -139,6 +151,14 @@ class WorkerSettings:
             run_at_startup=False,
             unique=True,
             timeout=300,
+            max_tries=1,
+        ),
+        cron(
+            poll_cbt_dns_cleanup,
+            minute={2, 12, 22, 32, 42, 52},
+            run_at_startup=False,
+            unique=True,
+            timeout=200,
             max_tries=1,
         ),
         cron(
