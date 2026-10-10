@@ -122,6 +122,7 @@ async def test_revoke_active_for_server_does_not_cross_tenant_boundaries(
         tenant_id=tenant.id,
         name="Main Lab CBT",
         paired_at=now,
+        dns_school_slug=tenant.slug,
     )
     server.id = uuid4()
     server.hostname_prefix = hostname_prefix(server.name, server.id)
@@ -168,6 +169,7 @@ async def test_get_by_tenant_and_id_returns_none_for_other_tenant(
         tenant_id=tenant.id,
         name="Science Hall CBT",
         paired_at=datetime.now(timezone.utc),
+        dns_school_slug=tenant.slug,
     )
     server.id = uuid4()
     server.hostname_prefix = hostname_prefix(server.name, server.id)
@@ -191,6 +193,7 @@ async def test_get_by_tenant_and_normalized_name_matches_case_and_whitespace_var
         tenant_id=tenant.id,
         name="Main   CBT   Lab",
         paired_at=datetime.now(timezone.utc),
+        dns_school_slug=tenant.slug,
     )
     server.id = uuid4()
     server.hostname_prefix = hostname_prefix(server.name, server.id)
