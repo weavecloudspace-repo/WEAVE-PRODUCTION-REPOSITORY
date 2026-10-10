@@ -38,9 +38,7 @@ async def test_bunny_delete_uses_only_owned_record_id() -> None:
         seen.append(request)
         return httpx.Response(204)
 
-    client = BunnyDNSClient(
-        api_key="fake", zone_id=1234, transport=httpx.MockTransport(handle)
-    )
+    client = BunnyDNSClient(api_key="fake", zone_id=1234, transport=httpx.MockTransport(handle))
     await client.delete_txt(record_id=31415)
     assert seen[0].method == "DELETE"
     assert seen[0].url.path == "/dnszone/1234/records/31415"

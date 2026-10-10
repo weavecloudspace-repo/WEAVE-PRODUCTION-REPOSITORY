@@ -11,7 +11,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
-from app.core.exceptions import AppException, ConflictException, ForbiddenException, NotFoundException
+from app.core.exceptions import (
+    AppException,
+    ConflictException,
+    ForbiddenException,
+    NotFoundException,
+)
 from app.modules.cbt.auth.schemas import AuthenticatedCBTServer
 from app.modules.cbt.dns.bunny import BunnyDNSClient, BunnyDNSUnavailable
 from app.modules.cbt.dns.hostname import challenge_record_name
@@ -46,8 +51,10 @@ def _provider_error() -> AppException:
 def _response(challenge: CBTDNSChallenge, hostname: str) -> DNSChallengeResponse:
     now = datetime.now(timezone.utc)
     state = (
-        "removed" if challenge.removed_at is not None
-        else "expired" if challenge.expires_at <= now
+        "removed"
+        if challenge.removed_at is not None
+        else "expired"
+        if challenge.expires_at <= now
         else "created"
     )
     return DNSChallengeResponse(
@@ -80,9 +87,16 @@ class CBTDNSChallengeService:
     @staticmethod
     async def _server(db: AsyncSession, actor: AuthenticatedCBTServer, *, lock: bool = False):
         server = await CBTServerRepository.get_by_tenant_and_id(
-            db, tenant_id=actor.tenant_id, server_id=actor.server_id, lock=lock,
+            db,
+            tenant_id=actor.tenant_id,
+            server_id=actor.server_id,
+            lock=lock,
         )
-        if server is None or server.status != CBTServerStatus.ACTIVE or server.revoked_at is not None:
+        if (
+            server is None
+            or server.status != CBTServerStatus.ACTIVE
+            or server.revoked_at is not None
+        ):
             raise ForbiddenException(detail="CBT server is not active")
         return server
 
@@ -130,7 +144,9 @@ class CBTDNSChallengeService:
         client = _provider()
         try:
             record_id = await client.create_txt(
-                name=name, value=payload.value, request_id=str(payload.request_id),
+                name=name,
+                value=payload.value,
+                request_id=str(payload.request_id),
             )
         except BunnyDNSUnavailable:
             raise _provider_error() from None
@@ -165,9 +181,7 @@ class CBTDNSChallengeService:
         return _response(challenge, server.hostname)
 
     @staticmethod
-    async def remove(
-        db: AsyncSession, actor: AuthenticatedCBTServer, challenge_id: UUID
-    ) -> None:
+    async def remove(db: AsyncSession, actor: AuthenticatedCBTServer, challenge_id: UUID) -> None:
         await CBTDNSChallengeService._server(db, actor)
         challenge = await CBTDNSChallengeService._owned(db, actor, challenge_id, lock=True)
         if challenge.removed_at is not None:
@@ -183,14 +197,18 @@ class CBTDNSChallengeService:
     async def cleanup_expired(db: AsyncSession, *, limit: int = 50) -> dict[str, int]:
         now = datetime.now(timezone.utc)
         rows = (
-            await db.execute(
-                select(CBTDNSChallenge)
-                .where(CBTDNSChallenge.removed_at.is_(None), CBTDNSChallenge.expires_at <= now)
-                .order_by(CBTDNSChallenge.expires_at)
-                .limit(limit)
-                .with_for_update(skip_locked=True)
+            (
+                await db.execute(
+                    select(CBTDNSChallenge)
+                    .where(CBTDNSChallenge.removed_at.is_(None), CBTDNSChallenge.expires_at <= now)
+                    .order_by(CBTDNSChallenge.expires_at)
+                    .limit(limit)
+                    .with_for_update(skip_locked=True)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if not rows:
             return {"removed": 0, "failed": 0}
         client = _provider()

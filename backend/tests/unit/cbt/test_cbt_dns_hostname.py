@@ -37,9 +37,7 @@ def test_same_server_name_in_different_schools_cannot_collide() -> None:
     prefix = hostname_prefix("Computer Lab", uuid4())
     assert hostname_for_server(
         prefix=prefix, tenant_id=uuid4(), environment="staging"
-    ) != hostname_for_server(
-        prefix=prefix, tenant_id=uuid4(), environment="staging"
-    )
+    ) != hostname_for_server(prefix=prefix, tenant_id=uuid4(), environment="staging")
 
 
 def test_dns_labels_are_bounded_and_punctuation_is_normalized() -> None:

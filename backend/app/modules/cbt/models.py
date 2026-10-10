@@ -47,6 +47,7 @@ class CBTServer(BaseModel):
             tenant_id=self.tenant_id,
             environment=settings.ENV.value,
         )
+
     status: Mapped[CBTServerStatus] = mapped_column(
         SQLEnum(
             CBTServerStatus,
@@ -174,6 +175,10 @@ class CBTDNSChallenge(BaseModel):
 
     __table_args__ = (
         UniqueConstraint("server_id", "request_id", name="uq_cbt_dns_challenges_server_request"),
-        Index("ix_cbt_dns_challenges_expiry", "expires_at", postgresql_where=text("removed_at IS NULL")),
+        Index(
+            "ix_cbt_dns_challenges_expiry",
+            "expires_at",
+            postgresql_where=text("removed_at IS NULL"),
+        ),
         Index("ix_cbt_dns_challenges_tenant_server", "tenant_id", "server_id"),
     )

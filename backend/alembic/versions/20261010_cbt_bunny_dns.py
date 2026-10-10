@@ -26,7 +26,9 @@ def _server_label(name: str, server_id: object) -> str:
 
 
 def upgrade() -> None:
-    op.add_column("cbt_servers", sa.Column("hostname_prefix", sa.String(63), nullable=True), schema="public")
+    op.add_column(
+        "cbt_servers", sa.Column("hostname_prefix", sa.String(63), nullable=True), schema="public"
+    )
     conn = op.get_bind()
     existing = conn.execute(sa.text("SELECT id, name FROM public.cbt_servers")).all()
     for server_id, name in existing:
@@ -47,8 +49,12 @@ def upgrade() -> None:
         sa.Column("removed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("tenant_id", sa.UUID(), nullable=False),
         sa.Column("id", sa.UUID(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["server_id"], ["public.cbt_servers.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["tenant_id"], ["public.tenants.id"]),
         sa.PrimaryKeyConstraint("id"),
@@ -74,7 +80,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_cbt_dns_challenges_tenant_server", table_name="cbt_dns_challenges", schema="public")
+    op.drop_index(
+        "ix_cbt_dns_challenges_tenant_server", table_name="cbt_dns_challenges", schema="public"
+    )
     op.drop_index("ix_cbt_dns_challenges_expiry", table_name="cbt_dns_challenges", schema="public")
     op.drop_table("cbt_dns_challenges", schema="public")
     op.drop_column("cbt_servers", "hostname_prefix", schema="public")
