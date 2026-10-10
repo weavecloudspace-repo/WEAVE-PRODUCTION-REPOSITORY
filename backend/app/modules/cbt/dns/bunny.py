@@ -23,7 +23,9 @@ class BunnyDNSClient:
         self._zone_id = zone_id
         self._transport = transport
 
-    async def _request(self, method: str, path: str, **kwargs: object) -> httpx.Response:
+    async def _request(
+        self, method: str, path: str, *, json: dict[str, object] | None = None
+    ) -> httpx.Response:
         try:
             async with httpx.AsyncClient(
                 base_url="https://api.bunny.net",
@@ -34,9 +36,9 @@ class BunnyDNSClient:
                     method,
                     path,
                     headers={"AccessKey": self._key},
-                    **kwargs,
+                    json=json,
                 )
-        except httpx.HTTPError as exc:
+        except httpx.HTTPError:
             raise BunnyDNSUnavailable("Bunny DNS request unavailable") from None
         return response
 
