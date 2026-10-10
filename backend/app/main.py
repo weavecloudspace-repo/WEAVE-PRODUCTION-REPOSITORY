@@ -295,7 +295,7 @@ def create_app() -> FastAPI:
     app.include_router(student_attendance_router, prefix=API_V1_PREFIX)
     app.include_router(parent_attendance_router, prefix=API_V1_PREFIX)
     app.include_router(cbt_pairing_router, prefix=f"{API_V1_PREFIX}/cbt")
-app.include_router(cbt_dns_router, prefix=f"{API_V1_PREFIX}/cbt")
+    app.include_router(cbt_dns_router, prefix=f"{API_V1_PREFIX}/cbt")
     app.include_router(cbt_auth_router, prefix=f"{API_V1_PREFIX}/cbt")
     app.include_router(cbt_ai_router, prefix=f"{API_V1_PREFIX}/cbt")
     app.include_router(cbt_academics_router, prefix=f"{API_V1_PREFIX}/cbt")
