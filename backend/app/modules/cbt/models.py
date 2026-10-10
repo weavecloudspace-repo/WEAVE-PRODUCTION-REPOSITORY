@@ -36,6 +36,7 @@ class CBTServer(BaseModel):
 
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     hostname_prefix: Mapped[str] = mapped_column(String(63), nullable=False)
+    dns_school_slug: Mapped[str] = mapped_column(String(63), nullable=False)
 
     @property
     def hostname(self) -> str:
@@ -44,7 +45,7 @@ class CBTServer(BaseModel):
 
         return hostname_for_server(
             prefix=self.hostname_prefix,
-            tenant_id=self.tenant_id,
+            school_slug=self.dns_school_slug,
             environment=settings.ENV.value,
         )
 
@@ -80,6 +81,7 @@ class CBTServer(BaseModel):
     __table_args__ = (
         Index("ix_cbt_servers_tenant_status", "tenant_id", "status"),
         Index("ix_cbt_servers_tenant_last_seen", "tenant_id", "last_seen_at"),
+        UniqueConstraint("dns_school_slug", "hostname_prefix", name="uq_cbt_servers_dns_hostname"),
         Index(
             "uq_cbt_servers_tenant_normalized_name",
             "tenant_id",
