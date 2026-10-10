@@ -14,6 +14,8 @@ from sqlalchemy import (
     Enum as SQLEnum,
     ForeignKey,
     Index,
+    BigInteger,
+    UniqueConstraint,
     func,
     String,
     Text,
@@ -33,6 +35,18 @@ class CBTServer(BaseModel):
     __tablename__ = "cbt_servers"
 
     name: Mapped[str] = mapped_column(String(150), nullable=False)
+    hostname_prefix: Mapped[str] = mapped_column(String(63), nullable=False)
+
+    @property
+    def hostname(self) -> str:
+        from app.config.settings import settings
+        from app.modules.cbt.dns.hostname import hostname_for_server
+
+        return hostname_for_server(
+            prefix=self.hostname_prefix,
+            tenant_id=self.tenant_id,
+            environment=settings.ENV.value,
+        )
     status: Mapped[CBTServerStatus] = mapped_column(
         SQLEnum(
             CBTServerStatus,
@@ -138,4 +152,28 @@ class CBTPairingCode(BaseModel):
             "expires_at",
             postgresql_where=text("used_at IS NULL AND invalidated_at IS NULL"),
         ),
+    )
+
+
+class CBTDNSChallenge(BaseModel):
+    """Provider-owned TXT record for one authenticated server's ACME DNS-01 challenge."""
+
+    __tablename__ = "cbt_dns_challenges"
+
+    server_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(f"{PUBLIC_SCHEMA}.cbt_servers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    request_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    fqdn: Mapped[str] = mapped_column(String(253), nullable=False)
+    value_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider_record_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("server_id", "request_id", name="uq_cbt_dns_challenges_server_request"),
+        Index("ix_cbt_dns_challenges_expiry", "expires_at", postgresql_where=text("removed_at IS NULL")),
+        Index("ix_cbt_dns_challenges_tenant_server", "tenant_id", "server_id"),
     )

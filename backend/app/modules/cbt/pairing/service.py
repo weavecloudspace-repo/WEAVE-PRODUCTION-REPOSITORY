@@ -9,7 +9,7 @@ Business logic for pairing local CBT servers with Weave tenants
 from __future__ import annotations
 import re
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +22,7 @@ from app.core.exceptions import (
 )
 
 from app.modules.cbt.models import CBTPairingCode, CBTServer, CBTServerCredential
+from app.modules.cbt.dns.hostname import hostname_prefix
 
 from app.modules.cbt.enums import CBTServerStatus
 from app.modules.cbt.pairing.schemas import (
@@ -300,9 +301,12 @@ class CBTPairingService:
             normalized_name=normalized_server_name,
         )
 
+        server_id = uuid4()
         server_record = CBTServer(
+            id=server_id,
             tenant_id=pairing_code.tenant_id,
             name=normalized_server_name,
+            hostname_prefix=hostname_prefix(normalized_server_name, server_id),
             paired_at=now,
             paired_by_admin_id=pairing_code.created_by_admin_id,
             client_version=payload.client_version,
@@ -337,6 +341,7 @@ class CBTPairingService:
             server_id=server.id,
             server_credential=raw_server_credential,
             server_name=server.name,
+            hostname=server.hostname,
             tenant=TenantInfo(id=tenant.id, name=tenant.school_name),
             paired_at=server.paired_at,
         )

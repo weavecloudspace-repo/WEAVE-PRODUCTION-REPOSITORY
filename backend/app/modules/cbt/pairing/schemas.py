@@ -96,6 +96,7 @@ class PairingResult(BaseModel):
     server_id: UUID
     server_credential: str
     server_name: str
+    hostname: str
     tenant: TenantInfo
     paired_at: datetime
 
@@ -108,6 +109,7 @@ class CBTServerResponse(BaseModel):
     id: UUID
     tenant_id: UUID
     name: str
+    hostname: str
     status: CBTServerStatus
     paired_at: datetime
     paired_by_admin_id: UUID | None
