@@ -53,6 +53,7 @@ without the CBT-side implementation and LAN DNS.
 ## Deployment safeguards
 
 - Rotate any key previously shared in chat before configuring Railway.
+- The client verifies the zone ID resolves to weavecloudspace.com before each write.
 - Verify the correct zone ID before enabling either environment.
 - Run Alembic migrations before the new code starts.
 - Run a live staging record creation, public DNS TXT lookup, deletion, and

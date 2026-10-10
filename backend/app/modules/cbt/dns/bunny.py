@@ -42,7 +42,19 @@ class BunnyDNSClient:
             raise BunnyDNSUnavailable("Bunny DNS request unavailable") from None
         return response
 
+    async def _assert_expected_zone(self) -> None:
+        response = await self._request("GET", f"/dnszone/{self._zone_id}")
+        if response.status_code != 200:
+            raise BunnyDNSUnavailable("Bunny DNS zone lookup failed")
+        try:
+            domain = response.json()["Domain"]
+        except (ValueError, TypeError, KeyError, AttributeError):
+            raise BunnyDNSUnavailable("Bunny DNS returned an invalid zone") from None
+        if not isinstance(domain, str) or domain.lower().rstrip(".") != "weavecloudspace.com":
+            raise BunnyDNSUnavailable("Bunny DNS zone does not match WEAVE domain")
+
     async def create_txt(self, *, name: str, value: str, request_id: str) -> int:
+        await self._assert_expected_zone()
         response = await self._request(
             "PUT",
             f"/dnszone/{self._zone_id}/records",
@@ -65,6 +77,7 @@ class BunnyDNSClient:
         return record_id
 
     async def delete_txt(self, *, record_id: int) -> None:
+        await self._assert_expected_zone()
         response = await self._request(
             "DELETE",
             f"/dnszone/{self._zone_id}/records/{record_id}",
