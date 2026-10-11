@@ -34,6 +34,7 @@ def _row(*, active: bool = True, elective: bool = False):
         curriculum_id=uuid4(),
         subject_id=uuid4(),
         is_elective=elective,
+        elective_group_id=uuid4() if elective else None,
         is_active=active,
         created_at=now,
         updated_at=now,
@@ -157,8 +158,10 @@ async def test_live_dependencies_block_curriculum_subject_deactivation() -> None
 
 
 @pytest.mark.asyncio
-async def test_historical_only_dependencies_allow_curriculum_subject_deactivation() -> None:
-    row = _row()
+@pytest.mark.parametrize("elective", [False, True])
+async def test_historical_only_dependencies_allow_curriculum_subject_deactivation(elective) -> None:
+    row = _row(elective=elective)
+    original_group_id = row.elective_group_id
     db = AsyncMock()
     with (
         patch(
@@ -192,9 +195,39 @@ async def test_historical_only_dependencies_allow_curriculum_subject_deactivatio
 
     assert response.is_active is False
     assert row.is_active is False
+    assert row.elective_group_id == original_group_id
     write_guard.assert_awaited_once_with(db, tenant_id=row.tenant_id)
     save.assert_awaited_once_with(db, row)
     db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_ungrouped_elective_cannot_be_deactivated() -> None:
+    row = _row(elective=True)
+    row.elective_group_id = None
+    db = AsyncMock()
+    with (
+        patch(
+            "app.modules.student_academics.curriculum_v2_service.ensure_academic_write_window",
+            new=AsyncMock(),
+        ),
+        patch.object(
+            AcademicCurriculumService,
+            "_curriculum_subject_context",
+            new=AsyncMock(return_value=_context(row)),
+        ) as context,
+        patch.object(CurriculumSubjectRepository, "save", new=AsyncMock()) as save,
+    ):
+        with pytest.raises(ConflictException, match="Assign an elective group"):
+            await AcademicCurriculumService.deactivate_subject(db, row.tenant_id, row.id)
+
+    assert row.is_active is True
+    assert row.elective_group_id is None
+    context.assert_awaited_once_with(
+        db, row.tenant_id, row.id, lock=True, require_active_level=True
+    )
+    save.assert_not_awaited()
+    db.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
