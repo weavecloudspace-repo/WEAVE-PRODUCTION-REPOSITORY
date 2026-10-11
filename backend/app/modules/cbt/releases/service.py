@@ -18,9 +18,7 @@ _RELEASE_REPOSITORY = "weavecloudspace-repo/WEAVE-CBT-PRODUCTION-REPOSITORY"
 _RELEASE_API_URL = f"https://api.github.com/repos/{_RELEASE_REPOSITORY}/releases"
 _RELEASE_BASE_URL = f"https://github.com/{_RELEASE_REPOSITORY}/releases/download"
 _IMAGE_REPOSITORY = "ghcr.io/weavecloudspace-repo/weave-cbt-production-repository"
-_IMAGE_REFERENCE_PATTERN = re.compile(
-    rf"^{re.escape(_IMAGE_REPOSITORY)}@sha256:[0-9a-f]{{64}}$"
-)
+_IMAGE_REFERENCE_PATTERN = re.compile(rf"^{re.escape(_IMAGE_REPOSITORY)}@sha256:[0-9a-f]{{64}}$")
 _RELEASE_TAGS = {
     "production": re.compile(r"^v1\.0\.\d+$"),
     "staging": re.compile(r"^staging-1\.0\.\d+$"),
@@ -194,9 +192,7 @@ class CBTReleaseService:
             raise CBTReleaseUnavailableError("The immutable CBT image is not identified.")
         image = pinned.group(1)
         source_commit = metadata.get("target_commitish")
-        if not isinstance(source_commit, str) or not re.fullmatch(
-            r"[0-9a-f]{40}", source_commit
-        ):
+        if not isinstance(source_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", source_commit):
             raise CBTReleaseUnavailableError("The release source commit is not pinned.")
 
         packages = [
@@ -234,9 +230,7 @@ class CBTReleaseService:
         return release
 
     @staticmethod
-    def _validate_release(
-        *, channel: str, tag: str, release: CBTReleaseResponse
-    ) -> None:
+    def _validate_release(*, channel: str, tag: str, release: CBTReleaseResponse) -> None:
         if release.channel != channel or not _RELEASE_TAGS[channel].fullmatch(tag):
             raise CBTReleaseUnavailableError(
                 "The published WEAVE CBT installer does not match this environment."
