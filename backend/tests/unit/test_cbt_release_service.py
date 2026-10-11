@@ -16,27 +16,29 @@ import app.modules.cbt.releases.service as release_service_module
 
 DIGEST = "a" * 64
 COMMIT = "b" * 40
-IMAGE = (
-    "ghcr.io/weavecloudspace-repo/weave-cbt-production-repository@sha256:" + DIGEST
-)
+IMAGE = "ghcr.io/weavecloudspace-repo/weave-cbt-production-repository@sha256:" + DIGEST
 
 
 def release_metadata(channel="staging"):
     tag = "staging-1.0.1512" if channel == "staging" else "v1.0.1512"
     assets = []
     for _, _, name in _PACKAGE_NAMES[channel]:
-        assets.append({
-            "name": name,
+        assets.append(
+            {
+                "name": name,
+                "state": "uploaded",
+                "size": 1024,
+                "browser_download_url": CBTReleaseService._asset_url(tag, name),
+            }
+        )
+    assets.append(
+        {
+            "name": "SHA256SUMS",
             "state": "uploaded",
-            "size": 1024,
-            "browser_download_url": CBTReleaseService._asset_url(tag, name),
-        })
-    assets.append({
-        "name": "SHA256SUMS",
-        "state": "uploaded",
-        "size": 512,
-        "browser_download_url": CBTReleaseService._asset_url(tag, "SHA256SUMS"),
-    })
+            "size": 512,
+            "browser_download_url": CBTReleaseService._asset_url(tag, "SHA256SUMS"),
+        }
+    )
     return {
         "tag_name": tag,
         "draft": False,
@@ -60,8 +62,10 @@ def test_published_release_builds_four_packages(channel):
     assert release.source_commit == COMMIT
     assert release.installer_url == release.packages[0].url
     assert {(p.platform, p.kind) for p in release.packages} == {
-        ("windows", "desktop"), ("windows", "cli"),
-        ("linux", "desktop"), ("linux", "cli"),
+        ("windows", "desktop"),
+        ("windows", "cli"),
+        ("linux", "desktop"),
+        ("linux", "cli"),
     }
     assert release.release_url.host == "github.com"
     assert _RELEASE_REPOSITORY in str(release.release_url)
@@ -74,7 +78,9 @@ def test_release_channel_matches_weave_environment(monkeypatch):
         (EnvironmentType.DEVELOPMENT, "staging"),
     ]:
         monkeypatch.setattr(
-            release_service_module, "settings", SimpleNamespace(ENV=env),
+            release_service_module,
+            "settings",
+            SimpleNamespace(ENV=env),
         )
         assert CBTReleaseService.channel_for_environment() == expected
 
@@ -83,7 +89,9 @@ def test_wrong_repository_or_channel_asset_url_is_rejected():
     metadata = release_metadata()
     metadata["assets"][0]["browser_download_url"] = (
         "https://github.com/untrusted/repository/releases/download/"
-        + metadata["tag_name"] + "/" + metadata["assets"][0]["name"]
+        + metadata["tag_name"]
+        + "/"
+        + metadata["assets"][0]["name"]
     )
     with pytest.raises(CBTReleaseUnavailableError, match="URL"):
         CBTReleaseService._build_release("staging", metadata, checksums())
@@ -137,7 +145,9 @@ def test_checksum_parser_rejects_malformed_duplicate_and_empty_data():
         DIGEST + "  WEAVE-CBT-Staging-Desktop-Setup.exe\n"
     )["WEAVE-CBT-Staging-Desktop-Setup.exe"] == DIGEST
     for bad in (
-        "", "not-a-checksum", DIGEST + "  ../traversal.exe",
+        "",
+        "not-a-checksum",
+        DIGEST + "  ../traversal.exe",
         DIGEST + "  file.exe\n" + DIGEST + "  file.exe",
     ):
         with pytest.raises(CBTReleaseUnavailableError):
