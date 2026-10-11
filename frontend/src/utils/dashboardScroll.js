@@ -1,5 +1,15 @@
 const DEFAULT_NATURAL_SCROLL_DURATION_MS = 520;
 
+export function shouldResetDashboardScroll(previousLocation, nextLocation) {
+  // Documentation owns topic, command-group, and section navigation.
+  if (nextLocation.pathname === "/admin/cbt/documentation") {
+    if (previousLocation?.pathname === nextLocation.pathname || nextLocation.hash) return false;
+  }
+  return !previousLocation
+    || previousLocation.pathname !== nextLocation.pathname
+    || previousLocation.search !== nextLocation.search;
+}
+
 function easeOutCubic(progress) {
   return 1 - Math.pow(1 - progress, 3);
 }

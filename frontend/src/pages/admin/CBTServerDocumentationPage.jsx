@@ -3,7 +3,7 @@ import {
 Info, Laptop, Link2, Monitor, Network, RefreshCcw, Rocket,
   Search, ShieldCheck, Terminal, Wrench, X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import PlatformLogo from "../../features/cbt/PlatformLogo";
@@ -149,9 +149,10 @@ export default function CBTServerDocumentationPage() {
   const visibleSections = topic.id === "cli"
     ? topic.sections.filter((section) => section.commandGroupId === selectedGroup.id || (selectedGroup.id === "diagnostics" && section.id === "cli-intro"))
     : topic.sections;
-  const previousTarget = useRef(topic.id + selectedGroup.id + location.hash);
+  const previousTarget = useRef({ contentKey: topic.id + selectedGroup.id, hash: location.hash });
   const [query, setQuery] = useState("");
   const [mobileNav, setMobileNav] = useState(false);
+  const [cliNavExpanded, setCliNavExpanded] = useState(true);
   const searchInput = useRef(null);
   const results = useMemo(() => searchCbtDocs(query), [query]);
 
@@ -167,29 +168,34 @@ export default function CBTServerDocumentationPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  useEffect(() => {
-    const targetKey = topic.id + selectedGroup.id + location.hash;
-    const unchangedTarget = previousTarget.current === targetKey;
-    previousTarget.current = targetKey;
-    if (unchangedTarget && !location.hash) return;
-    // Wait until the shell has reset its viewport and React has rendered the new topic.
-    let secondFrame;
-    const firstFrame = window.requestAnimationFrame(() => {
-      secondFrame = window.requestAnimationFrame(() => {
-        const section = topic.sections.find((item) => "#" + item.id === location.hash);
-        const target = section ? document.getElementById(section.id) : articleRef.current;
-        const viewport = document.getElementById("dashboard-scroll-viewport");
-        if (!target || !viewport) return;
-        const offset = section ? (sectionNavRef.current?.getBoundingClientRect().height || 0) + 16 : 16;
-        const top = viewport.scrollTop + target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - offset;
-        const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        viewport.scrollTo({ top: Math.max(0, top), behavior: reducedMotion ? "auto" : "smooth" });
-      });
-    });
-    return () => {
-      window.cancelAnimationFrame(firstFrame);
-      if (secondFrame) window.cancelAnimationFrame(secondFrame);
-    };
+  useLayoutEffect(() => {
+    const contentKey = topic.id + selectedGroup.id;
+    const contentChanged = previousTarget.current.contentKey !== contentKey;
+    const hashChanged = previousTarget.current.hash !== location.hash;
+    previousTarget.current = { contentKey, hash: location.hash };
+    if (!contentChanged && !hashChanged && !location.hash) return;
+
+    const article = articleRef.current;
+    const viewport = document.getElementById("dashboard-scroll-viewport");
+    if (!article || !viewport) return;
+    const section = topic.sections.find((item) => "#" + item.id === location.hash);
+    const target = (section && document.getElementById(section.id)) || article;
+    const offset = section ? (sectionNavRef.current?.getBoundingClientRect().height || 0) + 16 : 16;
+    const top = Math.max(0, viewport.scrollTop + target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - offset);
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // Keep the current reading position unless a section was requested or the
+    // new, shorter article would otherwise leave its heading above the viewport.
+    if (section || viewport.scrollTop > top) {
+      viewport.scrollTo({ top, behavior: section && !contentChanged && !reducedMotion ? "smooth" : "auto" });
+    }
+    if (contentChanged && !reducedMotion) {
+      const animation = article.animate?.(
+        [{ opacity: 0.65, transform: "translateY(4px)" }, { opacity: 1, transform: "translateY(0)" }],
+        { duration: 150, easing: "ease-out" },
+      );
+      return () => animation?.cancel();
+    }
   }, [topic, selectedGroup.id, location.hash]);
 
   const openTopic = (topicId, sectionId, groupId) => {
@@ -199,6 +205,14 @@ export default function CBTServerDocumentationPage() {
   };
   const navigateToSection = (sectionId) => {
     navigate({ pathname: location.pathname, search: location.search, hash: "#" + sectionId });
+  };
+  const selectTopic = (topicId) => {
+    if (topicId === "cli" && topic.id === "cli") {
+      setCliNavExpanded((expanded) => !expanded);
+      return;
+    }
+    if (topicId === "cli") setCliNavExpanded(true);
+    openTopic(topicId);
   };
   const TopicIcon = DOC_ICONS[topic.icon] || BookOpen;
 
@@ -255,12 +269,14 @@ export default function CBTServerDocumentationPage() {
             <nav className="space-y-1">
               {CBT_DOCS.map((item) => {
                 const Icon = DOC_ICONS[item.icon] || BookOpen;
-                return <div key={item.id}><button type="button" aria-current={topic.id === item.id ? "page" : undefined} onClick={() => openTopic(item.id)}
+                return <div key={item.id}><button type="button" aria-current={topic.id === item.id ? "page" : undefined}
+                  aria-expanded={item.id === "cli" ? topic.id === "cli" && cliNavExpanded : undefined}
+                  aria-controls={item.id === "cli" ? "cli-command-groups" : undefined} onClick={() => selectTopic(item.id)}
                   className={topic.id === item.id ? "flex w-full items-start gap-3 rounded-xl bg-primary/10 px-3 py-3 text-left text-primary" : "flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left text-text-soft hover:bg-surface-muted/60 hover:text-text"}>
                   {item.id === "windows" || item.id === "linux" ? <PlatformLogo platform={item.id} className="mt-0.5 h-5 w-5 shrink-0" /> : <Icon className="mt-0.5 h-4 w-4 shrink-0" />}
                   <span className="min-w-0"><span className="block text-xs font-semibold">{item.title}</span></span>
                 </button>
-                  {item.id === "cli" && topic.id === "cli" && <nav aria-label="CLI command groups" className="mb-2 ml-5 border-l border-border pl-2">
+                  {item.id === "cli" && topic.id === "cli" && cliNavExpanded && <nav id="cli-command-groups" aria-label="CLI command groups" className="mb-2 ml-5 border-l border-border pl-2">
                     {CLI_GROUPS.map((group) => <button key={group.id} type="button" aria-current={selectedGroup.id === group.id ? "page" : undefined}
                       onClick={() => openTopic("cli", "cli-" + group.id, group.id)}
                       className={"block min-h-9 w-full rounded-lg px-2 py-2 text-left text-xs " + (selectedGroup.id === group.id ? "bg-primary/10 font-semibold text-primary" : "text-text-muted hover:bg-surface-muted hover:text-text")}>
