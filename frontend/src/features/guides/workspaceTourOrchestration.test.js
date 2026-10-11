@@ -13,7 +13,7 @@ import {
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readSource = (...segments) =>
-  fs.readFileSync(path.join(sourceRoot, ...segments), "utf8");
+  fs.readFileSync(path.join(sourceRoot, ...segments), "utf8").replace(/\r\n/g, "\n");
 
 test("explicit first-workspace eligibility is persisted only from a fresh guide", async () => {
   const updates = [];
