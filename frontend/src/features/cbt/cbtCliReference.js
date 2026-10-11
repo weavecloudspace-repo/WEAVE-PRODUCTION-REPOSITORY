@@ -1,5 +1,5 @@
 /**
- * Verified against weave_cbt deployment/cli/src/weave_cli/commands at 03c3eb6.
+ * Verified against weave_cbt deployment/cli/src/weave_cli/commands at 037a865.
  * Keep command names, arguments, and flags aligned with that implementation.
  */
 export const CLI_GROUPS = [
@@ -38,7 +38,7 @@ const commands = [
   {
     groupId: "diagnostics", command: "weave doctor", description: "Diagnose Docker, Compose, local portals, and saved Windows LAN rules.",
     usage: "weave doctor", platforms: "Windows & Linux", access: "Runtime inspection permissions",
-    explanation: "Checks installation files, Docker CLI/Engine, Compose configuration, and local staff/student HTTP endpoints. On Windows it also inspects previously configured LAN forwarding.",
+    explanation: "Checks installation files, Docker CLI/Engine, Compose configuration, local staff/student HTTP endpoints, host disk headroom, and recent archived application errors. On Windows it also inspects previously configured LAN forwarding. Use weave logs --errors to review the reports.",
     options: [], examples: [{ label: "Run read-only diagnostics", command: "weave doctor" }],
     outcome: "Read the first failed check, then inspect that service's logs. Successful localhost checks still require a test from another school device.",
   },
@@ -84,11 +84,12 @@ const commands = [
   },
   {
     groupId: "logs", command: "weave logs", description: "Read logs for all services or one selected service.",
-    usage: "weave logs [SERVICE] [--follow | -f]", platforms: "Windows & Linux", access: "Runtime inspection permissions",
+    usage: "weave logs [SERVICE] [--follow | -f] | weave logs [SERVICE] --errors [--date YYYY-MM-DD] [--last NUMBER]", platforms: "Windows & Linux", access: "Runtime inspection permissions",
     explanation: "Choose api for request errors, worker for background/sync jobs, nginx for portal/HTTP errors, or bootstrap for installation/migration output. postgres and redis are also supported.",
-    options: [{ flag: "SERVICE", description: "Optional positional argument: api, worker, postgres, redis, nginx, or bootstrap. Omit it to inspect all services." }, { flag: "--follow, -f", description: "Stream live logs until Ctrl+C. This stops viewing logs, not the service." }],
-    examples: [{ label: "Read logs across the stack", command: "weave logs" }, { label: "Read API errors", command: "weave logs api" }, { label: "Follow live worker output", command: "weave logs worker --follow" }, { label: "Follow all services", command: "weave logs --follow" }, { label: "Inspect portal errors", command: "weave logs nginx" }, { label: "Inspect installation and migrations", command: "weave logs bootstrap" }],
-    outcome: "Service output for investigation. The CLI does not expose --tail or --since options.",
+    options: [{ flag: "SERVICE", description: "Optional positional argument: api, worker, postgres, redis, nginx, or bootstrap. Omit it to inspect all services." }, { flag: "--follow, -f", description: "Stream live logs until Ctrl+C. This stops viewing logs, not the service." }, { flag: "--errors", description: "Read persistent application error reports instead of Docker output. Cannot be combined with --follow." }, { flag: "--date YYYY-MM-DD", description: "Select an archive date in UTC; requires --errors. Without a date, reads up to the three latest archive date folders per service." }, { flag: "--last NUMBER", description: "Maximum archived reports, from 1 to 100; defaults to 20. Requires --errors." }],
+    examples: [{ label: "Read logs across the stack", command: "weave logs" }, { label: "Read API errors", command: "weave logs api" }, { label: "Follow live worker output", command: "weave logs worker --follow" }, { label: "Follow all services", command: "weave logs --follow" }, { label: "Inspect portal errors", command: "weave logs nginx" }, { label: "Inspect installation and migrations", command: "weave logs bootstrap" }, { label: "Read archived application errors", command: "weave logs --errors" }, { label: "Read the last ten API error reports", command: "weave logs api --errors --last 10" }, { label: "Read worker errors for a UTC date (replace the date)", command: "weave logs worker --errors --date 2026-10-11" }],
+    outcome: "Service output for investigation. The CLI does not expose --tail or --since options. Formatted archives cover application errors; postgres, redis, and nginx retain rotated Docker logs instead.",
+    note: "For archived reports use weave logs --errors, weave logs api --errors --last 10, or weave logs worker --errors --date 2026-10-11. Replace the example date with the UTC date you need. No archived errors does not prove the server is healthy.",
   },
   {
     groupId: "networking", command: "weave lan", description: "Configure restricted Windows-to-WSL school LAN forwarding.",
@@ -124,6 +125,77 @@ const commands = [
     examples: [{ label: "Review options before maintenance", command: "weave update --help" }, { label: "Update the server with confirmation", command: "weave update" }, { label: "Verify server health after updating", command: "weave status --json" }],
     outcome: "Updated services are verified and a pre-update restore point is retained. A failed update attempts to restore the previous image and database.",
     note: "Run outside examinations with a verified backup and enough disk space. A later weave rollback restores the pre-update database and loses all records written since that snapshot; it is not a routine undo.",
+  },
+  {
+    groupId: "networking", command: "weave network info", description: "Inspect host IPv4 addresses, subnet masks, networks, and gateways.",
+    usage: "weave network info [--json]", platforms: "Windows & Linux", access: "No elevation for adapter inspection",
+    explanation: "Reads active host adapters and suggests a school adapter only when exactly one eligible private /24-or-narrower network is found. It does not configure forwarding.",
+    options: [{ flag: "--json", description: "Return interfaces and the recommended adapter as JSON; recommended can be null." }],
+    examples: [{ label: "Inspect IP and subnet details", command: "weave network info" }, { label: "Read adapter inventory as JSON", command: "weave network info --json" }],
+    outcome: "Host network inventory and an optional suggestion. Multiple eligible adapters require manual selection.",
+  },
+  {
+    groupId: "networking", command: "weave network interfaces", description: "List active host IPv4 network adapters.",
+    usage: "weave network interfaces", platforms: "Windows & Linux", access: "No elevation for adapter inspection",
+    explanation: "Shows the same readable inventory as network info, including IP address, subnet mask, CIDR, gateway, and network profile.",
+    options: [], examples: [{ label: "List host adapters", command: "weave network interfaces" }],
+    outcome: "Adapter details for selecting the school LAN; no network changes.",
+  },
+  {
+    groupId: "networking", command: "weave network recommend", description: "Suggest a safe school LAN address and subnet.",
+    usage: "weave network recommend", platforms: "Windows & Linux", access: "No elevation for adapter inspection",
+    explanation: "Requires one unambiguous eligible private adapter and excludes recognized virtual adapters. On Windows it prints a suggested weave lan command. Linux uses native networking.",
+    options: [], examples: [{ label: "Review the suggested school network", command: "weave network recommend" }],
+    outcome: "A suggestion only. If selection is ambiguous, inspect interfaces and choose manually; forwarding is not enabled.",
+  },
+  {
+    groupId: "networking", command: "weave network configure", description: "Confirm and apply suggested Windows school LAN forwarding.",
+    usage: "weave network configure --auto", platforms: "Windows WSL2 only", access: "Administrator PowerShell",
+    explanation: "Finds one eligible private /24-or-narrower adapter, displays the listener and permitted subnet, and asks for confirmation before creating WEAVE-owned HTTP forwarding and firewall rules. For manual selection use weave lan.",
+    options: [{ flag: "--auto", description: "Inspect and confirm the single safe adapter. Required; there is no --yes option." }],
+    examples: [{ label: "Review and confirm automatic LAN setup", command: "weave network configure --auto", platform: "Windows" }],
+    outcome: "Restricted LAN mapping after confirmation. Verify it from another student device.",
+    note: "Refuses ambiguous adapters, unsupported runtimes, and sessions without administrator access. Run network recommend first to inspect the suggestion.",
+  },
+  {
+    groupId: "networking", command: "weave network url", description: "Display the student HTTP access link.",
+    usage: "weave network url", platforms: "Windows & Linux", access: "Installation inspection permissions",
+    explanation: "Windows uses the saved WEAVE LAN listener and requires configured forwarding. Linux uses the single eligible host adapter. The printed link ends in /student.",
+    options: [], examples: [{ label: "Show the student LAN link", command: "weave network url" }],
+    outcome: "An HTTP student URL. Use the verified HTTPS hostname when HTTPS is enabled, and test access from a separate school computer.",
+  },
+  {
+    groupId: "networking", command: "weave network doctor", description: "Diagnose host adapters, local HTTP connectivity, and Windows forwarding.",
+    usage: "weave network doctor", platforms: "Windows & Linux", access: "Installation and network inspection permissions",
+    explanation: "Lists host adapters, checks local TCP port 80, and checks saved Windows portproxy and firewall scope when configured. These checks inspect network state without changing it.",
+    options: [], examples: [{ label: "Investigate school LAN connectivity", command: "weave network doctor" }],
+    outcome: "Network diagnostic results. Local TCP success does not verify HTTP contents or access from student computers; missing forwarding can appear as a warning.",
+  },
+  {
+    groupId: "installation", command: "weave reinstall", description: "Create a fresh server installation on a disposable test machine.",
+    usage: "weave reinstall [--purge-data] [--yes | -y]", platforms: "Windows & Linux", access: "Administrator / root",
+    explanation: "Installs the packaged manager's pinned server image. Existing deployment state requires an explicit purge; custom installation paths are refused. The desktop and CLI packages remain installed.",
+    options: [{ flag: "--purge-data", description: "Permanently delete WEAVE Compose data volumes and rebuild with new credentials." }, { flag: "--yes, -y", description: "Skip the initial confirmation; the DELETE DATA prompt still applies when purging." }],
+    examples: [{ label: "Review fresh-install options", command: "weave reinstall --help" }, { label: "Install on a fresh test machine", command: "weave reinstall" }],
+    outcome: "A fresh server requiring pairing. A purge erases exam records and machine identity volumes.",
+    note: "Use a purge only on a disposable test server with explicit data-loss authorization. This is not a repair command for a school server.",
+  },
+  {
+    groupId: "updates", command: "weave rollback", description: "Restore the previous server image and pre-update database together.",
+    usage: "weave rollback", platforms: "Windows & Linux", access: "Administrator / root",
+    explanation: "Requires a saved update restore point, running Docker, and interactive confirmation. Can recover an interrupted update or revert the last successful update. It restores a database snapshot rather than downgrading migrations.",
+    options: [], examples: [{ label: "Review recovery command help", command: "weave rollback --help" }, { label: "Restore after approved recovery", command: "weave rollback" }],
+    outcome: "Previous image and database restored and verified. Recovery state is retained if rollback fails.",
+    note: "All attempts, answers, results, and other records written since the pre-update snapshot will be lost. Stop examinations and obtain explicit data-loss authorization before confirming. No --yes option is supported.",
+  },
+  {
+    groupId: "installation", command: "weave uninstall", description: "Remove server containers and registration while preserving school data by default.",
+    usage: "weave uninstall [--purge-volumes] [--yes | -y]", platforms: "Windows & Linux", access: "Administrator / root",
+    explanation: "Removes application containers, saved WEAVE Windows LAN rules, runtime persistence, and installation registration. Keeps application files, runtime configuration, Docker Engine, and WSL.",
+    options: [{ flag: "--purge-volumes", description: "Permanently delete Compose-managed PostgreSQL and application data volumes." }, { flag: "--yes, -y", description: "Skip the first confirmation; volume deletion still requires typing DELETE DATA." }],
+    examples: [{ label: "Review removal options", command: "weave uninstall --help" }, { label: "Unregister while preserving volumes", command: "weave uninstall" }],
+    outcome: "Server becomes unavailable and is unregistered. Data volumes remain unless explicitly purged; retained volumes are not a backup.",
+    note: "Back up school data and stop exams first. Purging permanently erases school records and requires explicit authorization.",
   },
 ];
 

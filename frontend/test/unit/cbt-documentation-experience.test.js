@@ -54,6 +54,16 @@ test("CLI examples align with the actual management commands", () => {
     "weave start",
     "weave stop",
     "weave restart",
+    "weave network info",
+    "weave network interfaces",
+    "weave network recommend",
+    "weave network configure",
+    "weave network url",
+    "weave network doctor",
+    "weave logs --errors",
+    "weave reinstall",
+    "weave rollback",
+    "weave uninstall",
   ]) {
     assert.ok(commands.has(command), `Missing documented command: ${command}`);
   }
@@ -85,23 +95,38 @@ test("CLI groups cover everyday tasks with complete usage details", () => {
   }
 });
 
+test("CLI reference covers every reviewed command and explains destructive recovery", () => {
+  const expected = ["--help", "install", "lan", "start", "stop", "restart", "reinstall", "self-update", "status", "tls", "logs", "doctor", "release", "update", "rollback", "uninstall", "network info", "network interfaces", "network recommend", "network configure", "network url", "network doctor"];
+  assert.deepEqual(CLI_COMMANDS.map((item) => item.command.replace(/^weave /, "")).sort(), expected.sort());
+  for (const name of ["reinstall", "rollback", "uninstall"]) {
+    const command = CLI_COMMANDS.find((item) => item.command === `weave ${name}`);
+    assert.match(command.note, /explicit.*authorization/i);
+    assert.match(command.note, /lost|erases|data-loss/i);
+  }
+});
+
 test("documented example flags match the reviewed CBT CLI command signatures", () => {
-  // Contract captured from weave_cbt deployment CLI at 03c3eb6.
+  // Contract captured from weave_cbt staging deployment CLI at 037a865.
   const supported = {
     release: [], status: ["--json"], doctor: [], start: [], stop: [], restart: [],
     install: ["--env-file", "--assets-dir", "--install-dir", "--data-dir", "--rootfs-archive", "--version", "--min-free-gib"],
-    logs: ["--follow", "-f"], lan: ["--listen-address", "--client-subnet", "--refresh", "--remove"],
+    logs: ["--follow", "-f", "--errors", "--date", "--last"], lan: ["--listen-address", "--client-subnet", "--refresh", "--remove"],
+    reinstall: ["--purge-data", "--yes", "-y"], rollback: [], uninstall: ["--purge-volumes", "--yes", "-y"],
+    "network info": ["--json"], "network interfaces": [], "network recommend": [],
+    "network configure": ["--auto"], "network url": [], "network doctor": [],
     tls: ["--dry-run", "--renew", "--activate"], "self-update": ["--check", "--yes", "-y"], update: ["--yes", "--image"],
   };
   for (const item of CLI_COMMANDS) {
     for (const example of item.examples) {
-      const [, name] = example.command.match(/(?:sudo )?weave (\S+)/);
+      const [, name] = example.command.match(/(?:sudo )?weave (network \S+|\S+)/);
       if (name === "--help") continue;
       assert.ok(Object.hasOwn(supported, name), `Unsupported command: ${name}`);
       const flags = example.command.match(/--[a-z-]+|(?<=\s)-[a-z](?=\s|$)/g) || [];
       for (const flag of flags) assert.ok(flag === "--help" || supported[name].includes(flag), `${name} does not support ${flag}`);
       if (name === "tls") assert.ok(flags.filter((flag) => ["--dry-run", "--renew", "--activate"].includes(flag)).length <= 1);
       if (name === "logs") {
+        assert.ok(!flags.includes("--errors") || !flags.some((flag) => ["--follow", "-f"].includes(flag)));
+        if (flags.some((flag) => ["--date", "--last"].includes(flag))) assert.ok(flags.includes("--errors"));
         const service = example.command.split(" ")[2];
         assert.ok(!service || service.startsWith("-") || ["api", "worker", "postgres", "redis", "nginx", "bootstrap"].includes(service));
       }
@@ -110,7 +135,7 @@ test("documented example flags match the reviewed CBT CLI command signatures", (
 });
 
 test("search indexes CLI flags and examples and routes results to their command group", () => {
-  for (const [query, groupId] of [["--client-subnet", "networking"], ["--env-file", "installation"], ["weave logs worker --follow", "logs"], ["self-update --check", "updates"]]) {
+  for (const [query, groupId] of [["--client-subnet", "networking"], ["--env-file", "installation"], ["weave logs worker --follow", "logs"], ["self-update --check", "updates"], ["network configure --auto", "networking"], ["--errors", "logs"], ["--purge-data", "installation"], ["weave rollback", "updates"]]) {
     assert.ok(searchCbtDocs(query).some((result) => result.topicId === "cli" && result.groupId === groupId && result.sectionId === "cli-" + groupId));
   }
 });
