@@ -141,9 +141,12 @@ def test_channel_selection_skips_wrong_channel_drafts_and_previews():
 
 
 def test_checksum_parser_rejects_malformed_duplicate_and_empty_data():
-    assert CBTReleaseService._parse_checksums(
-        DIGEST + "  WEAVE-CBT-Staging-Desktop-Setup.exe\n"
-    )["WEAVE-CBT-Staging-Desktop-Setup.exe"] == DIGEST
+    assert (
+        CBTReleaseService._parse_checksums(DIGEST + "  WEAVE-CBT-Staging-Desktop-Setup.exe\\n")[
+            "WEAVE-CBT-Staging-Desktop-Setup.exe"
+        ]
+        == DIGEST
+    )
     for bad in (
         "",
         "not-a-checksum",
