@@ -104,6 +104,8 @@ export default function ElectiveGroupManager({
     <WorkspacePanel
       title="Manage elective groups"
       description="Groups define how many subjects a student must or may choose. Active elective subjects must belong to an active group."
+      onBack={onCancel}
+      backDisabled={Boolean(saving)}
     >
       <form className="space-y-3" onSubmit={submit}>
         <fieldset disabled={Boolean(saving)} className="space-y-3">

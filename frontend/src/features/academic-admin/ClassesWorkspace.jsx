@@ -356,6 +356,8 @@ function ClassesWorkspace({ activeTab = "overview" }) {
           showEditor ? (
             <WorkspacePanel
               title={editingClassId ? "Edit class" : "Create class"}
+              onBack={closeEditor}
+              backDisabled={Boolean(saving)}
               description={
                 editingClassId
                   ? "Update this class and its teacher. If you move an active class into a level that specializes now, its current-term department is required."

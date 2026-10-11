@@ -446,6 +446,8 @@ function SchoolCalendarEventsWorkspace() {
           editorOpen ? (
             <WorkspacePanel
               title={editingEventId ? "Edit event" : "Create event"}
+              onBack={closeEditor}
+              backDisabled={Boolean(saving)}
               description="Events describe scheduled activity. They do not automatically reopen or close operational school days."
             >
               <form className="space-y-4" onSubmit={submit}>

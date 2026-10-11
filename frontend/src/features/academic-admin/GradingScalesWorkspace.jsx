@@ -1,5 +1,6 @@
 import { GraduationCap, ShieldCheck, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
@@ -62,6 +63,19 @@ function GradingScalesWorkspace({ activeTab }) {
   const resetForm = () => {
     setForm(BLANK_SCALE);
     setEditingId("");
+  };
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const closeEditor = () => {
+    if (saving) return;
+    resetForm();
+    if (activeTab === "create") {
+      const next = new URLSearchParams(searchParams);
+      next.set("view", searchParams.get("returnView") || "overview");
+      next.delete("tab");
+      next.delete("returnView");
+      setSearchParams(next, { replace: true });
+    }
   };
 
   const saveScale = async (event) => {
@@ -176,6 +190,8 @@ function GradingScalesWorkspace({ activeTab }) {
     return (
       <WorkspacePanel
         title={editingId ? "Edit inactive grading scale" : "Create grading scale"}
+        onBack={closeEditor}
+        backDisabled={Boolean(saving)}
         description="New grading scales are created inactive. Review the full range set before activation."
       >
         <form className="space-y-4" onSubmit={saveScale}>
@@ -219,7 +235,7 @@ function GradingScalesWorkspace({ activeTab }) {
               {saving === "form" ? "Saving..." : editingId ? "Update scale" : "Create inactive scale"}
             </Button>
             {editingId ? (
-              <Button type="button" variant="outline" onClick={resetForm} disabled={saving === "form"}>
+              <Button type="button" variant="outline" onClick={closeEditor} disabled={saving === "form"}>
                 Cancel
               </Button>
             ) : null}
