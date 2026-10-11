@@ -38,8 +38,18 @@ test("documentation search locates command syntax, CLI and LAN guidance", () => 
   assert.ok(searchCbtDocs("WSL2").some((result) => result.topicId === "windows"));
   assert.ok(searchCbtDocs("pairing").some((result) => result.topicId === "pairing"));
   assert.ok(searchCbtDocs("certificate").some((result) => result.topicId === "networking"));
+  assert.ok(searchCbtDocs("weave-cbt-coredns.service").some((result) => result.topicId === "linux"));
   assert.deepEqual(searchCbtDocs("    "), []);
   assert.deepEqual(searchCbtDocs("phrase-unlikely-to-occur-here"), []);
+});
+
+test("native Linux CoreDNS and Windows elevation are documented", () => {
+  const linux = CBT_DOCS.find((topic) => topic.id === "linux");
+  assert.ok(linux.sections.some((section) => section.id === "linux-dns"));
+  assert.ok(CLI_COMMANDS.find((item) => item.command === "weave network dns setup")
+    .examples.some((example) => example.command.includes("--interface eth0")));
+  const windows = CBT_DOCS.find((topic) => topic.id === "windows");
+  assert.ok(windows.sections.some((section) => (section.paragraphs || []).join(" ").includes("native Windows UAC")));
 });
 
 test("CLI examples align with the actual management commands", () => {
@@ -119,7 +129,7 @@ test("documented example flags match the reviewed CBT CLI command signatures", (
     "network status": ["--json"], "network setup": ["--auto", "--listen-address", "--client-subnet", "--yes"],
     "network trust": ["--interface", "--yes"], "network refresh": [], "network remove": ["--yes"],
     "network url": ["--json"], "network doctor": [],
-    "network dns status": ["--json"], "network dns setup": [], "network dns remove": ["--yes"],
+    "network dns status": ["--json"], "network dns setup": ["--interface"], "network dns remove": ["--yes"],
     tls: ["--dry-run", "--renew", "--activate"], "self-update": ["--check", "--yes", "-y"], update: ["--yes", "--image"],
   };
   for (const item of CLI_COMMANDS) {

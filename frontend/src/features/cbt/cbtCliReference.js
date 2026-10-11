@@ -266,7 +266,7 @@ const commands = [
     "command": "weave network dns status",
     "description": "Inspect optional local DNS.",
     "usage": "weave network dns status [--json]",
-    "platforms": "Windows WSL2",
+    "platforms": "Windows WSL2 & native Linux",
     "access": "Read-only local inspection",
     "explanation": "Shows whether WEAVE's headless CoreDNS service is configured and the DNS address needed by the router. It does not verify the router.",
     "options": [
@@ -288,27 +288,25 @@ const commands = [
     "groupId": "networking",
     "command": "weave network dns setup",
     "description": "Configure headless CoreDNS after HTTPS.",
-    "usage": "weave network dns setup",
-    "platforms": "Windows WSL2",
-    "access": "Administrator PowerShell and internet for the initial download",
-    "explanation": "Downloads a checksum-verified CoreDNS binary and configures a Windows background service using the paired HTTPS hostname. Does not start DHCP or change the router.",
-    "options": [],
+    "usage": "weave network dns setup [--interface NAME]",
+    "platforms": "Windows WSL2 & native Linux",
+    "access": "Administrator PowerShell or Linux sudo; internet for initial download",
+    "explanation": "After pairing and HTTPS activation, verifies the official CoreDNS release checksum and installs a headless Windows service or Linux systemd unit. Uses the paired HTTPS hostname and the approved private school IP. Linux supports --interface for multi-adapter servers. WEAVE does not change DHCP/router configuration.",
+    "options": [{ flag: "--interface NAME", description: "Native Linux: choose an exact physical school interface, e.g. eth0, when multiple suitable interfaces exist." }],
     "examples": [
-      {
-        "label": "Configure local DNS",
-        "command": "weave network dns setup",
-        "platform": "Windows"
-      }
+      { "label": "Configure Windows local DNS", "command": "weave network dns setup", "platform": "Windows" },
+      { "label": "Configure native Linux local DNS", "command": "sudo weave network dns setup", "platform": "Linux" },
+      { "label": "Choose a Linux adapter", "command": "sudo weave network dns setup --interface eth0", "platform": "Linux" }
     ],
-    "outcome": "Local CoreDNS responds; verify UDP and TCP port 53 from another laptop before updating router DHCP."
+    "outcome": "Local CoreDNS responds. On Linux, verify that host firewall policies allow school-subnet UDP and TCP port 53; then test from another device before updating router DHCP."
   },
   {
     "groupId": "networking",
     "command": "weave network dns remove",
     "description": "Remove WEAVE-managed CoreDNS.",
     "usage": "weave network dns remove [--yes]",
-    "platforms": "Windows WSL2",
-    "access": "Administrator PowerShell",
+    "platforms": "Windows WSL2 & native Linux",
+    "access": "Administrator PowerShell or Linux sudo",
     "explanation": "Restore the router's previous DNS setting first; removing the resolver otherwise causes hostname resolution failures for students.",
     "options": [
       {
@@ -323,7 +321,7 @@ const commands = [
         "platform": "Windows"
       }
     ],
-    "outcome": "WEAVE CoreDNS Windows service removed.",
+    "outcome": "WEAVE-owned CoreDNS Windows service or Linux systemd unit removed.",
     "note": "Requires explicit administrator authorization. Router DNS must be restored to avoid client outages."
   },
   {
