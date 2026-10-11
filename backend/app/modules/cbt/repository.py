@@ -157,6 +157,16 @@ class CBTServerRepository:
         return server
 
     @staticmethod
+    async def unrevoke(db: AsyncSession, server: CBTServer, *, suspended_at: datetime) -> CBTServer:
+        """Restore registration without restoring revoked credentials or activating."""
+        server.status = CBTServerStatus.SUSPENDED
+        server.suspended_at = suspended_at
+        server.revoked_at = None
+        # Retain the last revoking administrator and reason for review.
+        await db.flush()
+        return server
+
+    @staticmethod
     async def revoke(
         db: AsyncSession,
         server: CBTServer,

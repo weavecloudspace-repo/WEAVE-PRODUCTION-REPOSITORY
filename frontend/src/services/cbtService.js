@@ -97,6 +97,8 @@ export const cbtService = {
     api.post(`/cbt/servers/${encodeURIComponent(serverId)}/suspend`),
   reactivateServer: (serverId) =>
     api.post(`/cbt/servers/${encodeURIComponent(serverId)}/reactivate`),
+  unrevokeServer: (serverId) =>
+    api.post(`/cbt/servers/${encodeURIComponent(serverId)}/unrevoke`),
   revokeServer: (serverId, payload = {}) =>
     api.post(`/cbt/servers/${encodeURIComponent(serverId)}/revoke`, payload),
   rotateCredential: (serverId) =>

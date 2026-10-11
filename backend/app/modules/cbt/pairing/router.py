@@ -199,3 +199,19 @@ async def revoke_cbt_server(
         db=db,
     )
     return result
+
+
+@router.post("/servers/{server_id}/unrevoke", response_model=CBTServerResponse)
+async def unrevoke_cbt_server(
+    server_id: UUID,
+    db: DbSession,
+    current_admin: CurrentTenantAdmin,
+) -> CBTServerResponse:
+    """Restore a tenant-owned server to suspended, subject to plan capacity."""
+    result = await CBTPairingService.unrevoke_server(
+        db=db, admin=current_admin, server_id=server_id
+    )
+    await SubscriptionFeatureService.invalidate_tenant_subscription_state(
+        tenant_id_for(current_admin), db=db
+    )
+    return result

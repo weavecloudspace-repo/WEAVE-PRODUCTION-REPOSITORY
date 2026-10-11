@@ -372,6 +372,17 @@ export default function CBTServersPage() {
     setRevocationReason("");
   };
 
+  const confirmUnrevoke = (server) => {
+    setActionMenuServerId("");
+    setConfirmState({
+      action: "unrevoke",
+      serverId: server.id,
+      title: "Unrevoke this CBT server?",
+      description: "This restores the server to suspended, not active, and uses a server slot. Previously revoked credentials remain invalid; reactivation alone will not restore its connection.",
+      confirmLabel: "Unrevoke to suspended",
+    });
+  };
+
   const runServerAction = async (action, confirmationLiteral) => {
     if (!confirmState?.serverId) return;
     setBusyAction(`${action}:${confirmState.serverId}`);
@@ -380,6 +391,8 @@ export default function CBTServersPage() {
         await cbtService.suspendServer(confirmState.serverId);
       if (action === "reactivate")
         await cbtService.reactivateServer(confirmState.serverId);
+      if (action === "unrevoke")
+        await cbtService.unrevokeServer(confirmState.serverId);
       if (action === "revoke") {
         await cbtService.revokeServer(confirmState.serverId, {
           reason: revocationReason.trim(),
@@ -390,7 +403,8 @@ export default function CBTServersPage() {
       setRotatedCredential(null);
       await refreshAll();
       showSuccess(
-        `Server ${action === "reactivate" ? "reactivated" : action === "revoke" ? "revoked" : "suspended"} successfully.`,
+        action === "unrevoke" ? "Server unrevoked and suspended successfully." :
+          `Server ${action === "reactivate" ? "reactivated" : action === "revoke" ? "revoked" : "suspended"} successfully.`,
       );
     } catch (requestError) {
       showError(
@@ -499,7 +513,7 @@ export default function CBTServersPage() {
             icon={ShieldX}
             label="Revoked"
             value={String(stats.revoked)}
-            hint="Permanently revoked"
+            hint="Registration and credentials revoked"
             iconClassName="bg-rose-50 text-rose-600"
           />
         </div>
@@ -807,6 +821,16 @@ export default function CBTServersPage() {
                                   Reactivate server
                                 </button>
                               ) : null}
+                              {featureGuard.allowed && String(server.status).toLowerCase() === "revoked" ? (
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-text transition hover:bg-primary-subtle"
+                                  onClick={() => confirmUnrevoke(server)}
+                                >
+                                  <RotateCcw className="h-4 w-4" />
+                                  Unrevoke server
+                                </button>
+                              ) : null}
                               {String(server.status).toLowerCase() !==
                               "revoked" ? (
                                 <>
@@ -1063,6 +1087,17 @@ export default function CBTServersPage() {
                     </Button>
                   ) : null}
 
+                  {featureGuard.allowed && String(selectedServer.status).toLowerCase() === "revoked" ? (
+                    <Button
+                      variant="outline"
+                      className="w-full justify-center rounded-xl"
+                      onClick={() => confirmUnrevoke(selectedServer)}
+                      disabled={busyAction === `unrevoke:${selectedServer.id}`}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Unrevoke Server
+                    </Button>
+                  ) : null}
                   {String(selectedServer.status).toLowerCase() !== "revoked" ? (
                     <>
                       {CREDENTIAL_ROTATION_AVAILABLE && featureGuard.allowed ? (

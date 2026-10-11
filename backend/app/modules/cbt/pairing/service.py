@@ -487,6 +487,33 @@ class CBTPairingService:
         return CBTServerResponse.model_validate(server)
 
     @staticmethod
+    async def unrevoke_server(
+        db: AsyncSession, *, admin: TenantAdmin, server_id: UUID
+    ) -> CBTServerResponse:
+        """Return a revoked registration to suspended; credentials stay revoked."""
+        tenant_id = CBTPairingService._ensure_admin_has_tenant(admin)
+        # Match pairing's tenant-first lock order to serialize capacity/name checks.
+        await CBTPairingService._get_pairable_tenant(db, tenant_id=tenant_id, lock=True)
+        await SubscriptionFeatureService.ensure_feature_enabled(
+            db, tenant_id, FeatureCode.CBT_PAIRING
+        )
+        server = await CBTPairingService._get_server_for_admin(
+            db, admin=admin, server_id=server_id, lock=True
+        )
+        if server.status == CBTServerStatus.SUSPENDED:
+            return CBTServerResponse.model_validate(server)
+        if server.status != CBTServerStatus.REVOKED:
+            raise BadRequestException(detail="Only revoked CBT servers can be unrevoked.")
+        await CBTPairingService._ensure_cbt_pairing_allowed(db, tenant_id=tenant_id)
+        await CBTPairingService._ensure_server_name_available(
+            db,
+            tenant_id=tenant_id,
+            normalized_name=CBTPairingService.normalize_server_name(server.name),
+        )
+        await CBTServerRepository.unrevoke(db, server, suspended_at=datetime.now(timezone.utc))
+        return CBTServerResponse.model_validate(server)
+
+    @staticmethod
     async def rotate_server_credential(
         db: AsyncSession,
         *,
