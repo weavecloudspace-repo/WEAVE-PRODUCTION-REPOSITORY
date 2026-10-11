@@ -549,10 +549,6 @@ class AcademicCurriculumService:
         )
         if not row.is_active:
             return await AcademicCurriculumService._curriculum_subject_response(db, row, subject)
-        if row.is_elective and row.elective_group_id is None:
-            raise ConflictException(
-                "Assign an elective group before deactivating this subject so it can be activated again."
-            )
         dependencies = await CurriculumSubjectRepository.count_dependencies(db, tenant_id, row.id)
         blockers = {
             key: dependencies[key]

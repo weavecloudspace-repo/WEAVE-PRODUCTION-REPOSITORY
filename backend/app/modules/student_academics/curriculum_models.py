@@ -128,6 +128,10 @@ class CurriculumSubject(BaseModel):
             "is_elective OR elective_group_id IS NULL",
             name="ck_compulsory_subject_has_no_elective_group",
         ),
+        CheckConstraint(
+            "NOT is_elective OR elective_group_id IS NOT NULL",
+            name="ck_elective_subject_requires_group",
+        ),
         Index(
             "ix_curriculum_subjects_tenant_curriculum",
             "tenant_id",
