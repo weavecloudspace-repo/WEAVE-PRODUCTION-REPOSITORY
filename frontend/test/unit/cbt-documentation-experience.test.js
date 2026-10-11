@@ -54,10 +54,14 @@ test("CLI examples align with the actual management commands", () => {
     "weave start",
     "weave stop",
     "weave restart",
-    "weave network info",
-    "weave network interfaces",
-    "weave network recommend",
-    "weave network configure",
+    "weave network status",
+    "weave network setup",
+    "weave network trust",
+    "weave network refresh",
+    "weave network remove",
+    "weave network dns status",
+    "weave network dns setup",
+    "weave network dns remove",
     "weave network url",
     "weave network doctor",
     "weave logs --errors",
@@ -96,7 +100,7 @@ test("CLI groups cover everyday tasks with complete usage details", () => {
 });
 
 test("CLI reference covers every reviewed command and explains destructive recovery", () => {
-  const expected = ["--help", "install", "lan", "start", "stop", "restart", "reinstall", "self-update", "status", "tls", "logs", "doctor", "release", "update", "rollback", "uninstall", "network info", "network interfaces", "network recommend", "network configure", "network url", "network doctor"];
+  const expected = ["--help","install","start","stop","restart","reinstall","self-update","status","tls","logs","doctor","release","update","rollback","uninstall","network status","network setup","network trust","network refresh","network remove","network url","network doctor","network dns status","network dns setup","network dns remove"];
   assert.deepEqual(CLI_COMMANDS.map((item) => item.command.replace(/^weave /, "")).sort(), expected.sort());
   for (const name of ["reinstall", "rollback", "uninstall"]) {
     const command = CLI_COMMANDS.find((item) => item.command === `weave ${name}`);
@@ -110,10 +114,12 @@ test("documented example flags match the reviewed CBT CLI command signatures", (
   const supported = {
     release: [], status: ["--json"], doctor: [], start: [], stop: [], restart: [],
     install: ["--env-file", "--assets-dir", "--install-dir", "--data-dir", "--rootfs-archive", "--version", "--min-free-gib"],
-    logs: ["--follow", "-f", "--errors", "--date", "--last"], lan: ["--listen-address", "--client-subnet", "--refresh", "--remove"],
+    logs: ["--follow", "-f", "--errors", "--date", "--last"],
     reinstall: ["--purge-data", "--yes", "-y"], rollback: [], uninstall: ["--purge-volumes", "--yes", "-y"],
-    "network info": ["--json"], "network interfaces": [], "network recommend": [],
-    "network configure": ["--auto"], "network url": [], "network doctor": [],
+    "network status": ["--json"], "network setup": ["--auto", "--listen-address", "--client-subnet", "--yes"],
+    "network trust": ["--interface", "--yes"], "network refresh": [], "network remove": ["--yes"],
+    "network url": ["--json"], "network doctor": [],
+    "network dns status": ["--json"], "network dns setup": [], "network dns remove": ["--yes"],
     tls: ["--dry-run", "--renew", "--activate"], "self-update": ["--check", "--yes", "-y"], update: ["--yes", "--image"],
   };
   for (const item of CLI_COMMANDS) {
@@ -135,7 +141,7 @@ test("documented example flags match the reviewed CBT CLI command signatures", (
 });
 
 test("search indexes CLI flags and examples and routes results to their command group", () => {
-  for (const [query, groupId] of [["--client-subnet", "networking"], ["--env-file", "installation"], ["weave logs worker --follow", "logs"], ["self-update --check", "updates"], ["network configure --auto", "networking"], ["--errors", "logs"], ["--purge-data", "installation"], ["weave rollback", "updates"]]) {
+  for (const [query, groupId] of [["--client-subnet", "networking"], ["--env-file", "installation"], ["weave logs worker --follow", "logs"], ["self-update --check", "updates"], ["network setup --auto", "networking"], ["--errors", "logs"], ["--purge-data", "installation"], ["weave rollback", "updates"]]) {
     assert.ok(searchCbtDocs(query).some((result) => result.topicId === "cli" && result.groupId === groupId && result.sectionId === "cli-" + groupId));
   }
 });

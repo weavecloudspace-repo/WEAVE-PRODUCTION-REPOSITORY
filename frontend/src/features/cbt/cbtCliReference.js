@@ -1,5 +1,5 @@
 /**
- * Verified against weave_cbt deployment/cli/src/weave_cli/commands at 037a865.
+ * Verified against the staging WEAVE CBT unified network CLI.
  * Keep command names, arguments, and flags aligned with that implementation.
  */
 export const CLI_GROUPS = [
@@ -7,7 +7,7 @@ export const CLI_GROUPS = [
   { id: "installation", title: "Installation", description: "Provision the local exam server after installing the desktop or CLI package." },
   { id: "services", title: "Services", description: "Start, stop, and restart the installed server during normal administration." },
   { id: "logs", title: "Logs", description: "Read service output or follow a problem as it happens." },
-  { id: "networking", title: "Networking & HTTPS", description: "Configure Windows school LAN access and maintain the paired server's HTTPS certificate." },
+  { id: "networking", title: "Networking & HTTPS", description: "Approve a trusted school network, configure student access, and manage optional local DNS and HTTPS." },
   { id: "updates", title: "Updates", description: "Update the desktop/CLI manager separately from the running exam server." },
 ];
 
@@ -92,15 +92,6 @@ const commands = [
     note: "For archived reports use weave logs --errors, weave logs api --errors --last 10, or weave logs worker --errors --date 2026-10-11. Replace the example date with the UTC date you need. No archived errors does not prove the server is healthy.",
   },
   {
-    groupId: "networking", command: "weave lan", description: "Configure restricted Windows-to-WSL school LAN forwarding.",
-    usage: "weave lan --listen-address IPV4 --client-subnet CIDR", platforms: "Windows WSL2 only", access: "Administrator PowerShell",
-    explanation: "Binds HTTP port 80 to one private IPv4 address assigned to the Windows host, and limits the firewall to the specified school subnet. The network profile must be Private or Domain. Linux uses its host networking instead of this command.",
-    options: [{ flag: "--listen-address IPV4", description: "The specific private Windows host address reserved for this server." }, { flag: "--client-subnet CIDR", description: "A canonical private subnet, /24 or narrower, containing that host address." }, { flag: "--refresh", description: "Refresh the saved mapping after the WSL address changes. Do not combine with address options." }, { flag: "--remove", description: "Remove only WEAVE-owned LAN rules. This disables that LAN access; do not combine with --refresh or address options." }],
-    examples: [{ label: "Example school subnet (replace with your own values)", command: "weave lan --listen-address 192.168.1.10 --client-subnet 192.168.1.0/24", platform: "Windows" }, { label: "Refresh an already configured mapping", command: "weave lan --refresh", platform: "Windows" }],
-    outcome: "Restricted forwarding is configured. Verify access from a separate school computer; localhost success is insufficient.",
-    note: "The example address must actually belong to this server. Windows logon is required to keep the WSL runtime alive. Set up LAN before activating HTTPS on Windows.",
-  },
-  {
     groupId: "networking", command: "weave tls", description: "Issue or maintain HTTPS for an already paired server.",
     usage: "weave tls [--dry-run | --renew | --activate]", platforms: "Windows & Linux", access: "Runtime administration permissions",
     explanation: "Uses the paired school's assigned hostname and certificate workflow. Pair the server and provide internet access first. Windows activation requires Administrator PowerShell and a saved school LAN configuration.",
@@ -108,6 +99,249 @@ const commands = [
     examples: [{ label: "Issue and activate trusted HTTPS", command: "weave tls" }, { label: "Test certificate issuance", command: "weave tls --dry-run" }, { label: "Renew an enabled certificate", command: "weave tls --renew" }, { label: "Activate an existing certificate", command: "weave tls --activate" }],
     outcome: "For normal issuance/activation, Nginx serves HTTPS. Verify LAN DNS and browser trust from a second device.",
     note: "Use only one of these flags per invocation. A successful dry run is not proof that trusted HTTPS has been activated.",
+  },
+  {
+    "groupId": "networking",
+    "command": "weave network status",
+    "description": "Read school network state.",
+    "usage": "weave network status [--json]",
+    "platforms": "Windows & Linux",
+    "access": "Read-only network inspection",
+    "explanation": "Displays school adapters, saved forwarding and HTTPS activation. A Public school Wi-Fi must be explicitly approved.",
+    "options": [
+      {
+        "flag": "--json",
+        "description": "Output a machine-readable inventory."
+      }
+    ],
+    "examples": [
+      {
+        "label": "Inspect school connection",
+        "command": "weave network status"
+      },
+      {
+        "label": "Read inventory",
+        "command": "weave network status --json"
+      }
+    ],
+    "outcome": "Read-only network information."
+  },
+  {
+    "groupId": "networking",
+    "command": "weave network trust",
+    "description": "Approve a school-controlled network.",
+    "usage": "weave network trust --interface NAME [--yes]",
+    "platforms": "Windows WSL2 only",
+    "access": "Administrator PowerShell",
+    "explanation": "After technician approval, change only the selected school connection from Public to Private. Never use on unknown hotspots.",
+    "options": [
+      {
+        "flag": "--interface NAME",
+        "description": "Exact adapter name from network status."
+      },
+      {
+        "flag": "--yes",
+        "description": "Skip confirmation only after explicit authorization."
+      }
+    ],
+    "examples": [
+      {
+        "label": "Approve a school Wi-Fi",
+        "command": "weave network trust --interface \"Wi-Fi\"",
+        "platform": "Windows"
+      }
+    ],
+    "outcome": "Only the approved school connection is trusted."
+  },
+  {
+    "groupId": "networking",
+    "command": "weave network setup",
+    "description": "Enable student access over the school LAN.",
+    "usage": "weave network setup (--auto | --listen-address IP --client-subnet CIDR) [--yes]",
+    "platforms": "Windows WSL2; native Linux uses its existing network",
+    "access": "Administrator PowerShell",
+    "explanation": "Sets up WEAVE-owned forwarding and firewall rules for one approved school network. It does not change the router.",
+    "options": [
+      {
+        "flag": "--auto",
+        "description": "Use the only eligible trusted school adapter."
+      },
+      {
+        "flag": "--listen-address IP",
+        "description": "Server IP on the school LAN."
+      },
+      {
+        "flag": "--client-subnet CIDR",
+        "description": "Approved school network range."
+      },
+      {
+        "flag": "--yes",
+        "description": "Skip the final setup confirmation."
+      }
+    ],
+    "examples": [
+      {
+        "label": "Set up the detected network",
+        "command": "weave network setup --auto",
+        "platform": "Windows"
+      },
+      {
+        "label": "Set up an explicit subnet",
+        "command": "weave network setup --listen-address 192.168.1.12 --client-subnet 192.168.1.0/24",
+        "platform": "Windows"
+      }
+    ],
+    "outcome": "The server's LAN access is configured; verify from a student laptop."
+  },
+  {
+    "groupId": "networking",
+    "command": "weave network refresh",
+    "description": "Refresh WEAVE forwarding.",
+    "usage": "weave network refresh",
+    "platforms": "Windows WSL2",
+    "access": "Administrator PowerShell",
+    "explanation": "Update WEAVE-owned forwarding after the Windows WSL address changes; does not delete examination data.",
+    "options": [],
+    "examples": [
+      {
+        "label": "Refresh forwarding",
+        "command": "weave network refresh",
+        "platform": "Windows"
+      }
+    ],
+    "outcome": "Saved rules updated; verify actual connectivity."
+  },
+  {
+    "groupId": "networking",
+    "command": "weave network remove",
+    "description": "Disable WEAVE LAN access.",
+    "usage": "weave network remove [--yes]",
+    "platforms": "Windows WSL2",
+    "access": "Administrator PowerShell",
+    "explanation": "Removes only WEAVE-owned firewall and forwarding settings. The student portal may become unreachable.",
+    "options": [
+      {
+        "flag": "--yes",
+        "description": "Skip confirmation after approval to interrupt access."
+      }
+    ],
+    "examples": [
+      {
+        "label": "Remove school forwarding",
+        "command": "weave network remove",
+        "platform": "Windows"
+      }
+    ],
+    "outcome": "WEAVE LAN rules removed; examination data preserved.",
+    "note": "Requires explicit administrator authorization. Removing forwarding during exams interrupts access."
+  },
+  {
+    "groupId": "networking",
+    "command": "weave network url",
+    "description": "Show the correct student link.",
+    "usage": "weave network url [--json]",
+    "platforms": "Windows & Linux",
+    "access": "Local installation inspection",
+    "explanation": "After pairing and HTTPS activation, shows the exact assigned HTTPS hostname; earlier it shows HTTP with a warning. DNS still needs configuration.",
+    "options": [
+      {
+        "flag": "--json",
+        "description": "Return URL and HTTPS state as JSON."
+      }
+    ],
+    "examples": [
+      {
+        "label": "Student URL",
+        "command": "weave network url"
+      },
+      {
+        "label": "Read URL as JSON",
+        "command": "weave network url --json"
+      }
+    ],
+    "outcome": "Correct student URL; test DNS on a different computer."
+  },
+  {
+    "groupId": "networking",
+    "command": "weave network dns status",
+    "description": "Inspect optional local DNS.",
+    "usage": "weave network dns status [--json]",
+    "platforms": "Windows WSL2",
+    "access": "Read-only local inspection",
+    "explanation": "Shows whether WEAVE's headless CoreDNS service is configured and the DNS address needed by the router. It does not verify the router.",
+    "options": [
+      {
+        "flag": "--json",
+        "description": "Machine-readable local DNS status."
+      }
+    ],
+    "examples": [
+      {
+        "label": "Check CoreDNS",
+        "command": "weave network dns status",
+        "platform": "Windows"
+      }
+    ],
+    "outcome": "Shows local service status and suggested router DNS IP."
+  },
+  {
+    "groupId": "networking",
+    "command": "weave network dns setup",
+    "description": "Configure headless CoreDNS after HTTPS.",
+    "usage": "weave network dns setup",
+    "platforms": "Windows WSL2",
+    "access": "Administrator PowerShell and internet for the initial download",
+    "explanation": "Downloads a checksum-verified CoreDNS binary and configures a Windows background service using the paired HTTPS hostname. Does not start DHCP or change the router.",
+    "options": [],
+    "examples": [
+      {
+        "label": "Configure local DNS",
+        "command": "weave network dns setup",
+        "platform": "Windows"
+      }
+    ],
+    "outcome": "Local CoreDNS responds; verify UDP and TCP port 53 from another laptop before updating router DHCP."
+  },
+  {
+    "groupId": "networking",
+    "command": "weave network dns remove",
+    "description": "Remove WEAVE-managed CoreDNS.",
+    "usage": "weave network dns remove [--yes]",
+    "platforms": "Windows WSL2",
+    "access": "Administrator PowerShell",
+    "explanation": "Restore the router's previous DNS setting first; removing the resolver otherwise causes hostname resolution failures for students.",
+    "options": [
+      {
+        "flag": "--yes",
+        "description": "Skip confirmation only after router restoration."
+      }
+    ],
+    "examples": [
+      {
+        "label": "Remove local DNS",
+        "command": "weave network dns remove",
+        "platform": "Windows"
+      }
+    ],
+    "outcome": "WEAVE CoreDNS Windows service removed.",
+    "note": "Requires explicit administrator authorization. Router DNS must be restored to avoid client outages."
+  },
+  {
+    "groupId": "networking",
+    "command": "weave network doctor",
+    "description": "Diagnose student connectivity.",
+    "usage": "weave network doctor",
+    "platforms": "Windows & Linux",
+    "access": "Read-only inspection",
+    "explanation": "Checks network adapters and WEAVE forwarding. A server-side test does not prove a student device can connect.",
+    "options": [],
+    "examples": [
+      {
+        "label": "Run network diagnostics",
+        "command": "weave network doctor"
+      }
+    ],
+    "outcome": "Diagnostics only; check actual student access."
   },
   {
     groupId: "updates", command: "weave self-update", description: "Check or upgrade the desktop and CLI manager package.",
@@ -125,51 +359,6 @@ const commands = [
     examples: [{ label: "Review options before maintenance", command: "weave update --help" }, { label: "Update the server with confirmation", command: "weave update" }, { label: "Verify server health after updating", command: "weave status --json" }],
     outcome: "Updated services are verified and a pre-update restore point is retained. A failed update attempts to restore the previous image and database.",
     note: "Run outside examinations with a verified backup and enough disk space. A later weave rollback restores the pre-update database and loses all records written since that snapshot; it is not a routine undo.",
-  },
-  {
-    groupId: "networking", command: "weave network info", description: "Inspect host IPv4 addresses, subnet masks, networks, and gateways.",
-    usage: "weave network info [--json]", platforms: "Windows & Linux", access: "No elevation for adapter inspection",
-    explanation: "Reads active host adapters and suggests a school adapter only when exactly one eligible private /24-or-narrower network is found. It does not configure forwarding.",
-    options: [{ flag: "--json", description: "Return interfaces and the recommended adapter as JSON; recommended can be null." }],
-    examples: [{ label: "Inspect IP and subnet details", command: "weave network info" }, { label: "Read adapter inventory as JSON", command: "weave network info --json" }],
-    outcome: "Host network inventory and an optional suggestion. Multiple eligible adapters require manual selection.",
-  },
-  {
-    groupId: "networking", command: "weave network interfaces", description: "List active host IPv4 network adapters.",
-    usage: "weave network interfaces", platforms: "Windows & Linux", access: "No elevation for adapter inspection",
-    explanation: "Shows the same readable inventory as network info, including IP address, subnet mask, CIDR, gateway, and network profile.",
-    options: [], examples: [{ label: "List host adapters", command: "weave network interfaces" }],
-    outcome: "Adapter details for selecting the school LAN; no network changes.",
-  },
-  {
-    groupId: "networking", command: "weave network recommend", description: "Suggest a safe school LAN address and subnet.",
-    usage: "weave network recommend", platforms: "Windows & Linux", access: "No elevation for adapter inspection",
-    explanation: "Requires one unambiguous eligible private adapter and excludes recognized virtual adapters. On Windows it prints a suggested weave lan command. Linux uses native networking.",
-    options: [], examples: [{ label: "Review the suggested school network", command: "weave network recommend" }],
-    outcome: "A suggestion only. If selection is ambiguous, inspect interfaces and choose manually; forwarding is not enabled.",
-  },
-  {
-    groupId: "networking", command: "weave network configure", description: "Confirm and apply suggested Windows school LAN forwarding.",
-    usage: "weave network configure --auto", platforms: "Windows WSL2 only", access: "Administrator PowerShell",
-    explanation: "Finds one eligible private /24-or-narrower adapter, displays the listener and permitted subnet, and asks for confirmation before creating WEAVE-owned HTTP forwarding and firewall rules. For manual selection use weave lan.",
-    options: [{ flag: "--auto", description: "Inspect and confirm the single safe adapter. Required; there is no --yes option." }],
-    examples: [{ label: "Review and confirm automatic LAN setup", command: "weave network configure --auto", platform: "Windows" }],
-    outcome: "Restricted LAN mapping after confirmation. Verify it from another student device.",
-    note: "Refuses ambiguous adapters, unsupported runtimes, and sessions without administrator access. Run network recommend first to inspect the suggestion.",
-  },
-  {
-    groupId: "networking", command: "weave network url", description: "Display the student HTTP access link.",
-    usage: "weave network url", platforms: "Windows & Linux", access: "Installation inspection permissions",
-    explanation: "Windows uses the saved WEAVE LAN listener and requires configured forwarding. Linux uses the single eligible host adapter. The printed link ends in /student.",
-    options: [], examples: [{ label: "Show the student LAN link", command: "weave network url" }],
-    outcome: "An HTTP student URL. Use the verified HTTPS hostname when HTTPS is enabled, and test access from a separate school computer.",
-  },
-  {
-    groupId: "networking", command: "weave network doctor", description: "Diagnose host adapters, local HTTP connectivity, and Windows forwarding.",
-    usage: "weave network doctor", platforms: "Windows & Linux", access: "Installation and network inspection permissions",
-    explanation: "Lists host adapters, checks local TCP port 80, and checks saved Windows portproxy and firewall scope when configured. These checks inspect network state without changing it.",
-    options: [], examples: [{ label: "Investigate school LAN connectivity", command: "weave network doctor" }],
-    outcome: "Network diagnostic results. Local TCP success does not verify HTTP contents or access from student computers; missing forwarding can appear as a warning.",
   },
   {
     groupId: "installation", command: "weave reinstall", description: "Create a fresh server installation on a disposable test machine.",
