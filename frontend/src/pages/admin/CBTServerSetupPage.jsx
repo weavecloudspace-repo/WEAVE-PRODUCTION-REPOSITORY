@@ -86,6 +86,10 @@ export default function CBTServerSetupPage() {
     [release?.installer_asset],
   );
 
+  const windowsCli = (release?.packages || []).find(
+    (packageItem) =>
+      packageItem.platform === "windows" && packageItem.kind === "cli",
+  );
   const linuxPackages = (release?.packages || []).filter(
     (packageItem) => packageItem.platform === "linux",
   );
@@ -270,6 +274,20 @@ export default function CBTServerSetupPage() {
                     </div>
                   ) : null}
 
+                  {windowsCli ? (
+                    <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-text">Windows standalone CLI</p>
+                        <p className="mt-1 break-all text-xs text-text-muted">{windowsCli.asset}</p>
+                        <p className="mt-2 break-all font-mono text-xs text-text-muted">SHA-256: {windowsCli.sha256}</p>
+                      </div>
+                      <Button type="button" variant="outline" className="shrink-0 justify-center" onClick={() => startDownload(windowsCli)}>
+                        <Download className="h-4 w-4" />
+                        Download CLI
+                      </Button>
+                    </div>
+                  ) : null}
+
                   {release?.release_notes ? (
                     <div className="mt-5">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
@@ -444,7 +462,7 @@ export default function CBTServerSetupPage() {
           <Button
             type="button"
             className="shrink-0 justify-center"
-            disabled={!release || Boolean(releaseError) || creatingPairingCode}
+            disabled={creatingPairingCode}
             onClick={continueToPairing}
           >
             {creatingPairingCode ? (
