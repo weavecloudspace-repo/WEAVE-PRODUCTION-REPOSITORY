@@ -40,6 +40,9 @@ import { useToast } from "../../hooks/useToast";
 import { getErrorMessage, parseApiError } from "../../services/api";
 import { cbtService } from "../../services/cbtService";
 
+// Keep rotation hidden until CBT can adopt a replacement server credential.
+const CREDENTIAL_ROTATION_AVAILABLE = false;
+
 const STATUS_META = {
   active: {
     label: "Active",
@@ -512,7 +515,7 @@ export default function CBTServersPage() {
             <div>
               <p className="font-semibold">Historical CBT access is limited on this plan.</p>
               <p className="mt-1 text-xs leading-5">
-                Existing servers and result evidence remain available. Upgrade to Professional or Enterprise to pair, reactivate, or rotate credentials.
+                Existing servers and result evidence remain available. Upgrade to Professional or Enterprise to pair or reactivate servers.
               </p>
             </div>
             <Link to="/admin/billing/plans" className="shrink-0">
@@ -807,7 +810,7 @@ export default function CBTServersPage() {
                               {String(server.status).toLowerCase() !==
                               "revoked" ? (
                                 <>
-                                  {featureGuard.allowed ? (
+                                  {CREDENTIAL_ROTATION_AVAILABLE && featureGuard.allowed ? (
                                     <button
                                       type="button"
                                       className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-text transition hover:bg-primary-subtle"
@@ -1062,7 +1065,7 @@ export default function CBTServersPage() {
 
                   {String(selectedServer.status).toLowerCase() !== "revoked" ? (
                     <>
-                      {featureGuard.allowed ? (
+                      {CREDENTIAL_ROTATION_AVAILABLE && featureGuard.allowed ? (
                         <Button
                           variant="outline"
                           className="w-full justify-center rounded-xl"
