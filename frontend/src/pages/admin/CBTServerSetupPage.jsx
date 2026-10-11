@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleHelp,
-  Copy,
   Download,
   ExternalLink,
   FileArchive,
