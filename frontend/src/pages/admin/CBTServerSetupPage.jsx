@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  BookOpen,
   CheckCircle2,
   Download,
   HardDrive,
@@ -86,12 +87,25 @@ export default function CBTServerSetupPage() {
     [release?.installer_asset],
   );
 
-  const startDownload = () => {
+  const windowsCli = (release?.packages || []).find(
+    (packageItem) =>
+      packageItem.platform === "windows" && packageItem.kind === "cli",
+  );
+  const linuxPackages = (release?.packages || []).filter(
+    (packageItem) => packageItem.platform === "linux",
+  );
+
+  const startDownload = (packageItem = null) => {
     if (!release?.installer_url) return;
 
     const downloadLink = document.createElement("a");
-    downloadLink.href = release.installer_url;
-    downloadLink.download = packageName;
+    if (packageItem) {
+      downloadLink.href = packageItem.url;
+      downloadLink.download = packageItem.asset;
+    } else {
+      downloadLink.href = release.installer_url;
+      downloadLink.download = packageName;
+    }
     downloadLink.rel = "noopener noreferrer";
     downloadLink.style.display = "none";
     document.body.appendChild(downloadLink);
@@ -146,6 +160,15 @@ export default function CBTServerSetupPage() {
               </p>
             </div>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0 justify-center"
+            onClick={() => navigate("/admin/cbt/documentation")}
+          >
+            <BookOpen className="h-4 w-4" />
+            Documentation
+          </Button>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
@@ -168,7 +191,7 @@ export default function CBTServerSetupPage() {
                       ) : null}
                     </div>
                     <p className="mt-1 text-sm leading-6 text-text-muted">
-                      64-bit Windows installer with the dedicated local CBT runtime.
+                      Native desktop installer for 64-bit Windows. Includes WEAVE CBT Manager and the management CLI.
                     </p>
                   </div>
                 </div>
@@ -177,7 +200,7 @@ export default function CBTServerSetupPage() {
                   type="button"
                   className="shrink-0 justify-center"
                   disabled={!release?.installer_url || loadingRelease}
-                  onClick={startDownload}
+                  onClick={() => startDownload()}
                 >
                   <Download className="h-4 w-4" />
                   Download installer
@@ -254,6 +277,27 @@ export default function CBTServerSetupPage() {
                     </div>
                   </div>
 
+                  {release?.installer_sha256 ? (
+                    <div className="mt-4 rounded-xl border border-border/70 bg-surface-muted/25 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Windows desktop SHA-256</p>
+                      <p className="mt-1 break-all font-mono text-xs text-text">{release.installer_sha256}</p>
+                    </div>
+                  ) : null}
+
+                  {windowsCli ? (
+                    <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-text">Windows standalone CLI</p>
+                        <p className="mt-1 break-all text-xs text-text-muted">{windowsCli.asset}</p>
+                        <p className="mt-2 break-all font-mono text-xs text-text-muted">SHA-256: {windowsCli.sha256}</p>
+                      </div>
+                      <Button type="button" variant="outline" className="shrink-0 justify-center" onClick={() => startDownload(windowsCli)}>
+                        <Download className="h-4 w-4" />
+                        Download CLI
+                      </Button>
+                    </div>
+                  ) : null}
+
                   {release?.release_notes ? (
                     <div className="mt-5">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
@@ -266,6 +310,51 @@ export default function CBTServerSetupPage() {
                   ) : null}
                 </>
               )}
+            </div>
+
+            <div className="border-t border-border/70 px-5 py-6 sm:px-7">
+              <div className="flex items-start gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <Server className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-text">WEAVE CBT for Linux</h2>
+                  <p className="mt-1 text-sm leading-6 text-text-muted">
+                    Ubuntu/Debian amd64 desktop package and an advanced standalone CLI archive.
+                  </p>
+                </div>
+              </div>
+              {release && linuxPackages.length ? (
+                <div className="mt-4 space-y-3">
+                  {linuxPackages.map((packageItem) => (
+                    <div key={packageItem.asset} className="rounded-xl border border-border/70 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-text">
+                            {packageItem.kind === "desktop" ? "Linux Desktop (.deb)" : "Linux CLI (.tar.gz)"}
+                          </p>
+                          <p className="mt-1 break-all text-xs text-text-muted">{packageItem.asset}</p>
+                        </div>
+                        <Button type="button" variant="outline" className="shrink-0 justify-center" onClick={() => startDownload(packageItem)}>
+                          <Download className="h-4 w-4" />
+                          Download
+                        </Button>
+                      </div>
+                      <p className="mt-3 text-xs font-semibold text-text-muted">SHA-256</p>
+                      <p className="mt-1 break-all font-mono text-xs text-text">{packageItem.sha256}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-text-muted">
+                  {loadingRelease ? "Checking official Linux packages..." : "Linux downloads require a fully verified release."}
+                </p>
+              )}
+              {release?.checksums_url ? (
+                <a href={release.checksums_url} className="mt-4 inline-flex text-sm font-medium text-primary underline underline-offset-2" target="_blank" rel="noopener noreferrer">
+                  View official SHA256SUMS
+                </a>
+              ) : null}
             </div>
           </Card>
 
@@ -285,17 +374,14 @@ export default function CBTServerSetupPage() {
             </div>
 
             <div className="mt-6 space-y-5">
-              <SetupStep number="1" title="Download on the server computer">
-                Use a 64-bit Windows computer with enough disk space for the
-                local exam database and exam assets.
+              <SetupStep number="1" title="Choose a dedicated 64-bit exam server">
+                Select a Windows or supported Ubuntu/Debian computer with sufficient storage for the local exam database and exam assets.
               </SetupStep>
-              <SetupStep number="2" title="Run the installer as administrator">
-                Windows may ask for permission because WEAVE CBT prepares WSL2,
-                the local Linux runtime and background startup components.
+              <SetupStep number="2" title="Install the correct desktop package">
+                Run the Windows desktop setup as administrator, or install the Linux .deb through your OS package manager. The Linux .tar.gz archive is intended for experienced administrators.
               </SetupStep>
-              <SetupStep number="3" title="Allow a restart if Windows requires it">
-                If WSL2 needs a reboot, restart the computer and reopen WEAVE CBT
-                Manager to continue setup safely.
+              <SetupStep number="3" title="Complete platform setup and any required reboot">
+                On Windows, enable WSL2 and restart when prompted. On Linux, verify systemd, Docker, and your desktop authentication agent are available before administering services.
               </SetupStep>
               <SetupStep number="4" title="Wait until the Manager reports ready">
                 The first setup needs internet access to prepare the runtime and
@@ -345,6 +431,35 @@ export default function CBTServerSetupPage() {
           </div>
         </Card>
 
+        <Card className="rounded-2xl border-border/80 p-5 shadow-sm sm:p-6">
+          <h2 className="text-base font-semibold text-text">School network and security checklist</h2>
+          <div className="mt-4 grid gap-4 text-sm leading-6 text-text-muted md:grid-cols-2">
+            <div>
+              <p className="font-semibold text-text">LAN and DNS</p>
+              Reserve the server IP on the school router and configure its local DNS name to resolve to that private IP.
+              Test the staff and student portals from another wired or Wi-Fi device, not just localhost.
+              Use school-network firewall restrictions and verify actual access from an untrusted network.
+            </div>
+            <div>
+              <p className="font-semibold text-text">HTTPS and offline exams</p>
+              Configure trusted HTTPS with the correct hostname and certificate, then test in a normal student browser.
+              Never disable certificate verification. Internet is required for setup and WEAVE sync;
+              verify exam operation with the internet disconnected before a live examination.
+            </div>
+            <div>
+              <p className="font-semibold text-text">Windows setup</p>
+              Windows CBT uses WSL2. Configure the intended LAN forwarding and Windows Firewall policy,
+              refresh forwarding after address changes, and test access from a separate computer.
+            </div>
+            <div>
+              <p className="font-semibold text-text">Linux setup</p>
+              Install the desktop .deb using the system package manager. Administrative actions may require Polkit.
+              Published Docker ports can bypass ordinary UFW INPUT rules; confirm filtering from another device.
+              Preserve volumes and back up school data before updates or removals.
+            </div>
+          </div>
+        </Card>
+
         <div className="flex flex-col gap-3 rounded-2xl border border-primary/15 bg-primary/5 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-text">
@@ -357,7 +472,7 @@ export default function CBTServerSetupPage() {
           <Button
             type="button"
             className="shrink-0 justify-center"
-            disabled={!release || Boolean(releaseError) || creatingPairingCode}
+            disabled={creatingPairingCode}
             onClick={continueToPairing}
           >
             {creatingPairingCode ? (

@@ -1,130 +1,157 @@
+"""Release catalogue validation against the actual WEAVE CBT versioned artifact contract."""
+
 from types import SimpleNamespace
 
 import pytest
 
 from app.config.settings import EnvironmentType
-from app.modules.cbt.releases.schemas import CBTReleaseResponse
 from app.modules.cbt.releases.service import (
     CBTReleaseService,
     CBTReleaseUnavailableError,
+    _PACKAGE_NAMES,
+    _RELEASE_REPOSITORY,
 )
 import app.modules.cbt.releases.service as release_service_module
 
 
-def _release(
-    *,
-    channel: str = "production",
-    tag: str = "manager-production-latest",
-    image: str = "ghcr.io/aphrodite1818/weave-cbt-module:sha-7604735",
-) -> CBTReleaseResponse:
-    asset = (
-        "WeaveCBT-Setup-Windows-x64.exe"
-        if channel == "production"
-        else "WeaveCBT-Setup-Staging-x64.exe"
-    )
-    return CBTReleaseResponse(
-        channel=channel,
-        manager_version="0.1.0",
-        cbt_version="0.1.0",
-        minimum_supported_version="0.1.0",
-        image=image,
-        installer_asset=asset,
-        installer_url=(
-            f"https://github.com/Aphrodite1818/WEAVE-CBT-MODULE/releases/download/{tag}/{asset}"
-        ),
-        installer_sha256="a" * 64,
-        release_notes="Test release",
-        source_commit="b" * 40,
-    )
+DIGEST = "a" * 64
+COMMIT = "b" * 40
+IMAGE = "ghcr.io/weavecloudspace-repo/weave-cbt-production-repository@sha256:" + DIGEST
 
 
-def test_release_channel_matches_weave_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        release_service_module,
-        "settings",
-        SimpleNamespace(ENV=EnvironmentType.PRODUCTION),
-    )
-    assert CBTReleaseService.channel_for_environment() == "production"
-
-    monkeypatch.setattr(
-        release_service_module,
-        "settings",
-        SimpleNamespace(ENV=EnvironmentType.STAGING),
-    )
-    assert CBTReleaseService.channel_for_environment() == "staging"
-
-    monkeypatch.setattr(
-        release_service_module,
-        "settings",
-        SimpleNamespace(ENV=EnvironmentType.DEVELOPMENT),
-    )
-    assert CBTReleaseService.channel_for_environment() == "staging"
-
-
-def test_valid_production_release_is_accepted() -> None:
-    CBTReleaseService._validate_release(
-        channel="production",
-        tag="manager-production-latest",
-        release=_release(),
-    )
-
-
-def test_immutable_digest_release_is_accepted() -> None:
-    release = _release(image=("ghcr.io/aphrodite1818/weave-cbt-module@sha256:" + ("a" * 64)))
-
-    CBTReleaseService._validate_release(
-        channel="production",
-        tag="manager-production-latest",
-        release=release,
-    )
-
-
-def test_wrong_release_channel_is_rejected() -> None:
-    with pytest.raises(CBTReleaseUnavailableError, match="does not match"):
-        CBTReleaseService._validate_release(
-            channel="production",
-            tag="manager-production-latest",
-            release=_release(
-                channel="staging",
-                tag="manager-staging-latest",
-            ),
+def release_metadata(channel="staging"):
+    tag = "staging-1.0.1512" if channel == "staging" else "v1.0.1512"
+    assets = []
+    for _, _, name in _PACKAGE_NAMES[channel]:
+        assets.append(
+            {
+                "name": name,
+                "state": "uploaded",
+                "size": 1024,
+                "browser_download_url": CBTReleaseService._asset_url(tag, name),
+            }
         )
+    assets.append(
+        {
+            "name": "SHA256SUMS",
+            "state": "uploaded",
+            "size": 512,
+            "browser_download_url": CBTReleaseService._asset_url(tag, "SHA256SUMS"),
+        }
+    )
+    return {
+        "tag_name": tag,
+        "draft": False,
+        "prerelease": channel == "staging",
+        "target_commitish": COMMIT,
+        "body": f"GUI and CLI from commit {COMMIT}; application image {IMAGE}.",
+        "assets": assets,
+    }
 
 
-def test_wrong_release_tag_is_rejected() -> None:
-    with pytest.raises(CBTReleaseUnavailableError, match="URL failed"):
-        CBTReleaseService._validate_release(
-            channel="production",
-            tag="manager-production-latest",
-            release=_release(tag="manager-staging-latest"),
+def checksums(channel="staging"):
+    return {name: DIGEST for _, _, name in _PACKAGE_NAMES[channel]}
+
+
+@pytest.mark.parametrize("channel", ["staging", "production"])
+def test_published_release_builds_four_packages(channel):
+    metadata = release_metadata(channel)
+    release = CBTReleaseService._build_release(channel, metadata, checksums(channel))
+    assert release.channel == channel
+    assert release.image == IMAGE
+    assert release.source_commit == COMMIT
+    assert release.installer_url == release.packages[0].url
+    assert {(p.platform, p.kind) for p in release.packages} == {
+        ("windows", "desktop"),
+        ("windows", "cli"),
+        ("linux", "desktop"),
+        ("linux", "cli"),
+    }
+    assert release.release_url.host == "github.com"
+    assert _RELEASE_REPOSITORY in str(release.release_url)
+
+
+def test_release_channel_matches_weave_environment(monkeypatch):
+    for env, expected in [
+        (EnvironmentType.PRODUCTION, "production"),
+        (EnvironmentType.STAGING, "staging"),
+        (EnvironmentType.DEVELOPMENT, "staging"),
+    ]:
+        monkeypatch.setattr(
+            release_service_module,
+            "settings",
+            SimpleNamespace(ENV=env),
         )
+        assert CBTReleaseService.channel_for_environment() == expected
 
 
-def test_unexpected_image_repository_is_rejected() -> None:
-    release = _release(image="ghcr.io/example/untrusted:latest")
-    with pytest.raises(CBTReleaseUnavailableError, match="unexpected container image"):
-        CBTReleaseService._validate_release(
-            channel="production",
-            tag="manager-production-latest",
-            release=release,
-        )
+def test_wrong_repository_or_channel_asset_url_is_rejected():
+    metadata = release_metadata()
+    metadata["assets"][0]["browser_download_url"] = (
+        "https://github.com/untrusted/repository/releases/download/"
+        + metadata["tag_name"]
+        + "/"
+        + metadata["assets"][0]["name"]
+    )
+    with pytest.raises(CBTReleaseUnavailableError, match="URL"):
+        CBTReleaseService._build_release("staging", metadata, checksums())
 
 
-def test_lookalike_image_repository_is_rejected() -> None:
-    release = _release(image=("ghcr.io/aphrodite1818/weave-cbt-module-evil@sha256:" + ("a" * 64)))
-    with pytest.raises(CBTReleaseUnavailableError, match="unexpected container image"):
-        CBTReleaseService._validate_release(
-            channel="production",
-            tag="manager-production-latest",
-            release=release,
-        )
+def test_incomplete_or_unuploaded_installers_are_rejected():
+    metadata = release_metadata()
+    metadata["assets"].pop()
+    with pytest.raises(CBTReleaseUnavailableError, match="missing"):
+        CBTReleaseService._build_release("staging", metadata, checksums())
+    metadata = release_metadata()
+    metadata["assets"][0]["state"] = "starter"
+    with pytest.raises(CBTReleaseUnavailableError, match="not ready"):
+        CBTReleaseService._build_release("staging", metadata, checksums())
 
 
-def test_malformed_digest_is_rejected() -> None:
-    release = _release(image="ghcr.io/aphrodite1818/weave-cbt-module@sha256:not-a-digest")
-    with pytest.raises(CBTReleaseUnavailableError, match="unexpected container image"):
-        CBTReleaseService._validate_release(
-            channel="production",
-            tag="manager-production-latest",
-            release=release,
-        )
+def test_missing_or_extra_checksums_are_rejected():
+    metadata = release_metadata()
+    with pytest.raises(CBTReleaseUnavailableError, match="missing checksums"):
+        CBTReleaseService._build_release("staging", metadata, {})
+    invalid = checksums()
+    invalid["rogue.exe"] = DIGEST
+    with pytest.raises(CBTReleaseUnavailableError, match="unexpected entries"):
+        CBTReleaseService._build_release("staging", metadata, invalid)
+
+
+def test_wrong_image_digest_repository_or_source_commit_is_rejected():
+    metadata = release_metadata()
+    metadata["body"] = "application image ghcr.io/attacker/image@sha256:" + DIGEST
+    with pytest.raises(CBTReleaseUnavailableError, match="image"):
+        CBTReleaseService._build_release("staging", metadata, checksums())
+    metadata = release_metadata()
+    metadata["target_commitish"] = "staging"
+    with pytest.raises(CBTReleaseUnavailableError, match="source commit"):
+        CBTReleaseService._build_release("staging", metadata, checksums())
+
+
+def test_channel_selection_skips_wrong_channel_drafts_and_previews():
+    prod = release_metadata("production")
+    staging = release_metadata("staging")
+    draft = release_metadata("staging")
+    draft["draft"] = True
+    selected = CBTReleaseService._select_release("staging", [prod, draft, staging])
+    assert selected is staging
+    with pytest.raises(CBTReleaseUnavailableError, match="No verified"):
+        CBTReleaseService._select_release("production", [staging, draft])
+
+
+def test_checksum_parser_rejects_malformed_duplicate_and_empty_data():
+    assert (
+        CBTReleaseService._parse_checksums(DIGEST + "  WEAVE-CBT-Staging-Desktop-Setup.exe\n")[
+            "WEAVE-CBT-Staging-Desktop-Setup.exe"
+        ]
+        == DIGEST
+    )
+    for bad in (
+        "",
+        "not-a-checksum",
+        DIGEST + "  ../traversal.exe",
+        DIGEST + "  file.exe\n" + DIGEST + "  file.exe",
+    ):
+        with pytest.raises(CBTReleaseUnavailableError):
+            CBTReleaseService._parse_checksums(bad)
