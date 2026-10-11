@@ -75,6 +75,7 @@ test("setup cards use verified release metadata and preserve pairing independenc
   assert.match(setup, /release\?\.packages\?\.find/);
   assert.match(setup, /release\.installer_url/);
   assert.match(setup, /packageItem\.sha256/);
+  assert.doesNotMatch(setup, /Download checksums|release\?\.release_notes/);
   assert.match(setup, /Continue to pairing/);
   assert.match(setup, /disabled=\{creatingPairingCode\}/);
   assert.match(setup, /topic \? "\/admin\/cbt\/documentation\?topic="/);

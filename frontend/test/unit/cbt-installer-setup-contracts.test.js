@@ -31,8 +31,7 @@ test("CBT setup page downloads backend-selected release metadata", async () => {
   assert.match(setupPage, /cbtService\.getLatestRelease\(\)/);
   assert.match(setupPage, /release\.installer_url/);
   assert.match(setupPage, /release\?\.manager_version/);
-  assert.match(setupPage, /release\?\.cbt_version/);
-  assert.match(setupPage, /Environment matched automatically/);
+  assert.doesNotMatch(setupPage, /channelLabel|Release channel|Environment matched automatically/);
 });
 
 test("installer download is dispatched exactly once without opening or navigating to GitHub", async () => {

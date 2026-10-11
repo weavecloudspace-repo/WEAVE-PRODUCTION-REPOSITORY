@@ -1,11 +1,12 @@
 import {
   ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Copy,
 Info, Laptop, Link2, Monitor, Network, RefreshCcw, Rocket,
-  Search, ShieldCheck, Terminal, Wifi, Wrench, X,
+  Search, ShieldCheck, Terminal, Wrench, X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
+import PlatformLogo from "../../features/cbt/PlatformLogo";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
@@ -113,7 +114,7 @@ function DocumentationArticleSection({ section, index, showPlatform }) {
         <div className="min-w-0 flex-1 space-y-4">
           <h2 id={section.id + "-title"} className="pt-0.5 text-lg font-semibold tracking-tight text-text">{section.title}</h2>
           {section.paragraphs?.map((p) => <p key={p} className="text-sm leading-7 text-text-muted">{p}</p>)}
-          {section.steps && <ol className="grid gap-3 sm:grid-cols-2">
+          {section.steps && <ol className="space-y-3">
             {section.steps.map(([label, explanation], i) => <li key={label} className="flex gap-3 rounded-xl border border-border/70 bg-surface-muted/25 p-3.5">
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">{i + 1}</span>
               <span><span className="block text-sm font-semibold text-text">{label}</span><span className="mt-1 block text-xs leading-5 text-text-muted">{explanation}</span></span>
@@ -123,7 +124,7 @@ function DocumentationArticleSection({ section, index, showPlatform }) {
             <div role="group" aria-label="Select command platform" className="mb-4 flex flex-wrap gap-2">
               {Object.entries(CLI_PLATFORM_EXAMPLES).map(([key, item]) => <button key={key} type="button" aria-pressed={platform === key} onClick={() => setPlatform(key)}
                 className={platform === key ? "rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground" : "rounded-lg border border-border bg-surface px-3 py-2 text-xs font-medium text-text-soft hover:text-text"}>
-                {item.label}
+                <span className="flex items-center gap-2"><PlatformLogo platform={key === "windows" ? "windows" : "linux"} className="h-4 w-4" />{item.label}</span>
               </button>)}
             </div>
             <p className="mb-3 text-xs leading-6 text-text-muted">{example.instructions}</p>
@@ -143,9 +144,13 @@ function DocumentationArticleSection({ section, index, showPlatform }) {
 
 export default function CBTServerDocumentationPage() {
   const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
+  const location = useLocation();
+  const articleRef = useRef(null);
+  const sectionNavRef = useRef(null);
   const requestedTopic = params.get("topic");
   const topic = CBT_DOCS.find((item) => item.id === requestedTopic) || CBT_DOCS[0];
+  const previousTarget = useRef(topic.id + location.hash);
   const [query, setQuery] = useState("");
   const [mobileNav, setMobileNav] = useState(false);
   const searchInput = useRef(null);
@@ -163,24 +168,44 @@ export default function CBTServerDocumentationPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  useEffect(() => {
+    const targetKey = topic.id + location.hash;
+    const unchangedTarget = previousTarget.current === targetKey;
+    previousTarget.current = targetKey;
+    if (unchangedTarget && !location.hash) return;
+    // Wait until the shell has reset its viewport and React has rendered the new topic.
+    let secondFrame;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const section = topic.sections.find((item) => "#" + item.id === location.hash);
+        const target = section ? document.getElementById(section.id) : articleRef.current;
+        const viewport = document.getElementById("dashboard-scroll-viewport");
+        if (!target || !viewport) return;
+        const offset = section ? (sectionNavRef.current?.getBoundingClientRect().height || 0) + 16 : 16;
+        const top = viewport.scrollTop + target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - offset;
+        const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        viewport.scrollTo({ top: Math.max(0, top), behavior: reducedMotion ? "auto" : "smooth" });
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [topic, location.hash]);
+
   const openTopic = (topicId, sectionId) => {
-    setParams({ topic: topicId });
+    navigate({ pathname: location.pathname, search: "?topic=" + encodeURIComponent(topicId), hash: sectionId ? "#" + sectionId : "" });
     setQuery("");
     setMobileNav(false);
-    if (sectionId) {
-      window.setTimeout(() => document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
-    } else {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
   };
   const navigateToSection = (sectionId) => {
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    navigate({ pathname: location.pathname, search: location.search, hash: "#" + sectionId });
   };
   const TopicIcon = DOC_ICONS[topic.icon] || BookOpen;
 
   return (
     <DashboardLayout role="admin" title="WEAVE CBT Documentation">
-      <div className="mx-auto w-full max-w-[1500px] space-y-6 pb-12">
+      <div className="mx-auto w-full max-w-[1200px] space-y-4 pb-8">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <Button variant="ghost" size="icon" aria-label="Back to CBT setup" onClick={() => navigate("/admin/cbt/setup-server")}><ArrowLeft className="h-4 w-4" /></Button>
@@ -199,7 +224,7 @@ export default function CBTServerDocumentationPage() {
           <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-muted" />
           <input ref={searchInput} value={query} onChange={(event) => setQuery(event.target.value)}
             type="search" aria-label="Search CBT documentation" placeholder="Search documentation, CLI commands, setup, pairing..."
-            className="h-14 w-full rounded-2xl border border-border/80 bg-surface pl-12 pr-16 text-sm text-text shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" />
+            className="h-12 w-full rounded-2xl border border-border/80 bg-surface pl-12 pr-16 text-sm text-text shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" />
           <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 rounded-md border border-border bg-surface-muted px-2 py-1 text-[10px] font-semibold text-text-muted">Ctrl K</span>
         </div>
 
@@ -216,36 +241,35 @@ export default function CBTServerDocumentationPage() {
           </Card>
         ) : null}
 
-        <div className="grid items-start gap-5 lg:grid-cols-[210px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_184px]">
+        <div className="grid items-start gap-5 lg:grid-cols-[200px_minmax(0,1fr)]">
           <div className="lg:hidden">
             <Button variant="outline" size="sm" onClick={() => setMobileNav((v) => !v)} aria-expanded={mobileNav}><BookOpen className="h-4 w-4" /> Browse topics <ChevronRight className="h-4 w-4" /></Button>
           </div>
-          <aside aria-label="Documentation topics" className={(mobileNav ? "block" : "hidden") + " rounded-2xl border border-border/80 bg-surface p-2 shadow-sm lg:sticky lg:top-5 lg:block"}>
+          <aside aria-label="Documentation topics" className={(mobileNav ? "block" : "hidden") + " rounded-2xl border border-border/80 bg-surface p-2 shadow-sm lg:sticky lg:top-4 lg:block lg:max-h-[calc(100dvh-120px)] lg:overflow-y-auto"}>
             <p className="px-3 pb-2 pt-3 text-[10px] font-bold uppercase tracking-[0.17em] text-text-muted">Browse documentation</p>
             <nav className="space-y-1">
               {CBT_DOCS.map((item) => {
                 const Icon = DOC_ICONS[item.icon] || BookOpen;
                 return <button key={item.id} type="button" aria-current={topic.id === item.id ? "page" : undefined} onClick={() => openTopic(item.id)}
                   className={topic.id === item.id ? "flex w-full items-start gap-3 rounded-xl bg-primary/10 px-3 py-3 text-left text-primary" : "flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left text-text-soft hover:bg-surface-muted/60 hover:text-text"}>
-                  <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span className="min-w-0"><span className="block text-xs font-semibold">{item.title}</span><span className="mt-0.5 block text-[11px] leading-4 text-text-muted">{item.summary}</span></span>
+                  {item.id === "windows" || item.id === "linux" ? <PlatformLogo platform={item.id} className="mt-0.5 h-5 w-5 shrink-0" /> : <Icon className="mt-0.5 h-4 w-4 shrink-0" />}
+                  <span className="min-w-0"><span className="block text-xs font-semibold">{item.title}</span></span>
                 </button>;
               })}
             </nav>
           </aside>
 
-          <main className="min-w-0">
-            <Card className="overflow-hidden rounded-2xl border-border/80 p-0 shadow-sm">
-              <div className="border-b border-border/70 bg-gradient-to-br from-primary/10 via-surface to-surface px-5 py-6 sm:px-8 sm:py-8">
-                <div className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-primary"><TopicIcon className="h-4 w-4" /> WEAVE CBT Guide</div>
+          <main ref={articleRef} className="min-w-0">
+            <Card className="rounded-2xl border-border/80 p-0 shadow-sm">
+              <div className="border-b border-border/70 px-5 py-5 sm:px-8 sm:py-6">
+                <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">{topic.id === "windows" || topic.id === "linux" ? <PlatformLogo platform={topic.id} className="h-5 w-5" /> : <TopicIcon className="h-4 w-4" />} WEAVE CBT Guide</div>
                 <h2 className="text-xl font-semibold tracking-tight text-text sm:text-2xl">{topic.title}</h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-text-muted">{topic.summary}</p>
-                <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-medium">
-                  <span className="rounded-full border border-border bg-surface/90 px-3 py-1 text-text-muted">{topic.sections.length} sections</span>
-                  <span className="rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-primary">Windows &amp; Linux</span>
-                  <span className="rounded-full border border-border bg-surface/90 px-3 py-1 text-text-muted">Locally managed server</span>
-                </div>
               </div>
+              <nav ref={sectionNavRef} aria-label="On this page" className="sticky top-0 z-10 flex flex-wrap gap-x-4 gap-y-1 border-b border-border/70 bg-surface/95 px-5 py-3 backdrop-blur sm:px-8">
+                {topic.sections.map((section) => <button key={section.id} type="button" onClick={() => navigateToSection(section.id)} aria-current={location.hash === "#" + section.id ? "location" : undefined}
+                  className="min-h-8 text-xs font-medium text-text-muted hover:text-primary hover:underline aria-[current=location]:text-primary">{section.title}</button>)}
+              </nav>
               <div className="space-y-7 px-5 py-7 sm:px-8 sm:py-9">
                 {topic.sections.map((section, index) => <DocumentationArticleSection key={section.id} section={section} index={index} showPlatform={topic.id === "cli" && section.id === "cli-intro"} />)}
               </div>
@@ -255,22 +279,6 @@ export default function CBTServerDocumentationPage() {
               </div>
             </Card>
           </main>
-
-          <aside className="hidden space-y-4 xl:sticky xl:top-5 xl:block">
-            <div className="rounded-2xl border border-border/80 bg-surface p-4">
-              <p className="mb-3 text-xs font-bold text-text">On this page</p>
-              <nav aria-label="On this page" className="space-y-1 border-l border-border/80">
-                {topic.sections.map((section) => <button key={section.id} type="button" onClick={() => navigateToSection(section.id)}
-                  className="block w-full border-l-2 border-transparent py-2 pl-3 text-left text-xs leading-5 text-text-muted hover:border-primary hover:text-primary">{section.title}</button>)}
-              </nav>
-            </div>
-            <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
-              <p className="flex items-center gap-2 text-xs font-semibold text-text"><CircleHelp className="h-4 w-4 text-primary" /> Need help?</p>
-              <p className="mt-2 text-xs leading-5 text-text-muted">Find solutions to common setup, CLI and connectivity issues.</p>
-              <button type="button" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" onClick={() => openTopic("troubleshooting")}>Troubleshooting <ArrowRight className="h-3.5 w-3.5" /></button>
-            </div>
-            <div className="flex items-center gap-2 px-2 text-[11px] leading-5 text-text-muted"><Wifi className="h-4 w-4 shrink-0" /> Exam delivery uses your school LAN.</div>
-          </aside>
         </div>
       </div>
     </DashboardLayout>
