@@ -1,6 +1,6 @@
 import {
   ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Copy,
-  ExternalLink, Info, Laptop, Link2, Monitor, Network, RefreshCcw, Rocket,
+Info, Laptop, Link2, Monitor, Network, RefreshCcw, Rocket,
   Search, ShieldCheck, Terminal, Wifi, Wrench, X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
