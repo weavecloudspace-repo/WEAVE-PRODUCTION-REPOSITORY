@@ -110,7 +110,7 @@ test("CLI reference covers every reviewed command and explains destructive recov
 });
 
 test("documented example flags match the reviewed CBT CLI command signatures", () => {
-  // Contract captured from weave_cbt staging deployment CLI at 037a865.
+  // Reviewed against the unified CBT network CLI.
   const supported = {
     release: [], status: ["--json"], doctor: [], start: [], stop: [], restart: [],
     install: ["--env-file", "--assets-dir", "--install-dir", "--data-dir", "--rootfs-archive", "--version", "--min-free-gib"],
@@ -124,7 +124,7 @@ test("documented example flags match the reviewed CBT CLI command signatures", (
   };
   for (const item of CLI_COMMANDS) {
     for (const example of item.examples) {
-      const [, name] = example.command.match(/(?:sudo )?weave (network \S+|\S+)/);
+      const [, name] = example.command.match(/(?:sudo )?weave (network dns \S+|network \S+|\S+)/);
       if (name === "--help") continue;
       assert.ok(Object.hasOwn(supported, name), `Unsupported command: ${name}`);
       const flags = example.command.match(/--[a-z-]+|(?<=\s)-[a-z](?=\s|$)/g) || [];
