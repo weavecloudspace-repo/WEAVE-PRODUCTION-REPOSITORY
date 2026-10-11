@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  BookOpen,
   CheckCircle2,
   Download,
   HardDrive,
@@ -159,6 +160,15 @@ export default function CBTServerSetupPage() {
               </p>
             </div>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0 justify-center"
+            onClick={() => navigate("/admin/cbt/documentation")}
+          >
+            <BookOpen className="h-4 w-4" />
+            Documentation
+          </Button>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
