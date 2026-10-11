@@ -10,25 +10,19 @@ import PlatformLogo from "../../features/cbt/PlatformLogo";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
-import { CBT_DOCS, CLI_COMMANDS, searchCbtDocs } from "../../features/cbt/cbtDocumentationContent";
+import { CBT_DOCS, CLI_COMMANDS, CLI_GROUPS, searchCbtDocs } from "../../features/cbt/cbtDocumentationContent";
 
 const DOC_ICONS = { Rocket, Monitor, Laptop, Terminal, Link2, Network, Wrench, RefreshCcw, CircleHelp };
-const CATEGORIES = ["All", "Inspection", "Service", "Logs", "Administration"];
 const CLI_PLATFORM_EXAMPLES = {
   windows: {
     label: "Windows",
-    instructions: "The Windows Desktop installer includes weave.exe. From PowerShell, invoke its installed path directly if the CLI is not yet on PATH.",
-    command: '& "C:\\Program Files\\WeaveCBT\\weave.exe" release',
+    instructions: "Open PowerShell. If weave is not on PATH, use the installed executable path below and append the command and its options.",
+    command: '& "C:\\Program Files\\WeaveCBT\\weave.exe" status --json',
   },
-  deb: {
-    label: "Linux desktop (.deb)",
-    instructions: "Install the channel-matched Desktop .deb package using the system package manager. It includes the CLI.",
-    command: "sudo apt install ./weave-cbt-desktop-staging-linux-amd64.deb",
-  },
-  tar: {
-    label: "Linux CLI (.tar.gz)",
-    instructions: "Download the channel-matched CLI archive. Inspect its contents before extracting and follow its included installation guidance.",
-    command: "tar -tzf weave-cbt-staging-linux-amd64.tar.gz | head",
+  linux: {
+    label: "Linux",
+    instructions: "Open a terminal. The desktop package normally adds weave to PATH. Use sudo for administration commands; inspection requires access to the installed runtime.",
+    command: "weave status --json",
   },
 };
 
@@ -63,47 +57,48 @@ function CommandBlock({ command, label = "Terminal" }) {
   );
 }
 
-function CommandReference() {
-  const [category, setCategory] = useState("All");
-  const commands = category === "All" ? CLI_COMMANDS : CLI_COMMANDS.filter((item) => item.category === category);
+function CommandReference({ groupId, onSelectGroup }) {
+  const commands = CLI_COMMANDS.filter((item) => item.groupId === groupId);
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter CLI commands">
-        {CATEGORIES.map((item) => (
-          <button key={item} type="button" aria-pressed={category === item} onClick={() => setCategory(item)}
-            className={category === item ? "rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground" : "rounded-lg border border-border bg-surface px-3 py-2 text-xs font-medium text-text-soft hover:border-primary/30 hover:text-text"}>
-            {item}
-          </button>
-        ))}
+    <div className="space-y-4">
+      <div className="lg:hidden">
+        <label htmlFor="cli-command-group" className="mb-2 block text-xs font-semibold text-text">Command group</label>
+        <select id="cli-command-group" value={groupId} onChange={(event) => onSelectGroup(event.target.value)}
+          className="min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-text">
+          {CLI_GROUPS.map((group) => <option key={group.id} value={group.id}>{group.title}</option>)}
+        </select>
       </div>
-      <div className="overflow-hidden rounded-xl border border-border/80">
-        {commands.map((item) => <div key={item.command} className="flex flex-col gap-2 border-b border-border/60 bg-surface p-3 last:border-0 sm:flex-row sm:items-center sm:gap-4 sm:px-4">
-          <div className="min-w-0 flex-1">
-            <code className="break-all rounded-md bg-surface-muted px-2 py-1 text-xs font-semibold text-text">{item.command}</code>
-            <p className="mt-2 text-xs leading-5 text-text-muted">{item.description}</p>
+      <p className="text-xs leading-5 text-text-muted">Select a command to see when to use it, supported options, and copyable examples. Examples use <code>weave</code>; substitute the installed executable path if needed.</p>
+      <div className="divide-y divide-border/70 overflow-hidden rounded-xl border border-border/80">
+        {commands.map((item) => <details key={item.command} className="group bg-surface">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0"><code className="text-sm font-semibold text-text">{item.command}</code><span className="mt-1 block text-xs leading-5 text-text-muted">{item.description}</span></span>
+            <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-text-muted transition-transform group-open:rotate-90 motion-reduce:transition-none" />
+          </summary>
+          <div className="space-y-4 border-t border-border/60 px-4 py-5 sm:px-5">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted"><span>{item.platforms}</span><span>{item.access}</span></div>
+            <p className="text-sm leading-6 text-text-muted">{item.explanation}</p>
+            <div><h3 className="mb-2 text-xs font-semibold text-text">Usage</h3><code className="block break-words rounded-lg bg-surface-muted/50 p-3 text-xs leading-6 text-text">{item.usage}</code></div>
+            <div>
+              <h3 className="mb-2 text-xs font-semibold text-text">Options & arguments</h3>
+              {item.options.length ? <dl className="space-y-3">{item.options.map((option) => <div key={option.flag} className="sm:grid sm:grid-cols-[minmax(0,160px)_minmax(0,1fr)] sm:gap-3">
+                <dt><code className="break-words text-xs font-semibold text-text">{option.flag}</code></dt>
+                <dd className="mt-1 text-xs leading-6 text-text-muted sm:mt-0">{option.description}</dd>
+              </div>)}</dl> : <p className="text-xs text-text-muted">No command-specific options or arguments. Add --help to view help.</p>}
+            </div>
+            <div className="space-y-3"><h3 className="text-xs font-semibold text-text">Example usage</h3>
+              {item.examples.map((example) => <CommandBlock key={example.command} command={example.command} label={example.label + (example.platform ? " (" + example.platform + ")" : "")} />)}
+            </div>
+            <div><h3 className="mb-1 text-xs font-semibold text-text">What to check afterward</h3><p className="text-xs leading-6 text-text-muted">{item.outcome}</p></div>
+            {item.note && <p className="rounded-lg border border-primary/15 bg-primary/5 p-3 text-xs leading-6 text-text">{item.note}</p>}
           </div>
-          <InlineCopy command={item.command} />
-        </div>)}
+        </details>)}
       </div>
-      <p className="text-xs text-text-muted">Tip: use <code className="rounded bg-surface-muted px-1.5 py-0.5">weave --help</code> or <code className="rounded bg-surface-muted px-1.5 py-0.5">weave install --help</code> to inspect the options supported by your installed version.</p>
     </div>
   );
 }
 
-function InlineCopy({ command }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    try { await navigator.clipboard.writeText(command); setCopied(true); }
-    catch { setCopied(false); }
-  };
-  return <button type="button" onClick={handleCopy} aria-label={"Copy " + command}
-    className="inline-flex min-h-9 items-center justify-center gap-2 self-start rounded-lg border border-border px-3 text-xs font-medium text-text-soft hover:border-primary/40 hover:text-primary sm:self-center">
-    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-    {copied ? "Copied" : "Copy"}
-  </button>;
-}
-
-function DocumentationArticleSection({ section, index, showPlatform }) {
+function DocumentationArticleSection({ section, index, showPlatform, onSelectGroup }) {
   const [platform, setPlatform] = useState("windows");
   const example = CLI_PLATFORM_EXAMPLES[platform];
 
@@ -129,10 +124,9 @@ function DocumentationArticleSection({ section, index, showPlatform }) {
             </div>
             <p className="mb-3 text-xs leading-6 text-text-muted">{example.instructions}</p>
             <CommandBlock label={platform === "windows" ? "PowerShell" : "Terminal"} command={example.command} />
-            <p className="mt-3 text-xs text-text-muted">Sample staging filename shown. Always use the current package from your environment's download page.</p>
           </div>}
           {section.commands?.map((item) => <CommandBlock key={item.command} command={item.command} label={item.label} />)}
-          {section.commandTable && <CommandReference />}
+          {section.commandTable && <CommandReference groupId={section.commandGroupId} onSelectGroup={onSelectGroup} />}
           {section.tips?.map((tip) => <div key={tip} className="flex items-start gap-2.5 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 text-xs leading-6 text-text">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><p>{tip}</p>
           </div>)}
@@ -150,7 +144,12 @@ export default function CBTServerDocumentationPage() {
   const sectionNavRef = useRef(null);
   const requestedTopic = params.get("topic");
   const topic = CBT_DOCS.find((item) => item.id === requestedTopic) || CBT_DOCS[0];
-  const previousTarget = useRef(topic.id + location.hash);
+  const requestedGroup = params.get("group") || topic.sections.find((section) => "#" + section.id === location.hash)?.commandGroupId;
+  const selectedGroup = CLI_GROUPS.find((group) => group.id === requestedGroup) || CLI_GROUPS[0];
+  const visibleSections = topic.id === "cli"
+    ? topic.sections.filter((section) => section.commandGroupId === selectedGroup.id || (selectedGroup.id === "diagnostics" && section.id === "cli-intro"))
+    : topic.sections;
+  const previousTarget = useRef(topic.id + selectedGroup.id + location.hash);
   const [query, setQuery] = useState("");
   const [mobileNav, setMobileNav] = useState(false);
   const searchInput = useRef(null);
@@ -169,7 +168,7 @@ export default function CBTServerDocumentationPage() {
   }, []);
 
   useEffect(() => {
-    const targetKey = topic.id + location.hash;
+    const targetKey = topic.id + selectedGroup.id + location.hash;
     const unchangedTarget = previousTarget.current === targetKey;
     previousTarget.current = targetKey;
     if (unchangedTarget && !location.hash) return;
@@ -191,10 +190,10 @@ export default function CBTServerDocumentationPage() {
       window.cancelAnimationFrame(firstFrame);
       if (secondFrame) window.cancelAnimationFrame(secondFrame);
     };
-  }, [topic, location.hash]);
+  }, [topic, selectedGroup.id, location.hash]);
 
-  const openTopic = (topicId, sectionId) => {
-    navigate({ pathname: location.pathname, search: "?topic=" + encodeURIComponent(topicId), hash: sectionId ? "#" + sectionId : "" });
+  const openTopic = (topicId, sectionId, groupId) => {
+    navigate({ pathname: location.pathname, search: "?topic=" + encodeURIComponent(topicId) + (groupId ? "&group=" + encodeURIComponent(groupId) : ""), hash: sectionId ? "#" + sectionId : "" });
     setQuery("");
     setMobileNav(false);
   };
@@ -229,16 +228,22 @@ export default function CBTServerDocumentationPage() {
         </div>
 
         {query.trim() ? (
-          <Card className="space-y-3 rounded-2xl p-4 sm:p-6">
-            <div className="flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-text">Search results ({results.length})</h2>
-              <button type="button" onClick={() => setQuery("")} className="flex items-center gap-1 text-xs font-medium text-text-muted hover:text-text"><X className="h-3.5 w-3.5" /> Clear</button>
+          <div className="overflow-hidden rounded-xl border border-border/80 bg-surface" aria-label="Documentation search results">
+            <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
+              <h2 className="text-xs font-semibold text-text">Search results ({results.length})</h2>
+              <button type="button" onClick={() => setQuery("")} className="inline-flex min-h-8 items-center gap-1 text-xs font-medium text-text-muted hover:text-text"><X className="h-3.5 w-3.5" /> Clear</button>
             </div>
-            {results.length ? <div className="grid gap-2 sm:grid-cols-2">{results.map((item) => <button key={item.topicId + item.sectionId} type="button" onClick={() => openTopic(item.topicId, item.sectionId)}
-              className="group rounded-xl border border-border/80 p-3 text-left hover:border-primary/40 hover:bg-primary/5">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">{item.topicTitle}</span>
-              <span className="mt-1 flex items-center justify-between gap-2 text-sm font-medium text-text">{item.sectionTitle}<ArrowRight className="h-4 w-4 shrink-0 text-text-muted group-hover:text-primary" /></span>
-            </button>)}</div> : <p className="py-6 text-center text-sm text-text-muted">No matching articles. Try “weave logs”, “Windows”, “DNS” or “pairing”.</p>}
-          </Card>
+            {results.length ? <ul className="divide-y divide-border/60">{results.map((item) => <li key={item.topicId + item.sectionId}>
+              <button type="button" onClick={() => openTopic(item.topicId, item.sectionId, item.groupId)}
+                className="group flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-primary/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-primary sm:px-5">
+                <span className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
+                  <span className="shrink-0 text-xs font-medium text-text-muted sm:w-36">{item.topicTitle}</span>
+                  <span className="text-sm font-medium text-text">{item.sectionTitle}</span>
+                </span>
+                <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0 text-text-muted group-hover:text-primary" />
+              </button>
+            </li>)}</ul> : <p className="px-4 py-6 text-sm text-text-muted">No matching articles. Try “weave logs”, “Windows”, “DNS” or “pairing”.</p>}
+          </div>
         ) : null}
 
         <div className="grid items-start gap-5 lg:grid-cols-[200px_minmax(0,1fr)]">
@@ -250,11 +255,19 @@ export default function CBTServerDocumentationPage() {
             <nav className="space-y-1">
               {CBT_DOCS.map((item) => {
                 const Icon = DOC_ICONS[item.icon] || BookOpen;
-                return <button key={item.id} type="button" aria-current={topic.id === item.id ? "page" : undefined} onClick={() => openTopic(item.id)}
+                return <div key={item.id}><button type="button" aria-current={topic.id === item.id ? "page" : undefined} onClick={() => openTopic(item.id)}
                   className={topic.id === item.id ? "flex w-full items-start gap-3 rounded-xl bg-primary/10 px-3 py-3 text-left text-primary" : "flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left text-text-soft hover:bg-surface-muted/60 hover:text-text"}>
                   {item.id === "windows" || item.id === "linux" ? <PlatformLogo platform={item.id} className="mt-0.5 h-5 w-5 shrink-0" /> : <Icon className="mt-0.5 h-4 w-4 shrink-0" />}
                   <span className="min-w-0"><span className="block text-xs font-semibold">{item.title}</span></span>
-                </button>;
+                </button>
+                  {item.id === "cli" && topic.id === "cli" && <nav aria-label="CLI command groups" className="mb-2 ml-5 border-l border-border pl-2">
+                    {CLI_GROUPS.map((group) => <button key={group.id} type="button" aria-current={selectedGroup.id === group.id ? "page" : undefined}
+                      onClick={() => openTopic("cli", "cli-" + group.id, group.id)}
+                      className={"block min-h-9 w-full rounded-lg px-2 py-2 text-left text-xs " + (selectedGroup.id === group.id ? "bg-primary/10 font-semibold text-primary" : "text-text-muted hover:bg-surface-muted hover:text-text")}>
+                      {group.title}
+                    </button>)}
+                  </nav>}
+                </div>;
               })}
             </nav>
           </aside>
@@ -267,11 +280,11 @@ export default function CBTServerDocumentationPage() {
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-text-muted">{topic.summary}</p>
               </div>
               <nav ref={sectionNavRef} aria-label="On this page" className="sticky top-0 z-10 flex flex-wrap gap-x-4 gap-y-1 border-b border-border/70 bg-surface/95 px-5 py-3 backdrop-blur sm:px-8">
-                {topic.sections.map((section) => <button key={section.id} type="button" onClick={() => navigateToSection(section.id)} aria-current={location.hash === "#" + section.id ? "location" : undefined}
+                {visibleSections.map((section) => <button key={section.id} type="button" onClick={() => navigateToSection(section.id)} aria-current={location.hash === "#" + section.id ? "location" : undefined}
                   className="min-h-8 text-xs font-medium text-text-muted hover:text-primary hover:underline aria-[current=location]:text-primary">{section.title}</button>)}
               </nav>
               <div className="space-y-7 px-5 py-7 sm:px-8 sm:py-9">
-                {topic.sections.map((section, index) => <DocumentationArticleSection key={section.id} section={section} index={index} showPlatform={topic.id === "cli" && section.id === "cli-intro"} />)}
+                {visibleSections.map((section, index) => <DocumentationArticleSection key={section.id} section={section} index={index} onSelectGroup={(groupId) => openTopic("cli", "cli-" + groupId, groupId)} showPlatform={topic.id === "cli" && section.id === "cli-intro"} />)}
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 bg-surface-muted/20 px-5 py-4 sm:px-8">
                 <p className="flex items-center gap-2 text-xs text-text-muted"><ShieldCheck className="h-4 w-4 text-primary" /> Verify commands against the installed version.</p>

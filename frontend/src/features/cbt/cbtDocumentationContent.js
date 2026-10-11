@@ -1,6 +1,11 @@
+import { CLI_COMMANDS, CLI_GROUPS } from "./cbtCliReference.js";
+
+export { CLI_COMMANDS, CLI_GROUPS };
+
 /**
  * Curated CBT documentation. Keep commands aligned with the WEAVE CBT Typer CLI
  * and platform packaging; avoid guessing installation flags or release versions.
+ * Reader-facing documentation must not expose deployment environment types or channels.
  */
 export const CBT_DOCS = [
   {
@@ -12,7 +17,7 @@ export const CBT_DOCS = [
       {
         id: "overview", title: "Before you begin",
         paragraphs: ["Choose a dedicated Windows 64-bit or supported Ubuntu/Debian amd64 computer to host WEAVE CBT. The server retains exam data locally, including when internet access is unavailable during an examination.", "Initial installation, image downloads, pairing and synchronization require internet access. Keep sufficient free disk space and prepare a backup plan."],
-        tips: ["Select the installer from your WEAVE workspace; staging and production are different release channels.", "The Desktop package is recommended when the host has a graphical desktop."],
+        tips: ["Download the official installer from your WEAVE workspace.", "The Desktop package is recommended when the host has a graphical desktop."],
       },
       {
         id: "setup-flow", title: "Four steps to a ready server",
@@ -37,7 +42,7 @@ export const CBT_DOCS = [
     icon: "Monitor",
     sections: [
       { id:"windows-install", title:"Install the Windows package",
-        paragraphs:["Download the Windows Desktop installer selected for this environment. Run the installer as Administrator. It installs the Desktop Manager and the companion CLI into the same WeaveCBT application directory.", "For advanced or unattended administration, use the separate published Windows CLI setup instead of assuming a ZIP archive exists. The initial server installation provisions a dedicated WSL2 Ubuntu distribution and Docker; follow restart prompts."],
+        paragraphs:["Download the Windows Desktop installer from your WEAVE workspace. Run the installer as Administrator. It installs the Desktop Manager and the companion CLI into the same WeaveCBT application directory.", "For advanced or unattended administration, use the separate published Windows CLI setup instead of assuming a ZIP archive exists. The initial server installation provisions a dedicated WSL2 Ubuntu distribution and Docker; follow restart prompts."],
         commands:[{label:"Verify the installed Windows CLI (PowerShell)",command:'& "C:\\Program Files\\WeaveCBT\\weave.exe" release'}],
         tips:["Do not delete the dedicated WeaveCBT WSL distribution to troubleshoot a GUI-only failure. It can contain your local school examination database."],
       },
@@ -58,9 +63,9 @@ export const CBT_DOCS = [
     icon:"Laptop",
     sections:[
       {id:"linux-install",title:"Choose your Linux installation",
-       paragraphs:["For a desktop computer, download the WEAVE CBT Desktop .deb for your selected channel and install it with your distribution package manager. It includes the command-line manager.", "For a headless server, download the published CLI .tar.gz archive. Extract it into a dedicated directory, inspect the included assets, and follow the packaged instructions for installation. Avoid installing both package variants over each other."],
-       commands:[{label:"Desktop package (use your downloaded filename)",command:"sudo apt install ./weave-cbt-desktop-staging-linux-amd64.deb"},{label:"Inspect a downloaded CLI archive",command:"tar -tzf weave-cbt-staging-linux-amd64.tar.gz | head"}],
-       tips:["These example filenames are for staging. Download the production equivalents only from a production WEAVE workspace.", "Desktop administrative operations may require Polkit; do not grant unrestricted Docker socket permissions merely to bypass an authentication prompt."]},
+       paragraphs:["For a desktop computer, download the WEAVE CBT Desktop .deb from your WEAVE workspace and install it with your distribution package manager. It includes the command-line manager.", "For a headless server, download the published CLI .tar.gz archive. Extract it into a dedicated directory, inspect the included assets, and follow the packaged instructions for installation. Avoid installing both package variants over each other."],
+       commands:[{label:"Desktop package (use your downloaded filename)",command:"sudo apt install ./your-downloaded-desktop.deb"},{label:"Inspect a downloaded CLI archive",command:"tar -tzf your-downloaded-cli.tar.gz | head"}],
+       tips:["Replace the sample filenames with the exact names of your downloaded packages.", "Desktop administrative operations may require Polkit; do not grant unrestricted Docker socket permissions merely to bypass an authentication prompt."]},
       {id:"linux-verify",title:"Verify services and permissions",
        paragraphs:["Confirm that Docker and systemd are available and that the CLI has the correct privileges for service operations. A read-only inspection should not require permanently adding every school staff member to the Docker group."],
        commands:[{label:"Release assets",command:"weave release"},{label:"Runtime diagnostics",command:"weave doctor"},{label:"Listening ports",command:"sudo ss -lntp"}],
@@ -73,26 +78,20 @@ export const CBT_DOCS = [
   },
   {
     id:"cli", title:"CLI reference",
-    summary:"Commands, arguments, inspection, services and troubleshooting.",
+    summary:"Everyday commands grouped by task, with options and practical examples.",
     icon:"Terminal",
     sections:[
       {id:"cli-intro",title:"Using the WEAVE CBT command line",
-       paragraphs:["The WEAVE management CLI can verify the packaged release, install or manage a local server and inspect diagnostics. On Windows, it normally lives beside the WEAVE CBT Desktop executable; on a Linux Desktop installation it is normally available as weave.", "Open PowerShell or a terminal. Use the path shown below if weave is not on your Windows PATH. Always use the package matching your workspace's staging or production environment."],
-       commands:[{label:"Windows PowerShell",command:'& "C:\\Program Files\\WeaveCBT\\weave.exe" --help'},{label:"Linux / available PATH",command:"weave --help"}],
+       paragraphs:["The WEAVE management CLI can verify the packaged release, install or manage a local server and inspect diagnostics. On Windows, it normally lives beside the WEAVE CBT Desktop executable; on a Linux Desktop installation it is normally available as weave.", "Examples use weave as the command name. On Windows, replace weave with & \"C:\\Program Files\\WeaveCBT\\weave.exe\" if the command is not on PATH. On Linux, use sudo for commands marked Administrator / root."],
        tips:["Commands that configure, start, stop or remove the local runtime can require elevated permissions. Use read-only commands first."],
       },
-      {id:"cli-verify",title:"Verify the manager and runtime",
-       paragraphs:["The release command validates packaged release metadata and assets. The status command reports the installed server's state; the JSON form is useful for diagnostics and integrations."],
-       commands:[{label:"Release verification",command:"weave release"},{label:"JSON server status",command:"weave status --json"}],
-      },
-      {id:"cli-commands",title:"Common CLI commands",
-       paragraphs:["These commands are registered by the official WEAVE CBT CLI. Select a category to narrow the reference, or use the copy control next to a command."],
-       commandTable:true,
-      },
-      {id:"cli-examples",title:"Inspect a failing service",
-       paragraphs:["If the Desktop Manager reports a CLI error, first check the installed CLI directly. A successful command-line result with a failing GUI indicates a desktop discovery or subprocess problem, not necessarily an uninstalled server.", "For live service output, append --follow and interrupt with Ctrl+C when finished."],
-       commands:[{label:"Verify release separately",command:"weave release"},{label:"See API logs",command:"weave logs api"},{label:"Follow live logs",command:"weave logs --follow"},{label:"Get diagnostics",command:"weave doctor"}],
-      },
+      ...CLI_GROUPS.map((group) => ({
+        id: "cli-" + group.id,
+        title: group.title,
+        paragraphs: [group.description],
+        commandGroupId: group.id,
+        commandTable: true,
+      })),
     ],
   },
   {
@@ -142,14 +141,14 @@ export const CBT_DOCS = [
   },
   {
     id:"updates",title:"Updates and releases",
-    summary:"Verified package channels, checksums, safe updates.",
+    summary:"Official packages, checksums, and safe updates.",
     icon:"RefreshCcw",
     sections:[
-      {id:"release-channel",title:"Release channels",
-       paragraphs:["The WEAVE portal fetches official versioned downloads from the selected environment. Staging is for testing; production is for operational school examinations. Do not install assets from the other channel over an existing server without supported migration steps."]},
+      {id:"official-packages",title:"Official packages",
+       paragraphs:["Download manager and CLI packages from your WEAVE workspace. Check the installed manager with weave release and follow the update guide before changing an existing server."]},
       {id:"integrity",title:"Verify downloaded files",
        paragraphs:["Check the published SHA-256 checksum against the downloaded installer before running it. The download page displays the hash returned by the backend's verified release catalogue."],
-       commands:[{label:"PowerShell (substitute the downloaded filename)",command:"Get-FileHash .\\WEAVE-CBT-Staging-Desktop-Setup.exe -Algorithm SHA256"},{label:"Linux",command:"sha256sum weave-cbt-desktop-staging-linux-amd64.deb"}]},
+       commands:[{label:"PowerShell (substitute the downloaded filename)",command:"Get-FileHash .\\your-downloaded-installer.exe -Algorithm SHA256"},{label:"Linux",command:"sha256sum your-downloaded-desktop.deb"}]},
       {id:"backup",title:"Before updating",
        paragraphs:["Verify backups, avoid updating during an examination, and record the current application image and manager version. Follow the official package's update and rollback commands; never delete school data as part of a routine version update."]},
     ],
@@ -171,23 +170,6 @@ export const CBT_DOCS = [
   },
 ];
 
-export const CLI_COMMANDS = [
-  {category:"Inspection",command:"weave --help",description:"Show supported subcommands and options."},
-  {category:"Inspection",command:"weave release",description:"Validate the packaged release manifest and assets."},
-  {category:"Inspection",command:"weave status --json",description:"Inspect server state as machine-readable JSON."},
-  {category:"Inspection",command:"weave doctor",description:"Check runtime dependencies and local endpoints."},
-  {category:"Logs",command:"weave logs",description:"Read recent logs for all CBT services."},
-  {category:"Logs",command:"weave logs api",description:"Read FastAPI service logs."},
-  {category:"Logs",command:"weave logs --follow",description:"Follow live service logs; Ctrl+C to stop."},
-  {category:"Service",command:"weave start",description:"Start the installed CBT server."},
-  {category:"Service",command:"weave stop",description:"Stop the installed CBT server."},
-  {category:"Service",command:"weave restart",description:"Restart CBT services."},
-  {category:"Administration",command:"weave install",description:"Provision a CBT server using the packaged assets."},
-  {category:"Administration",command:"weave update --help",description:"Review supported update options before changing the server."},
-  {category:"Administration",command:"weave lan --help",description:"Inspect available Windows LAN forwarding options."},
-  {category:"Administration",command:"weave tls --help",description:"Review HTTPS management commands."},
-];
-
 export function searchCbtDocs(query) {
   const term = String(query || "").trim().toLocaleLowerCase();
   if (!term) return [];
@@ -200,9 +182,13 @@ export function searchCbtDocs(query) {
           ...(section.tips || []),
           ...(section.commands || []).flatMap((item) => [item.command, item.label]),
           ...(section.steps || []).flat(),
-          ...(section.commandTable ? CLI_COMMANDS.flatMap((item) => [item.command, item.description]) : []),
+          ...(section.commandTable ? CLI_COMMANDS
+            .filter((item) => item.groupId === section.commandGroupId)
+            .flatMap((item) => [item.command, item.description, item.usage, item.explanation, item.outcome, item.note || "",
+              ...item.options.flatMap((option) => [option.flag, option.description]),
+              ...item.examples.flatMap((example) => [example.command, example.label])]) : []),
         ].join(" ").toLocaleLowerCase().includes(term),
       )
-      .map((section) => ({topicId:topic.id, topicTitle:topic.title, sectionId:section.id, sectionTitle:section.title})),
+      .map((section) => ({topicId:topic.id, topicTitle:topic.title, sectionId:section.id, sectionTitle:section.title, groupId:section.commandGroupId})),
   ).slice(0, 30);
 }
