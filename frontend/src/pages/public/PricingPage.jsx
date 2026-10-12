@@ -18,7 +18,7 @@ const comparisonRows = [
   ["Students", (plan) => formatLimitValue(plan.limits.students)],
   ["Teachers", (plan) => formatLimitValue(plan.limits.teachers)],
   ["Parents", (plan) => formatLimitValue(plan.limits.parents)],
-  ["CBT servers", (plan) => formatLimitValue(plan.limits.cbt_servers)],
+  ["Local CBT installation", (plan) => Number(plan.limits.cbt_servers || 0) > 0 ? "Included" : "—"],
   [
     "Bulk import",
     (plan) =>
@@ -202,6 +202,9 @@ function PricingPage() {
                   </div>
                 ))}
               </div>
+              <p className="px-5 py-4 text-sm leading-6 text-text-muted">
+                WEAVE CBT V1 is designed for one school-hosted examination server. Schools can scale capacity by upgrading that server\u0027s hardware; independent CBT installations do not share examination data.
+              </p>
             </div>
           </div>
         </section>

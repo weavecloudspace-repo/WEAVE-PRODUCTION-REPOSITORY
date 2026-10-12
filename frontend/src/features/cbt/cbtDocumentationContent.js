@@ -16,7 +16,7 @@ export const CBT_DOCS = [
     sections: [
       {
         id: "overview", title: "Before you begin",
-        paragraphs: ["Choose a dedicated Windows 64-bit or supported Ubuntu/Debian amd64 computer to host WEAVE CBT. The server retains exam data locally, including when internet access is unavailable during an examination.", "Initial installation, image downloads, pairing and synchronization require internet access. Keep sufficient free disk space and prepare a backup plan."],
+        paragraphs: ["Choose a dedicated Windows 64-bit or supported Ubuntu/Debian amd64 computer to host WEAVE CBT. The server runs its own PostgreSQL, Redis and examination services and retains exam data locally, including when internet access is unavailable during an examination. WEAVE CBT V1 supports one standalone examination installation per school; capacity scales with the server hardware, not by combining separate installations.", "Initial installation, image downloads, pairing and synchronization require internet access. Keep sufficient free disk space and prepare a backup plan."],
         tips: ["Download the official installer from your WEAVE workspace.", "The Desktop package is recommended when the host has a graphical desktop."],
       },
       {
