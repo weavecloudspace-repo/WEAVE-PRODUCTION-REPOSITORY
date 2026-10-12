@@ -64,6 +64,11 @@ const DOWNLOAD_PLATFORMS = [
 
 const SUPPORT_LINKS = [
   {
+    title: "Manual student DNS setup",
+    topic: "networking",
+    Icon: Info,
+  },
+  {
     title: "Need the CLI?",
     topic: "cli",
     Icon: Terminal,
