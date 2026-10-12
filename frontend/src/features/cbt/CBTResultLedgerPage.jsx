@@ -279,11 +279,11 @@ function TechnicalIdentifier({ label, value, onCopy }) {
 
 function DetailField({ label, value }) {
   return (
-    <div className="min-w-0 rounded-xl border border-border/70 bg-surface-muted/30 px-3 py-3">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-text-faint">{label}</p>
-      <p className="mt-1 break-words text-sm font-medium text-text">
+    <div className="flex min-w-0 items-start gap-3 border-b border-border/60 py-2.5">
+      <dt className="w-28 shrink-0 text-xs font-medium text-text-muted sm:w-32">{label}</dt>
+      <dd className="min-w-0 flex-1 break-words text-sm font-medium text-text">
         {value || "--"}
-      </p>
+      </dd>
     </div>
   );
 }
@@ -861,7 +861,7 @@ export default function CBTResultLedgerPage({ role = "admin" }) {
             {batchDetail.batch_error_detail ? (
               <ErrorNotice><span className="font-semibold">{batchDetail.batch_error_code || "Batch error"}:</span> {batchDetail.batch_error_detail}</ErrorNotice>
             ) : null}
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <dl className="grid gap-x-6 md:grid-cols-2">
               <DetailField label="Batch reference" value={detailPresentation.reference} />
               <DetailField label="Exam" value={detailPresentation.title} />
               {isSuperadmin ? <DetailField label="School" value={detailPresentation.tenant} /> : null}
@@ -874,13 +874,20 @@ export default function CBTResultLedgerPage({ role = "admin" }) {
               <DetailField label="Exam date" value={formatDate(batchDetail.exam_date)} />
               <DetailField label="Imported" value={formatDateTime(batchDetail.created_at)} />
               <DetailField label="Processed" value={formatDateTime(batchDetail.processed_at)} />
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <DetailField label="Received" value={String(batchDetail.received_count)} />
-              <DetailField label="Applied" value={String(batchDetail.applied_count)} />
-              <DetailField label="Unchanged" value={String(batchDetail.unchanged_count)} />
-              <DetailField label="Rejected" value={String(batchDetail.rejected_count)} />
-            </div>
+            </dl>
+            <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
+              {[
+                ["Received", batchDetail.received_count],
+                ["Applied", batchDetail.applied_count],
+                ["Unchanged", batchDetail.unchanged_count],
+                ["Rejected", batchDetail.rejected_count],
+              ].map(([label, count]) => (
+                <div key={label} className="min-w-0 bg-surface px-4 py-3">
+                  <dt className="text-xs font-medium text-text-muted">{label}</dt>
+                  <dd className="mt-1 text-xl font-semibold tabular-nums text-text">{Number(count || 0).toLocaleString()}</dd>
+                </div>
+              ))}
+            </dl>
             <details className="rounded-xl border border-border bg-surface-muted/20">
               <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-text">
                 Technical details
@@ -905,6 +912,7 @@ export default function CBTResultLedgerPage({ role = "admin" }) {
                 <div><h3 className="text-sm font-semibold text-text">Student score decisions</h3><p className="mt-0.5 text-xs text-text-muted">{detailTotal.toLocaleString()} matching items</p></div>
                 <select
                   className="input-base min-w-[170px] text-sm"
+                  aria-label="Filter student score decisions by outcome"
                   value={itemOutcome}
                   onChange={(event) => {
                     const nextOutcome = event.target.value;

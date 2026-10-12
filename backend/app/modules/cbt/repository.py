@@ -73,6 +73,45 @@ class CBTServerRepository:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_school_dns_slug(db: AsyncSession, *, tenant_id: uuid.UUID) -> str | None:
+        return await db.scalar(
+            select(CBTServer.dns_school_slug)
+            .where(CBTServer.tenant_id == tenant_id)
+            .order_by(CBTServer.paired_at)
+            .limit(1)
+        )
+
+    @staticmethod
+    async def dns_school_slug_owned_by_other(
+        db: AsyncSession, *, school_slug: str, tenant_id: uuid.UUID
+    ) -> bool:
+        return (
+            await db.scalar(
+                select(CBTServer.id)
+                .where(
+                    CBTServer.dns_school_slug == school_slug,
+                    CBTServer.tenant_id != tenant_id,
+                )
+                .limit(1)
+            )
+            is not None
+        )
+
+    @staticmethod
+    async def dns_name_exists(db: AsyncSession, *, school_slug: str, server_label: str) -> bool:
+        return (
+            await db.scalar(
+                select(CBTServer.id)
+                .where(
+                    CBTServer.dns_school_slug == school_slug,
+                    CBTServer.hostname_prefix == server_label,
+                )
+                .limit(1)
+            )
+            is not None
+        )
+
+    @staticmethod
     async def list_for_tenant(db: AsyncSession, tenant_id: uuid.UUID) -> list[CBTServer]:
         result = await db.execute(
             select(CBTServer)
@@ -114,6 +153,16 @@ class CBTServerRepository:
     async def reactivate(db: AsyncSession, server: CBTServer) -> CBTServer:
         server.status = CBTServerStatus.ACTIVE
         server.suspended_at = None
+        await db.flush()
+        return server
+
+    @staticmethod
+    async def unrevoke(db: AsyncSession, server: CBTServer, *, suspended_at: datetime) -> CBTServer:
+        """Restore registration without restoring revoked credentials or activating."""
+        server.status = CBTServerStatus.SUSPENDED
+        server.suspended_at = suspended_at
+        server.revoked_at = None
+        # Retain the last revoking administrator and reason for review.
         await db.flush()
         return server
 

@@ -1,5 +1,6 @@
 import { CalendarDays, RefreshCw, ShieldAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import EmptyState from "../../../components/shared/EmptyState";
 import LoadingState from "../../../components/shared/LoadingState";
@@ -123,6 +124,14 @@ function SchoolCalendarWorkspace({
   const [loading, setLoading] = useState(true);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [saving, setSaving] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const returnToOverview = () => {
+    if (saving) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("view", "overview");
+    next.delete("tab");
+    setSearchParams(next, { replace: true });
+  };
   const [error, setError] = useState("");
   const [configForm, setConfigForm] = useState({
     timezone: "Africa/Lagos",
@@ -537,6 +546,7 @@ function SchoolCalendarWorkspace({
 
       {activeTab === "setup" ? (
         <SetupTab
+          onBack={setupTermId ? undefined : returnToOverview}
           sessions={sessions}
           filteredTerms={filteredTerms}
           selectedSessionId={selectedSessionId}
@@ -630,6 +640,7 @@ function SchoolCalendarWorkspace({
 
       {activeTab === "closures" ? (
         <ClosuresTab
+          onBack={returnToOverview}
           calendars={filteredCalendars}
           sessions={sessions}
           terms={terms}
@@ -778,6 +789,7 @@ function SetupTab({
   onConfigChange,
   onSave,
   onGenerate,
+  onBack,
 }) {
   const setupSteps = [
     ["Select session and term", selectedSessionId && selectedTermId],
@@ -794,7 +806,7 @@ function SetupTab({
   const manualOverrides = days.filter((day) => day.is_manual_override).length;
 
   return (
-    <WorkspacePanel title="Calendar Setup">
+    <WorkspacePanel title="Calendar Setup" onBack={onBack} backDisabled={busy}>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.85fr)]">
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -1457,6 +1469,7 @@ function EventsTab({
 }
 
 function ClosuresTab({
+  onBack,
   calendars,
   sessions,
   terms,
@@ -1471,6 +1484,8 @@ function ClosuresTab({
   return (
     <WorkspacePanel
       title="Emergency Closure"
+      onBack={onBack}
+      backDisabled={busy}
       description="Close the school for a date range when normal operations need to stop."
     >
       <form className="max-w-3xl space-y-4" onSubmit={onCreate}>

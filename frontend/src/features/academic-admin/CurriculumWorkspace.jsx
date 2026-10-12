@@ -84,6 +84,20 @@ export default function CurriculumWorkspace({ activeTab = "subjects" }) {
   const [saving, setSaving] = useState("");
   const [pendingDelete, setPendingDelete] = useState(null);
 
+  const closeEditor = () => {
+    if (saving) return;
+    setEditorMode("");
+    setSelectedSubjectIds([]);
+    setQuery("");
+    setAddDepartmentIds([]);
+    setElective(false);
+    setAddElectiveGroupId("");
+    setSemanticSubject(null);
+    setSemanticElective(false);
+    setSemanticGroupId("");
+    setReviewing(false);
+  };
+
   const loadBase = useCallback(async () => {
     try {
       const [levelResponse, subjectResponse] = await Promise.all([
@@ -441,6 +455,8 @@ export default function CurriculumWorkspace({ activeTab = "subjects" }) {
   const applicabilityEditor = applicabilityEditorOpen ? (
     <WorkspacePanel
       title="Subject applicability"
+      onBack={closeEditor}
+      backDisabled={Boolean(saving)}
       description="Choose which specializations receive this subject once specialization is active. With no departments selected, the subject is general and remains available to every class."
     >
       <form className="space-y-4" onSubmit={saveApplicability}>
@@ -506,7 +522,7 @@ export default function CurriculumWorkspace({ activeTab = "subjects" }) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setEditorMode("")}
+              onClick={closeEditor}
             >
               Cancel
             </Button>
@@ -586,6 +602,8 @@ export default function CurriculumWorkspace({ activeTab = "subjects" }) {
   const semanticsEditor = editorMode === "semantics" && semanticSubject ? (
     <WorkspacePanel
       title="Elective settings"
+      onBack={closeEditor}
+      backDisabled={Boolean(saving)}
       description={`Set whether ${semanticSubject.subject_name || "this subject"} is compulsory or elective. Elective subjects must belong to one active group.`}
     >
       <form className="space-y-4" onSubmit={saveSemantics}>
@@ -633,10 +651,7 @@ export default function CurriculumWorkspace({ activeTab = "subjects" }) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                setSemanticSubject(null);
-                setEditorMode("");
-              }}
+              onClick={closeEditor}
             >
               Cancel
             </Button>
@@ -667,14 +682,14 @@ export default function CurriculumWorkspace({ activeTab = "subjects" }) {
               targetDepartments={levelDepartments}
               saving={Boolean(saving)}
               onCopy={copyCurriculum}
-              onCancel={() => setEditorMode("")}
+              onCancel={closeEditor}
             />
           ) : editorMode === "elective-groups" ? (
             <ElectiveGroupManager
               levelId={levelId}
               groups={electiveGroups}
               onChanged={loadLevel}
-              onCancel={() => setEditorMode("")}
+              onCancel={closeEditor}
             />
           ) : editorMode === "semantics" ? (
             semanticsEditor
@@ -683,6 +698,8 @@ export default function CurriculumWorkspace({ activeTab = "subjects" }) {
           ) : editorOpen ? (
             <WorkspacePanel
               title="Add subjects to curriculum"
+              onBack={closeEditor}
+              backDisabled={Boolean(saving)}
               description={
                 specializationEnabled
                   ? "Select subjects, set elective status and department applicability, then review before saving."
@@ -873,7 +890,7 @@ export default function CurriculumWorkspace({ activeTab = "subjects" }) {
                       <FormActions
                         repeatable
                         submitting={Boolean(saving)}
-                        onCancel={() => setEditorMode("")}
+                        onCancel={closeEditor}
                       />
                     </>
                   )}

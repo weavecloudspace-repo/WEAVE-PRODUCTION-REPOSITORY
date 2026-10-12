@@ -32,7 +32,12 @@ export default function CurriculumCopyPanel({ levels, target, targetSubjects, ta
   }, [sourceId, retry]);
 
   return (
-    <WorkspacePanel title="Copy curriculum" description={`Add subjects to ${target.name} from another level in the same category.`}>
+    <WorkspacePanel
+      title="Copy curriculum"
+      description={`Add subjects to ${target.name} from another level in the same category.`}
+      onBack={onCancel}
+      backDisabled={saving}
+    >
       <form className="space-y-4" onSubmit={(event) => {
         event.preventDefault();
         if (!loading && source && preview.missing.length && !preview.unavailableDepartments.length) onCopy(event, sourceId);

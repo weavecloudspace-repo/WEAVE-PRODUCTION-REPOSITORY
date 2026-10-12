@@ -432,6 +432,8 @@ function AcademicPeriodsWorkspace({
 
   const editor = isSessions ? (
     <WorkspacePanel
+      onBack={guided ? undefined : closeEditor}
+      backDisabled={Boolean(saving)}
       title={
         editing?.type === "session"
           ? sessionById.get(editing.id)?.status === "open"
@@ -511,6 +513,8 @@ function AcademicPeriodsWorkspace({
   ) : (
     <WorkspacePanel
       title={editing?.type === "term" ? "Edit term" : "Create term"}
+      onBack={guided ? undefined : closeEditor}
+      backDisabled={Boolean(saving)}
       description={guided ? "Choose a term and its dates within the school year." : "Terms belong to one academic session. A plan is deliberately selected only when the term is opened."}
     >
       <form className="space-y-3" onSubmit={saveTerm}>

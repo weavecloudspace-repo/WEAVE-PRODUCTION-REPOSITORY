@@ -350,9 +350,10 @@ export const academicService = {
 
   listMyTeacherAssignments: (requestOptions) =>
     api.get("/teachers/academics/assignments", requestOptions),
-  listMyAssignmentStudents: (assignmentId, params) =>
+  listMyAssignmentStudents: (assignmentId, params, requestOptions) =>
     api.get(
       `/teachers/academics/assignments/${assignmentId}/students${queryString(params)}`,
+      requestOptions,
     ),
   listTeacherResults: (params, requestOptions) =>
     api.get(

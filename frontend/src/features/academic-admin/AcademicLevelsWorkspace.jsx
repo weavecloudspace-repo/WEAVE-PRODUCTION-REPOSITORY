@@ -312,6 +312,8 @@ function AcademicLevelsWorkspace({ activeTab = "overview" }) {
           showEditor ? (
             <WorkspacePanel
               title={editingLevelId ? "Update level" : "Create academic level"}
+              onBack={closeEditor}
+              backDisabled={Boolean(saving)}
               description="Levels own curriculum and ordered progression; classes remain optional organization."
             >
               <form

@@ -31,8 +31,7 @@ test("CBT setup page downloads backend-selected release metadata", async () => {
   assert.match(setupPage, /cbtService\.getLatestRelease\(\)/);
   assert.match(setupPage, /release\.installer_url/);
   assert.match(setupPage, /release\?\.manager_version/);
-  assert.match(setupPage, /release\?\.cbt_version/);
-  assert.match(setupPage, /Environment matched automatically/);
+  assert.doesNotMatch(setupPage, /channelLabel|Release channel|Environment matched automatically/);
 });
 
 test("installer download is dispatched exactly once without opening or navigating to GitHub", async () => {
@@ -57,4 +56,23 @@ test("CBT setup and pairing routes retain the subscription feature guard", async
     routes,
     /path="\/admin\/cbt\/pairing-code"[\s\S]*SubscriptionFeatureRouteGuard featureCode=\{FEATURE_CODES\.CBT_PAIRING\}/,
   );
+});
+
+test("CBT setup preserves pairing when official release metadata is unavailable", async () => {
+  const setupPage = await readSource("src/pages/admin/CBTServerSetupPage.jsx");
+  assert.match(setupPage, /disabled=\{creatingPairingCode\}/);
+  assert.doesNotMatch(
+    setupPage,
+    /disabled=\{!release \|\| Boolean\(releaseError\) \|\| creatingPairingCode\}/,
+  );
+  assert.match(setupPage, /continueToPairing/);
+});
+
+test("CBT setup offers both Windows and Linux desktop plus CLI artifacts", async () => {
+  const setupPage = await readSource("src/pages/admin/CBTServerSetupPage.jsx");
+  assert.match(setupPage, /packageItem\.platform === "windows"/);
+  assert.match(setupPage, /packageItem\.platform === "linux"/);
+  assert.match(setupPage, /Download CLI/);
+  assert.match(setupPage, /Linux Desktop \(\.deb\)/);
+  assert.match(setupPage, /Linux CLI \(\.tar\.gz\)/);
 });

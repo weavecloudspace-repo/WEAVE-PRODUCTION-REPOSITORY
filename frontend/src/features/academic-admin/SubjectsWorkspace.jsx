@@ -224,6 +224,8 @@ function SubjectsWorkspace({ activeTab = "overview" }) {
   const editor = (
     <WorkspacePanel
       title={editingId ? "Edit subject" : "Add subject"}
+      onBack={closeEditor}
+      backDisabled={Boolean(saving)}
       description={
         editingId
           ? "Name and code become immutable after the subject is first used. Description can still be maintained while the subject is not archived."

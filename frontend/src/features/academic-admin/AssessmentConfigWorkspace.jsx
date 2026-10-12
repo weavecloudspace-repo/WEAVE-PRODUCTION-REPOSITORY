@@ -24,6 +24,7 @@ function AssessmentConfigWorkspace() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   const { showSuccess, showError, showWarning } = useToast();
 
   const loadSchemes = useCallback(async () => {
@@ -47,6 +48,7 @@ function AssessmentConfigWorkspace() {
   );
 
   const selectScheme = (scheme) => {
+    setEditorOpen(true);
     setDraft({
       id: scheme.id,
       name: scheme.name,
@@ -160,6 +162,7 @@ function AssessmentConfigWorkspace() {
       await academicService.activateAssessmentScheme(saved.id);
       setConfirming(false);
       setDraft(newDraft());
+      setEditorOpen(false);
       await loadSchemes();
       showSuccess("Assessment scheme activated.");
     } catch (error) {
@@ -171,7 +174,15 @@ function AssessmentConfigWorkspace() {
 
   return (
     <div className="space-y-4">
-      <WorkspacePanel title="Active assessment scheme" description="The component order and maximums used throughout result entry and report cards. Only examinable components are projected to CBT.">
+      <WorkspacePanel
+        title="Active assessment scheme"
+        description="The component order and maximums used throughout result entry and report cards. Only examinable components are projected to CBT."
+        actions={!editorOpen ? (
+          <Button type="button" disabled={loading || saving} onClick={() => { setDraft(newDraft()); setEditorOpen(true); }}>
+            Create assessment scheme
+          </Button>
+        ) : null}
+      >
         {loading ? <p className="text-sm text-text-muted">Loading assessment schemes...</p> : active ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3"><p className="font-semibold text-text">{active.name}</p><Badge variant="success">Active</Badge></div>
@@ -180,8 +191,13 @@ function AssessmentConfigWorkspace() {
         ) : <p className="text-sm text-text-muted">No assessment scheme is active yet.</p>}
       </WorkspacePanel>
 
-      <WorkspacePanel title={draft.id ? "Edit draft scheme" : "Create assessment scheme"} description="Build the scoring structure in its persisted order. Examinable components sync to CBT; manual components remain in Weave for teacher/admin score entry. Activation requires a total of 100.">
-        <div className="space-y-4">
+      {editorOpen ? <WorkspacePanel
+        title={draft.id ? "Edit draft scheme" : "Create assessment scheme"}
+        description="Build the scoring structure in its persisted order. Examinable components sync to CBT; manual components remain in Weave for teacher/admin score entry. Activation requires a total of 100."
+        onBack={() => { setEditorOpen(false); setDraft(newDraft()); }}
+        backDisabled={saving}
+      >
+        <fieldset disabled={saving} className="space-y-4">
           <Input label="Scheme name" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
           <div className="space-y-2">
             {draft.components.map((item, index) => (
@@ -214,10 +230,10 @@ function AssessmentConfigWorkspace() {
             <Button type="button" variant="outline" disabled={saving || total !== 100} onClick={() => validate({ requireTotal: true }) && setConfirming(true)}><CheckCircle2 className="mr-2 h-4 w-4" />Activate</Button>
             <Button type="button" variant="ghost" onClick={() => setDraft(newDraft())}>New scheme</Button>
           </div>
-        </div>
-      </WorkspacePanel>
+        </fieldset>
+      </WorkspacePanel> : null}
 
-      {schemes.some((item) => item.status === "draft") ? <WorkspacePanel title="Saved drafts" description="Continue a mutable draft or activate it when its components total 100."><div className="flex flex-wrap gap-2">{schemes.filter((item) => item.status === "draft").map((item) => <Button key={item.id} type="button" variant="outline" onClick={() => selectScheme(item)}>{item.name} · {item.total_maximum_score}/100</Button>)}</div></WorkspacePanel> : null}
+      {schemes.some((item) => item.status === "draft") ? <WorkspacePanel title="Saved drafts" description="Continue a mutable draft or activate it when its components total 100."><div className="flex flex-wrap gap-2">{schemes.filter((item) => item.status === "draft").map((item) => <Button key={item.id} type="button" variant="outline" disabled={saving} onClick={() => selectScheme(item)}>{item.name} · {item.total_maximum_score}/100</Button>)}</div></WorkspacePanel> : null}
 
       {schemes.some((item) => item.status === "archived") ? <WorkspacePanel title="Archived schemes" description="Historical schemes remain immutable because academic records may reference their component IDs."><div className="space-y-2">{schemes.filter((item) => item.status === "archived").map((item) => <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 px-4 py-3"><span className="font-medium text-text">{item.name}</span><Badge variant="default">{item.components.length} components</Badge></div>)}</div></WorkspacePanel> : null}
 

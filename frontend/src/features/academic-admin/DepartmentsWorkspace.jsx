@@ -1,6 +1,7 @@
 import ClassSpecializationWorkspace from "./ClassSpecializationWorkspace";
 import { beginAcademicSubmission, endAcademicSubmission, finishAcademicCreation } from "./academicSubmission";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import Button from "../../components/ui/Button";
 import { useToast } from "../../hooks/useToast";
@@ -43,6 +44,21 @@ export default function DepartmentsWorkspace({ activeTab = "pool", setupTermId }
   const [saving, setSaving] = useState("");
   const [loadErrors, setLoadErrors] = useState({});
   const [loadStatus, setLoadStatus] = useState({ pool: true, base: true, availability: true });
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const closeEditor = () => {
+    if (saving) return;
+    setEditorOpen(false);
+    setEditing(null);
+    setName("");
+  };
+  const returnToPool = () => {
+    if (saving) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("view", "pool");
+    next.delete("tab");
+    setSearchParams(next, { replace: true });
+  };
 
   const loadPool = useCallback(async () => {
     setLoadStatus((current) => ({ ...current, pool: true }));
@@ -327,6 +343,8 @@ export default function DepartmentsWorkspace({ activeTab = "pool", setupTermId }
         editor={
           <WorkspacePanel
             title="Make a department available"
+            onBack={setupTermId ? undefined : returnToPool}
+            backDisabled={Boolean(saving)}
             description="Choose a school-wide department and the level where it will be available."
           >
             <form className="space-y-3" onSubmit={attachToLevel}>
@@ -398,6 +416,8 @@ export default function DepartmentsWorkspace({ activeTab = "pool", setupTermId }
           editorOpen ? (
             <WorkspacePanel
               title={editing ? "Edit department" : "Add department to pool"}
+              onBack={closeEditor}
+              backDisabled={Boolean(saving)}
               description="Department names are school-wide. Level availability is configured separately."
             >
               <form className="space-y-3" onSubmit={saveDepartment}>
@@ -414,7 +434,7 @@ export default function DepartmentsWorkspace({ activeTab = "pool", setupTermId }
                       {exactDuplicate.name} already exists in the department pool.
                     </p>
                   ) : null}
-                  <FormActions repeatable editing={Boolean(editing)} submitting={Boolean(saving)} disabled={!name.trim() || Boolean(exactDuplicate)} onCancel={() => { setEditorOpen(false); setEditing(null); setName(""); }} />
+                  <FormActions repeatable editing={Boolean(editing)} submitting={Boolean(saving)} disabled={!name.trim() || Boolean(exactDuplicate)} onCancel={closeEditor} />
                 </fieldset>
               </form>
             </WorkspacePanel>

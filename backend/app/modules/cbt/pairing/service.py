@@ -9,7 +9,7 @@ Business logic for pairing local CBT servers with Weave tenants
 from __future__ import annotations
 import re
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +22,7 @@ from app.core.exceptions import (
 )
 
 from app.modules.cbt.models import CBTPairingCode, CBTServer, CBTServerCredential
+from app.modules.cbt.dns.hostname import collision_label, hostname_prefix, school_label
 
 from app.modules.cbt.enums import CBTServerStatus
 from app.modules.cbt.pairing.schemas import (
@@ -300,9 +301,29 @@ class CBTPairingService:
             normalized_name=normalized_server_name,
         )
 
+        server_id = uuid4()
+        # Freeze the school's DNS namespace on first pairing, even if its
+        # display name or tenant slug changes later.
+        dns_school_slug = await CBTServerRepository.get_school_dns_slug(
+            db, tenant_id=pairing_code.tenant_id
+        )
+        if dns_school_slug is None:
+            dns_school_slug = school_label(tenant.slug)
+            if await CBTServerRepository.dns_school_slug_owned_by_other(
+                db, school_slug=dns_school_slug, tenant_id=pairing_code.tenant_id
+            ):
+                dns_school_slug = f"{school_label(tenant.slug)[:54].strip('-')}-{tenant.id.hex[:8]}"
+        dns_prefix = hostname_prefix(normalized_server_name)
+        if await CBTServerRepository.dns_name_exists(
+            db, school_slug=dns_school_slug, server_label=dns_prefix
+        ):
+            dns_prefix = collision_label(normalized_server_name, server_id)
         server_record = CBTServer(
+            id=server_id,
             tenant_id=pairing_code.tenant_id,
             name=normalized_server_name,
+            hostname_prefix=dns_prefix,
+            dns_school_slug=dns_school_slug,
             paired_at=now,
             paired_by_admin_id=pairing_code.created_by_admin_id,
             client_version=payload.client_version,
@@ -337,6 +358,7 @@ class CBTPairingService:
             server_id=server.id,
             server_credential=raw_server_credential,
             server_name=server.name,
+            hostname=server.hostname,
             tenant=TenantInfo(id=tenant.id, name=tenant.school_name),
             paired_at=server.paired_at,
         )
@@ -462,6 +484,33 @@ class CBTPairingService:
             revoked_by_admin_id=admin.id,
             reason=normalized_reason,
         )
+        return CBTServerResponse.model_validate(server)
+
+    @staticmethod
+    async def unrevoke_server(
+        db: AsyncSession, *, admin: TenantAdmin, server_id: UUID
+    ) -> CBTServerResponse:
+        """Return a revoked registration to suspended; credentials stay revoked."""
+        tenant_id = CBTPairingService._ensure_admin_has_tenant(admin)
+        # Match pairing's tenant-first lock order to serialize capacity/name checks.
+        await CBTPairingService._get_pairable_tenant(db, tenant_id=tenant_id, lock=True)
+        await SubscriptionFeatureService.ensure_feature_enabled(
+            db, tenant_id, FeatureCode.CBT_PAIRING
+        )
+        server = await CBTPairingService._get_server_for_admin(
+            db, admin=admin, server_id=server_id, lock=True
+        )
+        if server.status == CBTServerStatus.SUSPENDED:
+            return CBTServerResponse.model_validate(server)
+        if server.status != CBTServerStatus.REVOKED:
+            raise BadRequestException(detail="Only revoked CBT servers can be unrevoked.")
+        await CBTPairingService._ensure_cbt_pairing_allowed(db, tenant_id=tenant_id)
+        await CBTPairingService._ensure_server_name_available(
+            db,
+            tenant_id=tenant_id,
+            normalized_name=CBTPairingService.normalize_server_name(server.name),
+        )
+        await CBTServerRepository.unrevoke(db, server, suspended_at=datetime.now(timezone.utc))
         return CBTServerResponse.model_validate(server)
 
     @staticmethod

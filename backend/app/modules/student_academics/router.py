@@ -800,15 +800,21 @@ async def list_teacher_results(
     db: DbSession,
     current_teacher: CurrentTeacher,
     class_id: UUID | None = Query(default=None),
+    teacher_assignment_id: UUID | None = Query(default=None),
     academic_session_id: UUID | None = Query(default=None),
     academic_term_id: UUID | None = Query(default=None),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=100),
 ) -> StudentSubjectResultListResponse:
     items, total = await StudentAcademicService.list_results(
         db,
         current_teacher,
         class_id=class_id,
+        teacher_assignment_id=teacher_assignment_id,
         academic_session_id=academic_session_id,
         academic_term_id=academic_term_id,
+        skip=skip,
+        limit=limit,
     )
     return StudentSubjectResultListResponse(items=items, total=total)
 

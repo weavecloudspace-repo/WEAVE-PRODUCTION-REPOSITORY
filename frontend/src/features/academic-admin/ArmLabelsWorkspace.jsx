@@ -128,6 +128,8 @@ function ArmLabelsWorkspace({ activeTab = "overview" }) {
           showEditor ? (
             <WorkspacePanel
               title={editing ? "Edit arm label" : "Add arm label"}
+              onBack={closeEditor}
+              backDisabled={Boolean(saving)}
               description="Create one reusable label that can be used across many levels."
             >
               <form className="space-y-3" onSubmit={save}>

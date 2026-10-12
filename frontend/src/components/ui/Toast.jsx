@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 import { cn } from "../../utils/cn";
 import { toastBus } from "../../hooks/useToast";
+import { appendToast } from "../../utils/toastPolicy";
 
 const toneClasses = {
   info: "border-primary/25 bg-surface text-text",
@@ -28,6 +29,7 @@ function ToastCard({ toast, onClose }) {
   const Icon = icons[toast.type] || icons.info;
 
   useEffect(() => {
+    if (toast.duration == null || toast.duration <= 0) return;
     const timeoutId = window.setTimeout(() => onClose(toast.id), toast.duration);
     return () => window.clearTimeout(timeoutId);
   }, [onClose, toast.duration, toast.id]);
@@ -60,18 +62,18 @@ export default function ToastHost() {
 
   useEffect(() => {
     return toastBus.subscribe((nextToast) => {
-      setToasts((current) => [...current, nextToast].slice(-4));
+      setToasts((current) => appendToast(current, nextToast));
     });
   }, []);
 
-  const closeToast = (id) => {
+  const closeToast = useCallback((id) => {
     setToasts((current) => current.filter((toast) => toast.id !== id));
-  };
+  }, []);
 
   if (toasts.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-3 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-[90] flex flex-col-reverse gap-3 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[24rem] md:bottom-6">
+    <div className="pointer-events-auto fixed inset-x-3 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-[90] flex max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom)-env(safe-area-inset-top))] flex-col-reverse gap-3 overflow-y-auto overscroll-contain sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[24rem] sm:max-h-[calc(100dvh-3rem-env(safe-area-inset-top))] md:bottom-6">
       {toasts.map((toast) => (
         <ToastCard key={toast.id} toast={toast} onClose={closeToast} />
       ))}

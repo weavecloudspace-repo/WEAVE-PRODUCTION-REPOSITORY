@@ -1,8 +1,6 @@
-import { CheckCircle2, LockKeyhole } from "lucide-react";
+import { Check, CheckCircle2, LockKeyhole } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-
 import Button from "../ui/Button";
-import Card from "../ui/Card";
 
 const selectedFromGroup = (group) =>
   (group?.subjects || [])
@@ -12,24 +10,21 @@ const selectedFromGroup = (group) =>
 export default function StudentElectiveSelectionPanel({
   workspace,
   onSave,
+  onStateChange,
 }) {
   const groups = useMemo(() => workspace?.groups || [], [workspace]);
-  const [selectedByGroup, setSelectedByGroup] = useState({});
+  // This panel mounts when the manager opens. Keep other groups' drafts when a save refreshes the workspace.
+  const [selectedByGroup, setSelectedByGroup] = useState(() =>
+    Object.fromEntries(
+      groups.map((group) => [
+        group.elective_group_id,
+        selectedFromGroup(group),
+      ]),
+    ),
+  );
   const [savingGroupId, setSavingGroupId] = useState("");
   const [errorByGroup, setErrorByGroup] = useState({});
-
-  useEffect(() => {
-    setSelectedByGroup(
-      Object.fromEntries(
-        groups.map((group) => [
-          group.elective_group_id,
-          selectedFromGroup(group),
-        ]),
-      ),
-    );
-    setErrorByGroup({});
-  }, [groups]);
-
+  const [savedGroupId, setSavedGroupId] = useState("");
   const originalByGroup = useMemo(
     () =>
       Object.fromEntries(
@@ -40,24 +35,31 @@ export default function StudentElectiveSelectionPanel({
       ),
     [groups],
   );
-
-  if (!groups.length) return null;
+  const dirty = groups.some((group) => {
+    const selected = selectedByGroup[group.elective_group_id] || [];
+    const original = originalByGroup[group.elective_group_id] || [];
+    return (
+      selected.length !== original.length ||
+      selected.some((id) => !original.includes(id))
+    );
+  });
+  const saving = Boolean(savingGroupId);
+  useEffect(() => {
+    onStateChange?.({ saving, dirty });
+  }, [onStateChange, saving, dirty]);
 
   const toggleSubject = (group, subjectId) => {
     if (group.locked || savingGroupId) return;
     setSelectedByGroup((current) => {
       const selected = new Set(current[group.elective_group_id] || []);
-      if (selected.has(subjectId)) {
-        selected.delete(subjectId);
-      } else {
+      if (selected.has(subjectId)) selected.delete(subjectId);
+      else {
         if (selected.size >= group.maximum_choices) return current;
         selected.add(subjectId);
       }
-      return {
-        ...current,
-        [group.elective_group_id]: [...selected],
-      };
+      return { ...current, [group.elective_group_id]: [...selected] };
     });
+    setSavedGroupId("");
     setErrorByGroup((current) => ({
       ...current,
       [group.elective_group_id]: "",
@@ -65,6 +67,7 @@ export default function StudentElectiveSelectionPanel({
   };
 
   const saveGroup = async (group) => {
+    if (group.locked || savingGroupId) return;
     const selected = selectedByGroup[group.elective_group_id] || [];
     if (
       selected.length < group.minimum_choices ||
@@ -72,18 +75,28 @@ export default function StudentElectiveSelectionPanel({
     ) {
       setErrorByGroup((current) => ({
         ...current,
-        [group.elective_group_id]: `Choose between ${group.minimum_choices} and ${group.maximum_choices} subject(s).`,
+        [group.elective_group_id]: `Choose between ${group.minimum_choices} and ${group.maximum_choices} subjects.`,
       }));
       return;
     }
-
     setSavingGroupId(group.elective_group_id);
+    setSavedGroupId("");
     setErrorByGroup((current) => ({
       ...current,
       [group.elective_group_id]: "",
     }));
     try {
-      await onSave(group.elective_group_id, selected);
+      const updatedWorkspace = await onSave(group.elective_group_id, selected);
+      const updatedGroup = updatedWorkspace?.groups?.find(
+        (item) => item.elective_group_id === group.elective_group_id,
+      );
+      setSelectedByGroup((current) => ({
+        ...current,
+        [group.elective_group_id]: updatedGroup
+          ? selectedFromGroup(updatedGroup)
+          : selected,
+      }));
+      setSavedGroupId(group.elective_group_id);
     } catch (error) {
       setErrorByGroup((current) => ({
         ...current,
@@ -96,115 +109,134 @@ export default function StudentElectiveSelectionPanel({
   };
 
   return (
-    <Card className="border-primary/15 bg-primary-soft/20 p-4 sm:p-5">
-      <div className="mb-4">
-        <p className="text-sm font-bold text-text">Choose your electives</p>
-        <p className="mt-1 text-xs leading-5 text-text-muted">
-          Your choices stay in place across terms. You can change a group until an
-          assessment score has been recorded for that group in the current term.
-        </p>
-      </div>
-
-      <div className="space-y-4">
-        {groups.map((group) => {
-          const selected = selectedByGroup[group.elective_group_id] || [];
-          const original = originalByGroup[group.elective_group_id] || [];
-          const changed =
-            selected.length !== original.length ||
-            selected.some((id) => !original.includes(id));
-          const saving = savingGroupId === group.elective_group_id;
-          const rangeLabel =
-            group.minimum_choices === group.maximum_choices
-              ? `Choose ${group.maximum_choices}`
-              : `Choose ${group.minimum_choices}–${group.maximum_choices}`;
-
-          return (
-            <section
-              key={group.elective_group_id}
-              className="rounded-2xl border border-border bg-surface p-3.5 sm:p-4"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-text">{group.name}</p>
-                    {group.locked ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-semibold text-text-muted">
-                        <LockKeyhole className="h-3 w-3" /> Locked
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-1 text-xs text-text-muted">
-                    {rangeLabel} · {selected.length} selected
-                  </p>
-                </div>
-                {!group.locked ? (
-                  <Button
-                    size="sm"
-                    onClick={() => saveGroup(group)}
-                    disabled={!changed || saving || Boolean(savingGroupId && !saving)}
-                  >
-                    {saving ? "Saving…" : "Save choices"}
-                  </Button>
-                ) : null}
+    <div className="space-y-5">
+      <p className="rounded-xl bg-surface-muted/50 px-4 py-3 text-sm leading-6 text-text-muted">
+        Your choices carry across terms. A group becomes locked once a score is
+        recorded for one of its subjects in the current term.
+      </p>
+      {groups.map((group) => {
+        const selected = selectedByGroup[group.elective_group_id] || [];
+        const original = originalByGroup[group.elective_group_id] || [];
+        const changed =
+          selected.length !== original.length ||
+          selected.some((id) => !original.includes(id));
+        const groupSaving = savingGroupId === group.elective_group_id;
+        const atLimit = selected.length >= group.maximum_choices;
+        const rangeLabel =
+          group.minimum_choices === group.maximum_choices
+            ? `Choose ${group.maximum_choices}`
+            : `Choose ${group.minimum_choices} to ${group.maximum_choices}`;
+        return (
+          <section
+            key={group.elective_group_id}
+            aria-label={group.name}
+            className="overflow-hidden rounded-2xl border border-border"
+          >
+            <div className="border-b border-border bg-surface-muted/20 px-4 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <h3 className="text-base font-semibold text-text">
+                  {group.name}
+                </h3>
+                {group.locked && (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-text-muted">
+                    <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />{" "}
+                    Locked
+                  </span>
+                )}
               </div>
-
-              {group.locked && group.locked_reason ? (
-                <p className="mt-3 rounded-xl bg-surface-muted px-3 py-2 text-xs leading-5 text-text-muted">
-                  {group.locked_reason}
+              <p className="mt-1 text-sm text-text-muted">
+                {rangeLabel} / {selected.length} selected
+              </p>
+            </div>
+            <div className="space-y-3 p-4">
+              {group.locked && (
+                <p className="text-sm leading-6 text-text-muted">
+                  {group.locked_reason ||
+                    "Your school has locked this group for the current term."}
                 </p>
-              ) : null}
-
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              )}
+              <div className="grid gap-2 sm:grid-cols-2">
                 {(group.subjects || []).map((subject) => {
-                  const checked = selected.includes(subject.curriculum_subject_id);
+                  const checked = selected.includes(
+                    subject.curriculum_subject_id,
+                  );
                   return (
                     <button
                       key={subject.curriculum_subject_id}
                       type="button"
-                      disabled={group.locked || Boolean(savingGroupId)}
+                      aria-pressed={checked}
+                      disabled={group.locked || saving || (!checked && atLimit)}
                       onClick={() =>
                         toggleSubject(group, subject.curriculum_subject_id)
                       }
-                      className={`flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
-                        checked
-                          ? "border-primary/40 bg-primary-soft/60"
-                          : "border-border bg-surface hover:border-primary/25 hover:bg-surface-muted"
-                      } disabled:cursor-not-allowed disabled:opacity-70`}
+                      className={`flex min-h-16 items-center gap-3 rounded-xl border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${checked ? "border-primary/50 bg-primary-soft/40" : "border-border bg-surface hover:border-primary/30"} disabled:cursor-not-allowed disabled:opacity-70`}
                     >
                       <span
-                        className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border ${
-                          checked
-                            ? "border-primary bg-primary text-white"
-                            : "border-border bg-surface"
-                        }`}
+                        className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border ${checked ? "border-primary bg-primary text-white" : "border-border bg-surface"}`}
                         aria-hidden="true"
                       >
-                        {checked ? <CheckCircle2 className="h-4 w-4" /> : null}
+                        {checked && <Check className="h-4 w-4" />}
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold text-text">
+                        <span className="block break-words text-sm font-semibold text-text">
                           {subject.subject_name}
                         </span>
-                        {subject.subject_code ? (
-                          <span className="block text-[11px] text-text-muted">
+                        {subject.subject_code && (
+                          <span className="mt-1 block text-xs text-text-muted">
                             {subject.subject_code}
                           </span>
-                        ) : null}
+                        )}
                       </span>
                     </button>
                   );
                 })}
               </div>
-
-              {errorByGroup[group.elective_group_id] ? (
-                <p className="mt-3 text-xs font-medium text-danger">
+              {!group.locked && atLimit && (
+                <p className="text-xs leading-5 text-text-muted">
+                  All choices filled. Deselect a subject to choose a different
+                  one.
+                </p>
+              )}
+              {errorByGroup[group.elective_group_id] && (
+                <p role="alert" className="text-sm font-medium text-error">
                   {errorByGroup[group.elective_group_id]}
                 </p>
-              ) : null}
-            </section>
-          );
-        })}
-      </div>
-    </Card>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 pt-3">
+                <span
+                  role="status"
+                  className="inline-flex items-center gap-1.5 text-xs text-text-muted"
+                >
+                  {savedGroupId === group.elective_group_id ? (
+                    <>
+                      <CheckCircle2
+                        className="h-4 w-4 text-primary"
+                        aria-hidden="true"
+                      />{" "}
+                      Choices saved
+                    </>
+                  ) : changed ? (
+                    "Unsaved changes"
+                  ) : (
+                    `${original.length} saved choices`
+                  )}
+                </span>
+                {!group.locked && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => saveGroup(group)}
+                    disabled={!changed || saving}
+                    aria-label={`Save choices for ${group.name}`}
+                  >
+                    {groupSaving ? "Saving..." : "Save choices"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </section>
+        );
+      })}
+    </div>
   );
 }

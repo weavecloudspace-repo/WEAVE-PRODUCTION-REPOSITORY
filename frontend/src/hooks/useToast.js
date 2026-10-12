@@ -22,7 +22,7 @@ export const toastBus = {
       id,
       message: normalizedMessage,
       type,
-      duration: options.duration ?? 3200,
+      duration: type === "error" ? null : (options.duration ?? 3200),
     });
     return id;
   },

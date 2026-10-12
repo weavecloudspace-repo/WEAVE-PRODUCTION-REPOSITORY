@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     DEFAULT_SESSION_DAYS: int = Field(default=7, gt=0)
     REMEMBER_ME_SESSION_DAYS: int = Field(default=30, gt=0)
 
+    # DNS-01 is disabled until a rotated key and the Bunny zone ID are configured.
+    BUNNY_DNS_API_KEY: SecretStr | None = None
+    BUNNY_DNS_ZONE_ID: int | None = Field(default=None, gt=0)
+
     DATABASE_URL: str | None = None
     DB_POOL_SIZE: int = Field(default=5, ge=1, le=50)
     DB_MAX_OVERFLOW: int = Field(default=5, ge=0, le=100)

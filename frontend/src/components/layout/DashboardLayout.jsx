@@ -34,7 +34,7 @@ import { authSession } from "../../services/api";
 import { clearDashboardSessionCache } from "../../services/dashboardSessionCache";
 import { legalComplianceService } from "../../services/legalComplianceService";
 import { cn } from "../../utils/cn";
-import { scrollDashboardViewportToTop } from "../../utils/dashboardScroll";
+import { scrollDashboardViewportToTop, shouldResetDashboardScroll } from "../../utils/dashboardScroll";
 import { scheduleThemeChromeSync } from "../../utils/themeChromeSync";
 import AiChatLauncher from "../ai/AiChatLauncher";
 import WeaveIcon from "../brand/WeaveIcon";
@@ -141,6 +141,7 @@ function DashboardShellFrame({
   });
   const shellRef = useRef(null);
   const mainRef = useRef(null);
+  const previousScrollLocationRef = useRef(null);
   const initialScrollRestoreRef = useRef(true);
   const pullStateRef = useRef({
     tracking: false,
@@ -298,9 +299,12 @@ function DashboardShellFrame({
   }, [academicHubActive, location.pathname]);
 
   useEffect(() => {
+    const shouldReset = shouldResetDashboardScroll(previousScrollLocationRef.current, location);
+    previousScrollLocationRef.current = location;
+    if (!shouldReset) return;
     if (guidePageActive && initialScrollRestoreRef.current) return;
     scrollDashboardViewportToTop("auto");
-  }, [guidePageActive, location.pathname, location.search]);
+  }, [guidePageActive, location]);
 
   useEffect(() => {
     if (!guidePageActive) return undefined;

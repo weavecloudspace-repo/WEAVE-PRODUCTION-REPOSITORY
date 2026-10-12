@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Archive,
+  ArrowLeft,
   ArrowRight,
   CheckCircle2,
   Edit3,
@@ -40,7 +41,7 @@ export function WorkspaceGrid({ editor, content, wide = false }) {
   );
 }
 
-export function WorkspacePanel({ title, description, children, actions }) {
+export function WorkspacePanel({ title, description, children, actions, onBack, backDisabled = false }) {
   return (
     <Card className="rounded-xl p-4 shadow-none sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -50,8 +51,16 @@ export function WorkspacePanel({ title, description, children, actions }) {
             <p className="mt-1 text-sm leading-6 text-text-muted">{description}</p>
           ) : null}
         </div>
-        {actions ? (
-          <div className="w-full sm:w-auto sm:max-w-xs sm:shrink-0">{actions}</div>
+        {actions || onBack ? (
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:max-w-xs sm:shrink-0">
+            {onBack ? (
+              <Button type="button" size="small" variant="outline" disabled={backDisabled} onClick={onBack}>
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                Back to overview
+              </Button>
+            ) : null}
+            {actions}
+          </div>
         ) : null}
       </div>
       <div className="mt-4">{children}</div>
