@@ -8,14 +8,12 @@ const sourceRoot = path.dirname(fileURLToPath(import.meta.url));
 const readSource = (...segments) =>
   fs.readFileSync(path.join(sourceRoot, ...segments), "utf8");
 
-test("installed mobile navigation stays close to the device bottom edge", () => {
-  const css = readSource("styles", "mobileOverrides.css");
-
-  assert.match(
-    css,
-    /bottom:\s*calc\(-0\.45\s*\*\s*env\(safe-area-inset-bottom\)\)\s*!important/,
-  );
-  assert.match(css, /calc\(env\(safe-area-inset-bottom\)\s*\*\s*0\.45\)/);
+test("installed mobile navigation floats clear of the system gesture area", () => {
+  const css = readSource("styles", "mobilePlatformFixes.css");
+  const overrides = readSource("styles", "mobileOverrides.css");
+  assert.ok(css.includes("bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important"));
+  assert.match(css, /--mobile-bottom-nav-clearance/);
+  assert.equal(overrides.includes("bottom: calc(-0.45 * env(safe-area-inset-bottom))"), false);
 });
 
 test("academic structure is not coupled to class or subject subscription quotas", () => {

@@ -52,9 +52,11 @@ test("pricing surfaces show three paid cards and keep Free outside checkout card
 test("installed PWA nav floats above the safe area and iOS header stays crisp", async () => {
   const css = await read("src/styles/mobilePlatformFixes.css");
   assert.match(css, /data-standalone-pwa="true"\] \[data-mobile-bottom-nav="true"\]/);
-  assert.match(css, /bottom: calc\(0\.5rem \+ env\(safe-area-inset-bottom, 0px\)\) !important/);
+  assert.match(css, /bottom: calc\(1rem \+ env\(safe-area-inset-bottom, 0px\)\) !important/);
   assert.match(css, /data-pwa-platform="ios"/);
   assert.match(css, /\.dashboard-topbar/);
+  assert.match(css, /transform: none !important/);
+  assert.match(css, /--mobile-bottom-nav-clearance/);
   assert.match(css, /-webkit-backdrop-filter: none !important/);
   assert.match(css, /backdrop-filter: none !important/);
   assert.match(css, /data-mobile-billing-action/);
