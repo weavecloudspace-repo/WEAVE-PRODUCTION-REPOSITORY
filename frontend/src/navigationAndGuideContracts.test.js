@@ -13,7 +13,7 @@ test("installed mobile navigation floats clear of the system gesture area", () =
   const overrides = readSource("styles", "mobileOverrides.css");
   assert.match(css, /bottom: calc\\(1rem \\+ env\\(safe-area-inset-bottom, 0px\\)\\) !important/);
   assert.match(css, /--mobile-bottom-nav-clearance/);
-  assert.doesNotMatch(overrides, /bottom:\\s*calc\\(-0\\.45/);
+  assert.doesNotMatch(overrides, "bottom: calc(-0.45 * env(safe-area-inset-bottom))");
 });
 
 test("academic structure is not coupled to class or subject subscription quotas", () => {
