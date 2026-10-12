@@ -1,12 +1,21 @@
 @media (max-width: 767px) {
-  html[data-standalone-pwa="true"][data-pwa-platform="android"]
-    [data-mobile-bottom-nav="true"] {
-    bottom: -0.3rem !important;
+  /* Float the installed-app capsule above the system gesture area on both platforms. */
+  html[data-standalone-pwa="true"] [data-mobile-bottom-nav="true"] {
+    bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: 0 !important;
+    padding-inline: max(0.75rem, env(safe-area-inset-left, 0px)) !important;
   }
 
-  html[data-standalone-pwa="true"][data-pwa-platform="ios"]
-    [data-mobile-bottom-nav="true"] {
-    bottom: -0.65rem !important;
+  /* iOS compositing can blur translucent sticky headers while scrolling. */
+  html[data-standalone-pwa="true"][data-pwa-platform="ios"] .dashboard-topbar {
+    background: rgb(var(--color-surface)) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    filter: none !important;
+  }
+
+  html[data-standalone-pwa="true"][data-pwa-platform="ios"] .dashboard-topbar::before {
+    background: rgb(var(--color-surface)) !important;
   }
 
   html[data-standalone-pwa="true"] [data-mobile-billing-page="true"] {
