@@ -199,7 +199,9 @@ class TermPlanEntitlementService:
                     query.order_by(
                         PaymentTransaction.raw_payload["paystack_expiration_probe"][
                             "last_checked_at"
-                        ].astext.asc().nullsfirst(),
+                        ]
+                        .astext.asc()
+                        .nullsfirst(),
                         PaymentTransaction.created_at.asc(),
                     )
                     .limit(EXPIRY_BATCH_SIZE)
