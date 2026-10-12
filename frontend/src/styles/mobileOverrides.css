@@ -20,11 +20,6 @@
 
   [data-mobile-bottom-nav="true"] {
     display: block !important;
-    bottom: calc(-0.45 * env(safe-area-inset-bottom)) !important;
-    padding-bottom: max(
-      0.12rem,
-      calc(env(safe-area-inset-bottom) * 0.45)
-    ) !important;
   }
 
   [data-mobile-drawer="true"] {
