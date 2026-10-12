@@ -17,6 +17,10 @@ from app.modules.student_academics.models import (
     AcademicTermStatus,
 )
 from app.modules.subscriptions.cache import invalidate_tenant_subscription_cache
+from app.modules.subscriptions.checkout_expiration import (
+    EXPIRY_BATCH_SIZE,
+    verify_before_abandoning,
+)
 from app.modules.subscriptions.models import PaymentTransaction, TermPlanEntitlement
 from app.modules.subscriptions.plans import coerce_subscription_plan, get_plan_entitlements
 from app.modules.payments.enums import PaymentPurpose
@@ -187,13 +191,32 @@ class TermPlanEntitlementService:
             query = query.where(PaymentTransaction.tenant_id == tenant_id)
         if term_id is not None:
             query = query.where(PaymentTransaction.academic_term_id == term_id)
-        rows = list((await db.execute(query.with_for_update())).scalars().all())
+        # Bounded provider checks: no bulk write can mark an unverified
+        # checkout abandoned. SKIP LOCKED avoids fighting webhook settlement.
+        rows = list(
+            (
+                await db.execute(
+                    query.order_by(
+                        PaymentTransaction.raw_payload["paystack_expiration_probe"][
+                            "last_checked_at"
+                        ].astext.asc().nullsfirst(),
+                        PaymentTransaction.created_at.asc(),
+                    )
+                    .limit(EXPIRY_BATCH_SIZE)
+                    .with_for_update(skip_locked=True)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        abandoned = 0
         for transaction in rows:
-            transaction.status = PaymentStatus.ABANDONED
-            transaction.failure_reason = "Pending checkout expired before payment completion."
+            decision = await verify_before_abandoning(db, transaction, as_of=now)
+            if decision == "abandoned":
+                abandoned += 1
         if rows:
             await db.flush()
-        return len(rows)
+        return abandoned
 
     @staticmethod
     def amount_kobo(plan: SubscriptionPlan) -> int:
@@ -586,8 +609,20 @@ class TermPlanEntitlementService:
                         "Finish or wait for that checkout to expire before choosing another plan."
                     )
                 return TermPlanEntitlementService._checkout_response(pending)
-            pending.status = PaymentStatus.ABANDONED
-            pending.failure_reason = "Pending checkout expired before payment completion."
+            decision = await verify_before_abandoning(db, pending, as_of=now)
+            if decision == "settled":
+                # Commit the recovered payment before rejecting a second checkout.
+                await db.commit()
+                await invalidate_tenant_subscription_cache(tenant_id)
+                raise ConflictException(
+                    "Your previous Paystack payment was confirmed. "
+                    "Check your current subscription before starting another checkout."
+                )
+            if decision != "abandoned":
+                raise ConflictException(
+                    "The previous checkout is still awaiting Paystack confirmation. "
+                    "Please check payment history before starting another payment."
+                )
 
         callback_url = str(settings.PAYSTACK_CALLBACK_URL or "").strip()
         if settings.is_production_like and not callback_url:
