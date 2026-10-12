@@ -172,9 +172,7 @@ async def test_mismatched_success_never_calls_settlement(monkeypatch) -> None:
     response = _successful_response(transaction)
     response["data"]["metadata"]["tenant_id"] = str(uuid4())
 
-    with patch.object(
-        recovery, "settle_verified_term_payment", new=AsyncMock()
-    ) as settle:
+    with patch.object(recovery, "settle_verified_term_payment", new=AsyncMock()) as settle:
         with pytest.raises(PaymentVerificationError):
             await recovery._settle(
                 recovery.PaymentProbe(
@@ -210,9 +208,7 @@ async def test_pending_provider_state_is_retried_without_settlement(monkeypatch)
     settle = AsyncMock()
     monkeypatch.setattr(recovery, "_settle", settle)
     fake_provider = SimpleNamespace(
-        verify_transaction=AsyncMock(
-            return_value={"data": {"status": "pending"}}
-        )
+        verify_transaction=AsyncMock(return_value={"data": {"status": "pending"}})
     )
     monkeypatch.setattr(recovery, "PaystackClient", lambda: fake_provider)
 
@@ -239,13 +235,19 @@ async def test_provider_failure_isolated_from_next_payment(monkeypatch) -> None:
         AsyncMock(
             side_effect=[
                 recovery.PaymentProbe(
-                    first.reference, first.amount_kobo, first.currency,
-                    str(first.tenant_id), str(first.academic_term_id),
+                    first.reference,
+                    first.amount_kobo,
+                    first.currency,
+                    str(first.tenant_id),
+                    str(first.academic_term_id),
                     first.plan_code.value,
                 ),
                 recovery.PaymentProbe(
-                    second.reference, second.amount_kobo, second.currency,
-                    str(second.tenant_id), str(second.academic_term_id),
+                    second.reference,
+                    second.amount_kobo,
+                    second.currency,
+                    str(second.tenant_id),
+                    str(second.academic_term_id),
                     second.plan_code.value,
                 ),
             ]
@@ -257,9 +259,7 @@ async def test_provider_failure_isolated_from_next_payment(monkeypatch) -> None:
         )
     )
     monkeypatch.setattr(recovery, "PaystackClient", lambda: provider)
-    monkeypatch.setattr(
-        recovery, "_settle", AsyncMock(return_value="settled")
-    )
+    monkeypatch.setattr(recovery, "_settle", AsyncMock(return_value="settled"))
 
     result = await recovery.reconcile_pending_term_payments()
 

@@ -113,9 +113,7 @@ async def _claim(reference: str, now: datetime) -> PaymentProbe | None:
             return None
 
         interval = (
-            PENDING_INTERVAL
-            if transaction.status == PaymentStatus.PENDING
-            else ABANDONED_INTERVAL
+            PENDING_INTERVAL if transaction.status == PaymentStatus.PENDING else ABANDONED_INTERVAL
         )
         raw[PROBE_KEY] = {
             "attempts": int(previous.get("attempts") or 0) + 1,
@@ -164,9 +162,7 @@ async def _settle(probe: PaymentProbe, payload: dict[str, Any]) -> str:
                 "plan_code": transaction.plan_code.value,
             },
         )
-        entitlement = await settle_verified_term_payment(
-            db, transaction, payload, commit=False
-        )
+        entitlement = await settle_verified_term_payment(db, transaction, payload, commit=False)
         await db.commit()
         tenant_id = transaction.tenant_id
 
