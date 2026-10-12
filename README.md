@@ -100,6 +100,8 @@ The general worker handles lightweight and recurring work. The heavy worker seri
 
 The general worker also probes up to eight pending Paystack term payments every ten minutes, with cooldown state persisted on each transaction. It retries recently abandoned checkouts for seven days to detect delayed settlements. Normal pending payments use the existing idempotent settlement path; paid abandoned checkouts are recorded for manual reconciliation rather than activating an outdated plan. Paystack webhooks remain the primary payment notification mechanism. This is a recovery job, not a replacement for webhook delivery monitoring.
 
+Checkout expiry is provider-aware: after the 30-minute local TTL, the lifecycle job (and replacement checkout flow) checks the current Paystack status before abandoning a transaction. Confirmed successes settle using the existing idempotent entitlement path; failed/abandoned gateway states can expire. A gateway-level pending state gets a two-hour grace window, and provider outages, malformed/mismatched responses, or settlement conflicts defer expiry. The expiry sweep checks at most eight transactions per run and rotates based on last-attempt metadata. A settled checkout is never replaced simply because its original callback did not complete.
+
 ```bash
 cd backend
 
