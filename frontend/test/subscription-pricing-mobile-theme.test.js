@@ -49,12 +49,16 @@ test("pricing surfaces show three paid cards and keep Free outside checkout card
   assert.match(mobilePlans, /Continue on Free/);
 });
 
-test("iOS and Android PWA nav positions are platform-specific", async () => {
+test("installed PWA nav floats above the safe area and iOS header stays crisp", async () => {
   const css = await read("src/styles/mobilePlatformFixes.css");
+  assert.match(css, /data-standalone-pwa="true"\] \[data-mobile-bottom-nav="true"\]/);
+  assert.match(css, /bottom: calc\(1rem \+ env\(safe-area-inset-bottom, 0px\)\) !important/);
   assert.match(css, /data-pwa-platform="ios"/);
-  assert.match(css, /bottom: -0\.65rem/);
-  assert.match(css, /data-pwa-platform="android"/);
-  assert.match(css, /bottom: -0\.3rem/);
+  assert.match(css, /\.dashboard-topbar/);
+  assert.match(css, /transform: none !important/);
+  assert.match(css, /--mobile-bottom-nav-clearance/);
+  assert.match(css, /-webkit-backdrop-filter: none !important/);
+  assert.match(css, /backdrop-filter: none !important/);
   assert.match(css, /data-mobile-billing-action/);
   assert.match(css, /position: fixed/);
   assert.match(css, /safe-area-inset-top/);

@@ -1,12 +1,46 @@
 @media (max-width: 767px) {
-  html[data-standalone-pwa="true"][data-pwa-platform="android"]
-    [data-mobile-bottom-nav="true"] {
-    bottom: -0.3rem !important;
+  /* Float the installed-app capsule above the system gesture area on both platforms. */
+  html[data-standalone-pwa="true"] [data-mobile-bottom-nav="true"] {
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: 0 !important;
+    padding-inline: max(1rem, env(safe-area-inset-left, 0px)) !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
   }
 
-  html[data-standalone-pwa="true"][data-pwa-platform="ios"]
-    [data-mobile-bottom-nav="true"] {
-    bottom: -0.65rem !important;
+  /* The capsule must be opaque and independent of the footer / scroll surface. */
+  html[data-standalone-pwa="true"] [data-mobile-bottom-nav="true"] > div {
+    background: rgb(var(--color-surface)) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16) !important;
+  }
+
+  html[data-standalone-pwa="true"] {
+    --mobile-bottom-nav-clearance: calc(7.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* iOS compositing can blur translucent sticky headers while scrolling. */
+  html[data-standalone-pwa="true"][data-pwa-platform="ios"] .dashboard-topbar {
+    background: rgb(var(--color-surface)) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    filter: none !important;
+    transform: none !important;
+    -webkit-transform: none !important;
+    will-change: auto !important;
+    isolation: auto !important;
+  }
+
+  html[data-standalone-pwa="true"][data-pwa-platform="ios"] .dashboard-topbar * {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    filter: none !important;
+  }
+
+  html[data-standalone-pwa="true"][data-pwa-platform="ios"] .dashboard-topbar::before {
+    background: rgb(var(--color-surface)) !important;
   }
 
   html[data-standalone-pwa="true"] [data-mobile-billing-page="true"] {
