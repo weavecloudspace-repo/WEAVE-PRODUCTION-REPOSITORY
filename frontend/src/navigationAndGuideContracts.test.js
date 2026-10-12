@@ -11,7 +11,7 @@ const readSource = (...segments) =>
 test("installed mobile navigation floats clear of the system gesture area", () => {
   const css = readSource("styles", "mobilePlatformFixes.css");
   const overrides = readSource("styles", "mobileOverrides.css");
-  assert.match(css, /bottom: calc\\(1rem \\+ env\\(safe-area-inset-bottom, 0px\\)\\) !important/);
+  assert.ok(css.includes("bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important"));
   assert.match(css, /--mobile-bottom-nav-clearance/);
   assert.doesNotMatch(overrides, "bottom: calc(-0.45 * env(safe-area-inset-bottom))");
 });
