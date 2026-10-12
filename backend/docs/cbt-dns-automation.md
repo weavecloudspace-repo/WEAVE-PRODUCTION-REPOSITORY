@@ -4,6 +4,19 @@ WEAVE Cloud owns DNS-01 TXT creation, tracking and cleanup. The CBT node owns it
 ACME account, certificate private keys, certificate installation, and the ACME
 renewal scheduler; this repository does not obtain certificates for the node.
 
+## Current client setup: manual local hosts mapping
+
+**Until automated local DNS distribution is implemented, manually configure
+the Windows `hosts` file or Linux `/etc/hosts` on each student computer** to
+resolve the assigned hostname to the school server's LAN IPv4 address. Windows
+users should run `ipconfig /flushdns` after saving; on Linux the change
+usually applies without flushing, though `sudo resolvectl flush-caches` can
+be used on systems with systemd-resolved. Full procedures and checks:
+[CBT manual local DNS setup](../../docs/cbt-manual-local-dns.md).
+
+CoreDNS remains available as an **optional** advanced setup; no CoreDNS
+configuration or commands have been removed.
+
 ## Stable hostname
 
 A pairing response adds `hostname` using:
