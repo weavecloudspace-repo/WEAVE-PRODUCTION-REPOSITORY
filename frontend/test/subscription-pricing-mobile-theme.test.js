@@ -55,6 +55,8 @@ test("installed PWA nav floats above the safe area and iOS header stays crisp", 
   assert.match(css, /bottom: calc\(0\.5rem \+ env\(safe-area-inset-bottom, 0px\)\) !important/);
   assert.match(css, /data-pwa-platform="ios"/);
   assert.match(css, /\.dashboard-topbar/);
+  assert.match(css, /transform: none !important/);
+  assert.match(css, /--mobile-bottom-nav-clearance/);
   assert.match(css, /-webkit-backdrop-filter: none !important/);
   assert.match(css, /backdrop-filter: none !important/);
   assert.match(css, /data-mobile-billing-action/);
