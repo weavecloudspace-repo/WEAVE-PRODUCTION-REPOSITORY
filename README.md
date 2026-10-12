@@ -219,6 +219,16 @@ Refresh and logout requests use the HttpOnly refresh cookie and require both an 
 
 Student setup codes created by bulk import are encrypted at rest and available for access-slip generation only for the configured retention window.
 
+## CBT student hostname resolution (manual default)
+
+Until centrally managed local DNS is available, each Windows or Linux student
+computer must map the assigned CBT server FQDN to its school LAN IP in the OS
+hosts file. Windows users should flush their DNS cache with
+`ipconfig /flushdns`. Linux users edit `/etc/hosts` and can use
+`resolvectl flush-caches` if systemd-resolved is present. The optional CoreDNS
+feature and CLI commands are retained. See
+[manual CBT hostname setup](docs/cbt-manual-local-dns.md).
+
 ## Deployment
 
 - Backend API: Railway
