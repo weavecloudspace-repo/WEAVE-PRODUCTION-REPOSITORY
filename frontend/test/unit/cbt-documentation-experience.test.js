@@ -52,6 +52,32 @@ test("native Linux CoreDNS and Windows elevation are documented", () => {
   assert.ok(windows.sections.some((section) => (section.paragraphs || []).join(" ").includes("native Windows UAC")));
 });
 
+test("manual Windows and Linux hosts-file mapping is the default documented CBT DNS path", async () => {
+  const windows = CBT_DOCS.find((topic) => topic.id === "windows").sections
+    .find((section) => section.id === "windows-hosts");
+  const linux = CBT_DOCS.find((topic) => topic.id === "linux").sections
+    .find((section) => section.id === "linux-hosts");
+  const dns = CBT_DOCS.find((topic) => topic.id === "networking").sections
+    .find((section) => section.id === "dns");
+  assert.ok(windows);
+  assert.ok(linux);
+  assert.ok(dns);
+  const commandsFor = (section) => section.commands.map((item) => item.command);
+  assert.ok(commandsFor(windows).includes(String.raw`notepad C:\Windows\System32\drivers\etc\hosts`));
+  assert.ok(commandsFor(windows).includes("ipconfig /flushdns"));
+  assert.ok(commandsFor(linux).includes("sudo nano /etc/hosts"));
+  assert.ok(commandsFor(linux).includes("getent hosts test-server1.testschool1.cbt.weavecloudspace.com"));
+  assert.ok(commandsFor(linux).includes("sudo resolvectl flush-caches"));
+  assert.ok(commandsFor(dns).includes("weave network dns setup"), "Optional CoreDNS must remain supported");
+  assert.match(dns.paragraphs.join(" "), /CURRENT DEFAULT/);
+  assert.match(dns.paragraphs.join(" "), /EACH Windows or Linux student computer/);
+  assert.ok(searchCbtDocs("ipconfig /flushdns").some((result) => result.sectionId === "windows-hosts"));
+  assert.ok(searchCbtDocs("/etc/hosts").some((result) => result.sectionId === "linux-hosts"));
+  const setupPage = await source("src/pages/admin/CBTServerSetupPage.jsx");
+  assert.match(setupPage, /Manual student DNS setup/);
+  assert.match(setupPage, /topic: "networking"/);
+});
+
 test("CLI examples align with the actual management commands", () => {
   const commands = new Set(CLI_COMMANDS.flatMap((item) => [item.command, ...item.examples.map((example) => example.command)]));
   for (const command of [
