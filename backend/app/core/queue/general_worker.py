@@ -22,6 +22,9 @@ from app.core.queue.arq import (  # noqa: E402
 from app.modules.attendance.repository import AttendanceRepository  # noqa: E402
 from app.modules.cbt.dns.service import CBTDNSChallengeService  # noqa: E402
 from app.modules.email_outbox.worker import process_email_outbox_batch  # noqa: E402
+from app.modules.subscriptions.pending_payment_reconciliation import (  # noqa: E402
+    reconcile_pending_term_payments,
+)
 from app.modules.subscriptions.service import (  # noqa: E402
     SubscriptionLifecycleService,
 )
@@ -94,6 +97,19 @@ async def poll_subscription_lifecycle(ctx: dict[str, Any]) -> dict[str, int]:
 
 
 @capture_worker_exceptions(queue_name=GENERAL_QUEUE_NAME)
+async def process_pending_payment_reconciliation_job(
+    ctx: dict[str, Any],
+) -> dict[str, int]:
+    """Verify pending and recent abandoned term payments against Paystack."""
+    _ = ctx
+    return await reconcile_pending_term_payments()
+
+
+async def poll_pending_payment_reconciliation(ctx: dict[str, Any]) -> dict[str, int]:
+    return await process_pending_payment_reconciliation_job(ctx)
+
+
+@capture_worker_exceptions(queue_name=GENERAL_QUEUE_NAME)
 async def poll_cbt_dns_cleanup(ctx: dict[str, Any]) -> dict[str, int]:
     """Remove expired Bunny TXT challenges using the existing shared worker."""
 
@@ -134,6 +150,7 @@ class WorkerSettings:
         process_email_outbox_batch,
         process_attendance_retention_job,
         process_subscription_lifecycle_job,
+        process_pending_payment_reconciliation_job,
     ]
     cron_jobs = [
         cron(
@@ -159,6 +176,14 @@ class WorkerSettings:
             run_at_startup=False,
             unique=True,
             timeout=200,
+            max_tries=1,
+        ),
+        cron(
+            poll_pending_payment_reconciliation,
+            minute={0, 10, 20, 30, 40, 50},
+            run_at_startup=True,
+            unique=True,
+            timeout=240,
             max_tries=1,
         ),
         cron(

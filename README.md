@@ -98,6 +98,8 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 
 The general worker handles lightweight and recurring work. The heavy worker serializes imports and progression so they cannot compete for database capacity.
 
+The general worker also probes up to eight pending Paystack term payments every ten minutes, with cooldown state persisted on each transaction. It retries recently abandoned checkouts for seven days to detect delayed settlements. Normal pending payments use the existing idempotent settlement path; paid abandoned checkouts are recorded for manual reconciliation rather than activating an outdated plan. Paystack webhooks remain the primary payment notification mechanism. This is a recovery job, not a replacement for webhook delivery monitoring.
+
 ```bash
 cd backend
 

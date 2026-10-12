@@ -27,8 +27,9 @@ def test_general_worker_registers_lightweight_jobs() -> None:
         "process_email_outbox_batch",
         "process_attendance_retention_job",
         "process_subscription_lifecycle_job",
+        "process_pending_payment_reconciliation_job",
     }
-    assert len(GeneralWorkerSettings.cron_jobs) == 4
+    assert len(GeneralWorkerSettings.cron_jobs) == 5
     assert GeneralWorkerSettings.max_jobs == 3
 
 

@@ -15,6 +15,7 @@ def test_general_worker_registration_imports_cleanly() -> None:
         "process_email_outbox_batch",
         "process_attendance_retention_job",
         "process_subscription_lifecycle_job",
+        "process_pending_payment_reconciliation_job",
     }
     assert GeneralWorkerSettings.cron_jobs
     assert GeneralWorkerSettings.max_jobs == 3
