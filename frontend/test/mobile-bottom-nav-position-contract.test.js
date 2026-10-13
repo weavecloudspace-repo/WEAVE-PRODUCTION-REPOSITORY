@@ -37,63 +37,26 @@ test("installed PWA bottom nav stays at the lower edge after launch and resume",
   );
 });
 
-test("the iOS PWA dock uses a viewport-relative safe-area bottom anchor", async () => {
-  const { resolvePwaScreenHeight } = await import(
-    "../src/utils/mobilePwaStability.js"
-  );
+test("the iOS PWA dock uses one CSS viewport anchor across launch and login", () => {
   const css = readSource("../src/styles/mobilePwaStability.css");
   const runtime = readSource("../src/utils/mobilePwaStability.js");
+  const navAnchor = getStandaloneNavRules(css);
 
-  // Simulate the shorter viewport returned by WebKit after background/resume.
-  const launchHeights = [926, 876, 926, 876];
-  const resolved = launchHeights.map((fallbackHeight) =>
-    resolvePwaScreenHeight({
-      screenWidth: 428,
-      screenHeight: 926,
-      landscape: false,
-      fallbackHeight,
-    }),
-  );
+  // The viewport height must follow iOS after an authentication transition.
+  assert.match(css, /--pwa-layout-height:\s*100dvh/);
+  assert.doesNotMatch(runtime, /root\.style\.setProperty\(["']--pwa-layout-height/);
+  assert.match(runtime, /root\.style\.removeProperty\("--pwa-layout-height"\)/);
+  assert.match(runtime, /const handleViewportResize = \(\) => \{[\s\S]*?setStableLayoutHeight\(\)/);
 
-  assert.deepEqual(resolved, [926, 926, 926, 926]);
-  assert.equal(
-    resolvePwaScreenHeight({
-      screenWidth: 428,
-      screenHeight: 926,
-      landscape: true,
-      fallbackHeight: 428,
-    }),
-    428,
-  );
-  assert.equal(
-    resolvePwaScreenHeight({
-      screenWidth: undefined,
-      screenHeight: undefined,
-      landscape: false,
-      fallbackHeight: 844,
-    }),
-    844,
-  );
-
-  assert.match(runtime, /--pwa-device-screen-height/);
-  assert.match(runtime, /syncScreenAnchor\(\)/);
-  assert.match(runtime, /window\.screen\?\.height/);
-
-  const iosRules = css.match(
-    /html\[data-standalone-pwa="true"\]\[data-pwa-platform="ios"\]\s+\[data-mobile-bottom-nav="true"\]\s*\{([^}]*)\}/,
-  )?.[1];
-
-  assert.ok(iosRules, "iOS navigation must have an explicit viewport-relative bottom anchor");
-  assert.ok(iosRules.includes("top: auto !important;"));
-  assert.ok(iosRules.includes("bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important"));
-  assert.match(iosRules, /padding-bottom:\s*0\s*!important/);
-  assert.match(iosRules, /transform:\s*none\s*!important/);
-  assert.doesNotMatch(iosRules, /--pwa-device-screen-height|translate3d\(0, -100%, 0\)/);
+  // Only one CSS rule controls the dock's vertical position.
+  assert.match(navAnchor, /bottom:\s*0\s*!important/);
+  assert.doesNotMatch(css, /bottom:\s*calc\(0\.75rem \+ env\(safe-area-inset-bottom/);
+  assert.doesNotMatch(css, /top:\s*calc\(var\(--pwa-device-screen-height/);
+  assert.doesNotMatch(runtime, /resolvePwaScreenHeight|--pwa-device-screen-height/);
 
   const keyboardRules = css.match(
     /html\[data-standalone-pwa="true"\]\[data-keyboard-open="true"\]:not\(\[data-modal-open="true"\]\)\s+\[data-mobile-bottom-nav="true"\]\s*\{([^}]*)\}/,
   )?.[1];
-
   assert.ok(keyboardRules);
   assert.doesNotMatch(keyboardRules, /(?:^|;)\s*(?:top|bottom|translate|transform)\s*:/);
 });
