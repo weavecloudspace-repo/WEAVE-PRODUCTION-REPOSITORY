@@ -86,9 +86,9 @@ test("the iOS PWA dock uses a viewport-relative safe-area bottom anchor", async 
   assert.ok(iosRules, "iOS navigation must have an explicit viewport-relative bottom anchor");
   assert.ok(iosRules.includes("top: auto !important;"));
   assert.ok(iosRules.includes("bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important"));
-  assert.match(iosRules, /padding-bottom:\\s*0\\s*!important/);
-  assert.match(iosRules, /transform:\\s*none\\s*!important/);
-  assert.doesNotMatch(iosRules, /--pwa-device-screen-height|translate3d\\(0, -100%, 0\\)/);
+  assert.match(iosRules, /padding-bottom:\s*0\s*!important/);
+  assert.match(iosRules, /transform:\s*none\s*!important/);
+  assert.doesNotMatch(iosRules, /--pwa-device-screen-height|translate3d\(0, -100%, 0\)/);
 
   const keyboardRules = css.match(
     /html\[data-standalone-pwa="true"\]\[data-keyboard-open="true"\]:not\(\[data-modal-open="true"\]\)\s+\[data-mobile-bottom-nav="true"\]\s*\{([^}]*)\}/,
