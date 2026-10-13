@@ -1,7 +1,10 @@
 @media (max-width: 767px) {
-  /* Float the installed-app capsule above the system gesture area on both platforms. */
+  /*
+   * The bottom-nav vertical anchor is owned by mobilePwaStability.css.
+   * Do not introduce a second safe-area bottom offset here: iOS can report
+   * different insets at launch/resume, causing the capsule to jump upwards.
+   */
   html[data-standalone-pwa="true"] [data-mobile-bottom-nav="true"] {
-    bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
     padding-bottom: 0 !important;
     padding-inline: max(1rem, env(safe-area-inset-left, 0px)) !important;
     background: transparent !important;

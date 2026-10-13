@@ -67,7 +67,6 @@ export const installMobilePwaStability = () => {
   const root = document.documentElement;
   const visualViewport = window.visualViewport;
   const standaloneQuery = window.matchMedia?.("(display-mode: standalone)");
-  const reducedMotionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
   let stableLayoutHeight = 0;
   let stableViewportWidth = 0;
   let keyboardOpen = false;
@@ -125,10 +124,11 @@ export const installMobilePwaStability = () => {
     if (rect.top < visibleTop) delta = rect.top - visibleTop;
     if (Math.abs(delta) < 1) return;
 
+    // Immediate corrections cannot overlap the native keyboard scroll animation.
     scrollContainer.scrollBy({
       top: delta,
       left: 0,
-      behavior: reducedMotionQuery?.matches ? "auto" : "smooth",
+      behavior: "auto",
     });
   };
 
@@ -158,6 +158,19 @@ export const installMobilePwaStability = () => {
     );
 
     if (!keyboardOpen) return;
+
+    // iOS WebKit already scrolls focused auth inputs into view. Re-scrolling
+    // the auth container on every visualViewport scroll/resize creates a
+    // feedback loop: the manual scroll emits another viewport event, causing
+    // the login form to jump or flicker while the keyboard is displayed.
+    if (
+      root.dataset.pwaPlatform === "ios" &&
+      isEditableElement(activeElement) &&
+      activeElement.closest(".auth-surface")
+    ) {
+      window.cancelAnimationFrame(frameId);
+      return;
+    }
 
     window.cancelAnimationFrame(frameId);
     frameId = window.requestAnimationFrame(keepFocusedElementVisible);

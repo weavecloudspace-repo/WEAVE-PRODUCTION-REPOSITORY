@@ -116,6 +116,17 @@
     isolation: isolate;
   }
 
+  /*
+   * Keep iOS auth forms on a static compositing layer. Transform-based
+   * entrance animations can flash when WebKit raises the software keyboard.
+   */
+  html[data-standalone-pwa="true"][data-pwa-platform="ios"]
+    .auth-surface .public-panel-reveal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
   /* A modal temporarily owns scrolling and freezes the page beneath it. */
   html[data-modal-open="true"] #dashboard-scroll-viewport,
   html[data-modal-open="true"] [data-guide-page="true"],
