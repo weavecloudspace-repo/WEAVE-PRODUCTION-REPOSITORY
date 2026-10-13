@@ -144,20 +144,18 @@
   }
 
   /*
-   * iOS standalone uses a physical-screen anchor rather than bottom: 0
-   * against WebKit's sometimes shorter resume-time layout viewport. With
-   * viewport-fit=cover and a translucent status bar, screen.height is the
-   * stable bottom edge across cold launches, logins, and background resumes.
-   * The 0.5rem gap keeps the capsule low without touching the gesture edge.
+   * Anchor iOS navigation to the layout viewport, not screen.height.
+   * screen.height can include areas outside the visible PWA viewport and
+   * place the capsule behind the home-indicator/footer region.
    */
   html[data-standalone-pwa="true"][data-pwa-platform="ios"]
     [data-mobile-bottom-nav="true"] {
-    top: calc(var(--pwa-device-screen-height, 100dvh) - 0.5rem) !important;
-    bottom: auto !important;
+    top: auto !important;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important;
     padding-bottom: 0 !important;
     translate: none !important;
-    transform: translate3d(0, -100%, 0) !important;
-    -webkit-transform: translate3d(0, -100%, 0) !important;
+    transform: none !important;
+    -webkit-transform: none !important;
   }
 
   html[data-standalone-pwa="true"] [data-mobile-bottom-nav="true"] {
