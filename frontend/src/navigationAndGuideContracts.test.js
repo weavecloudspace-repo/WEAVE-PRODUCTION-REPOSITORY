@@ -12,8 +12,8 @@ test("installed mobile navigation stays pinned to the lower screen edge", () => 
   const css = readSource("styles", "mobilePlatformFixes.css");
   const stability = readSource("styles", "mobilePwaStability.css");
   const overrides = readSource("styles", "mobileOverrides.css");
-  assert.doesNotMatch(css, /bottom:\\s*calc\\(1rem \\+ env\\(safe-area-inset-bottom/);
-  assert.match(stability, /bottom:\\s*0\\s*!important/);
+  assert.doesNotMatch(css, /bottom:\s*calc\(1rem \+ env\(safe-area-inset-bottom/);
+  assert.match(stability, /bottom:\s*0\s*!important/);
   assert.match(css, /--mobile-bottom-nav-clearance/);
   assert.equal(overrides.includes("bottom: calc(-0.45 * env(safe-area-inset-bottom))"), false);
 });
