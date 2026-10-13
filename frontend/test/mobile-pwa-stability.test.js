@@ -45,6 +45,8 @@ test("the stable layout uses the visible PWA viewport instead of the larger docu
     source,
     /Math\.max\([\s\S]{0,100}window\.innerHeight[\s\S]{0,100}document\.documentElement\.clientHeight/,
   );
+  assert.doesNotMatch(source, /root\.style\.setProperty\(["']--pwa-layout-height/);
+  assert.match(source, /root\.style\.removeProperty\("--pwa-layout-height"\)/);
 });
 
 test("the PWA navbar geometry remains frozen while scroll ownership changes", async () => {
@@ -56,7 +58,7 @@ test("the PWA navbar geometry remains frozen while scroll ownership changes", as
   );
   assert.match(
     css,
-    /data-pwa-platform="ios"[\s\S]*?bottom:\s*calc\(0\.75rem \+ env\(safe-area-inset-bottom, 0px\)\)\s*!important/,
+    /data-mobile-bottom-nav="true"[\s\S]*?bottom:\s*0\s*!important/,
   );
   assert.doesNotMatch(css, /transform:\s*translate3d\(0, -100%, 0\)\s*!important/);
   assert.doesNotMatch(css, /calc\(env\(safe-area-inset-bottom, 0px\) - 1\.8rem\)/);
