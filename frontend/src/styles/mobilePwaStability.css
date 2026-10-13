@@ -1,5 +1,6 @@
 @media (max-width: 767px) {
   html[data-standalone-pwa="true"] {
+    /* Keep the shell tied to the live viewport, never a launch-time pixel height. */
     --pwa-layout-height: 100dvh;
     --virtual-keyboard-height: 0px;
     --mobile-bottom-nav-clearance: calc(
@@ -144,19 +145,9 @@
   }
 
   /*
-   * Anchor iOS navigation to the layout viewport, not screen.height.
-   * screen.height can include areas outside the visible PWA viewport and
-   * place the capsule behind the home-indicator/footer region.
+   * One bottom anchor for every installed PWA. Do not apply a second iOS
+   * safe-area offset: it stacks with the app viewport and lifts the dock.
    */
-  html[data-standalone-pwa="true"][data-pwa-platform="ios"]
-    [data-mobile-bottom-nav="true"] {
-    top: auto !important;
-    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important;
-    padding-bottom: 0 !important;
-    translate: none !important;
-    transform: none !important;
-    -webkit-transform: none !important;
-  }
 
   html[data-standalone-pwa="true"] [data-mobile-bottom-nav="true"] {
     position: fixed !important;
