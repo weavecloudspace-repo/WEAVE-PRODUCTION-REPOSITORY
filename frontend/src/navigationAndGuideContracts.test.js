@@ -8,10 +8,12 @@ const sourceRoot = path.dirname(fileURLToPath(import.meta.url));
 const readSource = (...segments) =>
   fs.readFileSync(path.join(sourceRoot, ...segments), "utf8");
 
-test("installed mobile navigation floats clear of the system gesture area", () => {
+test("installed mobile navigation stays pinned to the lower screen edge", () => {
   const css = readSource("styles", "mobilePlatformFixes.css");
+  const stability = readSource("styles", "mobilePwaStability.css");
   const overrides = readSource("styles", "mobileOverrides.css");
-  assert.ok(css.includes("bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important"));
+  assert.doesNotMatch(css, /bottom:\s*calc\(1rem \+ env\(safe-area-inset-bottom/);
+  assert.match(stability, /bottom:\s*0\s*!important/);
   assert.match(css, /--mobile-bottom-nav-clearance/);
   assert.equal(overrides.includes("bottom: calc(-0.45 * env(safe-area-inset-bottom))"), false);
 });
