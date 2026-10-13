@@ -109,8 +109,9 @@ test("standalone PWA scrolling and floating dock geometry have one final authori
   );
   assert.match(
     stabilityCss,
-    /data-pwa-platform="ios"[\s\S]*?safe-area-inset-bottom, 0px\) - 1\.8rem/,
+    /data-pwa-platform="ios"[\s\S]*?--pwa-device-screen-height/,
   );
+  assert.doesNotMatch(stabilityCss, /safe-area-inset-bottom, 0px\) - 1\.8rem/);
   assert.match(
     stabilityCss,
     /#dashboard-scroll-viewport[\s\S]*?overflow-y:\s*auto\s*!important/,
