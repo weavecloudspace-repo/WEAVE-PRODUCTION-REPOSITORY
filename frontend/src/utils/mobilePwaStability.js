@@ -44,6 +44,25 @@ const getLayoutViewportHeight = () => {
   return Math.round(Number(document.documentElement.clientHeight || 0));
 };
 
+/**
+ * A standalone iOS PWA can expose a shorter layout viewport on a later launch
+ * while the physical screen dimensions remain unchanged. Anchor its dock to
+ * the physical screen height, not the transient visual/layout viewport height.
+ */
+export const resolvePwaScreenHeight = ({
+  screenWidth,
+  screenHeight,
+  landscape,
+  fallbackHeight,
+}) => {
+  const width = Number(screenWidth);
+  const height = Number(screenHeight);
+  if (width > 0 && height > 0) {
+    return Math.round(landscape ? Math.min(width, height) : Math.max(width, height));
+  }
+  return Math.max(0, Math.round(Number(fallbackHeight) || 0));
+};
+
 const isEditableElement = (element) => Boolean(
   element instanceof Element && element.matches(EDITABLE_SELECTOR),
 );
@@ -73,6 +92,29 @@ export const installMobilePwaStability = () => {
   let frameId = 0;
   let orientationTimer = 0;
 
+  const syncScreenAnchor = () => {
+    if (!isStandalonePwa() || detectPwaPlatform() !== "ios") {
+      root.style.removeProperty("--pwa-device-screen-height");
+      return;
+    }
+
+    const orientationType = window.screen?.orientation?.type;
+    const isLandscape = typeof orientationType === "string"
+      ? orientationType.startsWith("landscape")
+      : window.matchMedia?.("(orientation: landscape)")?.matches
+        ?? window.innerWidth > window.innerHeight;
+    const height = resolvePwaScreenHeight({
+      screenWidth: window.screen?.width,
+      screenHeight: window.screen?.height,
+      landscape: isLandscape,
+      fallbackHeight: getLayoutViewportHeight(),
+    });
+
+    if (height > 0) {
+      root.style.setProperty("--pwa-device-screen-height", `${height}px`);
+    }
+  };
+
   const clearKeyboardState = () => {
     keyboardOpen = false;
     root.dataset.keyboardOpen = "false";
@@ -94,6 +136,7 @@ export const installMobilePwaStability = () => {
     const standalone = isStandalonePwa();
     root.dataset.standalonePwa = String(standalone);
     root.dataset.pwaPlatform = detectPwaPlatform();
+    syncScreenAnchor();
 
     if (!standalone) {
       clearKeyboardState();
@@ -189,6 +232,7 @@ export const installMobilePwaStability = () => {
     orientationTimer = window.setTimeout(() => {
       clearKeyboardState();
       setStableLayoutHeight({ force: true });
+      syncScreenAnchor();
       syncKeyboardState();
       resetHorizontalDocumentState();
     }, 250);
@@ -235,6 +279,7 @@ export const installMobilePwaStability = () => {
     window.clearTimeout(orientationTimer);
     window.cancelAnimationFrame(frameId);
     clearKeyboardState();
+    root.style.removeProperty("--pwa-device-screen-height");
     delete window[INSTALLATION_KEY];
   };
 
