@@ -84,7 +84,7 @@ test("the iOS PWA dock uses a viewport-relative safe-area bottom anchor", async 
   )?.[1];
 
   assert.ok(iosRules, "iOS navigation must have an explicit viewport-relative bottom anchor");
-  assert.match(iosRules, /top:\\s*auto\\s*!important/);
+  assert.ok(iosRules.includes("top: auto !important;"));
   assert.ok(iosRules.includes("bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important"));
   assert.match(iosRules, /padding-bottom:\\s*0\\s*!important/);
   assert.match(iosRules, /transform:\\s*none\\s*!important/);
