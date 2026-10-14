@@ -37,6 +37,20 @@ test("PWA navigation uses a single anchored shell and internal gesture clearance
   assert.doesNotMatch(nav, /border-t border-border\/70 bg-background px-2 pt-0\.5 pb-3/);
 });
 
+test("iOS PWA dock stays anchored to the dashboard shell across login and logout", () => {
+  const css = read("../src/styles/mobilePwaStability.css");
+  const nav = read("../src/components/layout/BottomNav.jsx");
+  const shell = read("../src/components/layout/DashboardLayout.jsx");
+
+  assert.match(shell, /className="fixed inset-0 flex min-h-\[100dvh\]/);
+  assert.match(shell, /<BottomNav role=\{role\}/);
+  assert.match(css, /data-pwa-platform="ios"\]\s*\[data-dashboard-role\] > \[data-mobile-bottom-nav="true"\]/);
+  assert.match(css, /position: absolute !important/);
+  assert.match(css, /contain: none !important/);
+  assert.match(nav, /Math\.max\(0, rect\.height\)/);
+  assert.doesNotMatch(nav, /window\.innerHeight \|\| root\.clientHeight/);
+});
+
 test("mobile drawer leaves its close button above the full-height opaque surface", () => {
   const drawer = read("../src/components/layout/MobileDrawer.jsx");
   const css = read("../src/styles/mobileDashboard.css");
