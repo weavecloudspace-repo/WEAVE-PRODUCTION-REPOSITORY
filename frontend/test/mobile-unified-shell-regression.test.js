@@ -23,6 +23,8 @@ test("browser-only drawer sync preserves the original mobile drawer structure", 
   assert.match(drawer, /data-mobile-drawer="true"/);
   assert.match(css, /data-ios-browser="true"\]\[data-ios-browser-drawer-open="true"\]/);
   assert.doesNotMatch(css, /data-standalone-pwa="true"\]\[data-ios-browser-drawer-open/);
+  assert.match(css, /data-ios-browser-drawer-open="true"\] #root/);
+  assert.doesNotMatch(css, /data-ios-browser-drawer-open="true"\] body\s*\{/);
 });
 
 test("PWA navigation uses a single anchored shell and internal gesture clearance", () => {
