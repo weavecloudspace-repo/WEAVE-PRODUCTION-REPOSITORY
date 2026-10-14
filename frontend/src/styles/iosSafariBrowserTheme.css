@@ -23,8 +23,10 @@
   }
 
   html[data-ios-browser="true"] [data-dashboard-role]:not([data-guide-page="true"]) {
-    position: absolute !important;
-    inset: 0;
+    position: relative !important;
+    inset: auto !important;
+    height: auto !important;
+    overflow: visible !important;
   }
 
   html[data-ios-browser="true"] #dashboard-scroll-viewport {
@@ -34,5 +36,40 @@
 
   html[data-ios-browser="true"] body::before {
     display: none;
+  }
+}
+
+/*
+ * iOS browser tabs should scroll with Safari, not inside a fixed-height PWA
+ * frame. This lets Safari expand/collapse its toolbar without trapping an
+ * artificial viewport/footer beneath the page.
+ */
+@media (max-width: 767px) {
+  html[data-ios-browser="true"],
+  html[data-ios-browser="true"] body,
+  html[data-ios-browser="true"] #root {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow-y: visible !important;
+  }
+
+  html[data-ios-browser="true"] [data-dashboard-role]:not([data-guide-page="true"]) {
+    min-height: 100dvh !important;
+  }
+
+  html[data-ios-browser="true"] [data-dashboard-role]:not([data-guide-page="true"]) > div:has(> .dashboard-topbar) {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow: visible !important;
+  }
+
+  html[data-ios-browser="true"] #dashboard-scroll-viewport {
+    flex: 1 0 auto !important;
+    overflow: visible !important;
+    overscroll-behavior-y: auto !important;
+  }
+
+  html[data-ios-browser="true"] #dashboard-content {
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px)) !important;
   }
 }

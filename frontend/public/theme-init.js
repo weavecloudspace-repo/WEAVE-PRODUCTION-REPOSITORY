@@ -120,6 +120,9 @@
     document.documentElement.style.colorScheme = resolvedTheme;
     document.documentElement.style.backgroundColor = themeColor;
     syncStableMetas(resolvedTheme, themeColor);
+    // Align installed iOS status-bar presentation with the active appearance.
+    const appleBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    appleBar?.setAttribute("content", resolvedTheme === "dark" ? "black" : "default");
   } catch {
     applyFallback();
   }
