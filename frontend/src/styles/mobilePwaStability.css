@@ -172,6 +172,29 @@
     transition: opacity 120ms ease, visibility 120ms ease;
   }
 
+  /*
+   * iOS standalone dashboards already have a fixed, viewport-sized shell.
+   * Anchor the dock inside that shell, not as a second independently fixed
+   * viewport layer: repeated login/logout and keyboard dismissal can leave
+   * WebKit's visual viewport temporarily out of sync with the layout viewport.
+   * This preserves the exact same visible bottom offset and safe-area padding.
+   */
+  html[data-standalone-pwa="true"][data-pwa-platform="ios"]
+    [data-dashboard-role] {
+    min-height: 0 !important;
+    height: 100% !important;
+  }
+
+  html[data-standalone-pwa="true"][data-pwa-platform="ios"]
+    [data-dashboard-role] > [data-mobile-bottom-nav="true"] {
+    position: absolute !important;
+    inset-inline: 0 !important;
+    bottom: 0 !important;
+    transform: none !important;
+    -webkit-transform: none !important;
+    contain: none !important;
+  }
+
   html[data-standalone-pwa="true"] [data-mobile-bottom-nav="true"] > div {
     width: 100% !important;
     max-width: 30rem !important;
