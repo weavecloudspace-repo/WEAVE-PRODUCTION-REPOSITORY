@@ -13,7 +13,7 @@ test("installed mobile navigation stays pinned to the lower screen edge", () => 
   const stability = readSource("styles", "mobilePwaStability.css");
   const overrides = readSource("styles", "mobileOverrides.css");
   assert.doesNotMatch(css, /bottom:\s*calc\(1rem \+ env\(safe-area-inset-bottom/);
-  assert.match(stability, /bottom:\s*0\s*!important/);
+  assert.match(stability, /bottom:\s*max\(0\.5rem,\s*env\(safe-area-inset-bottom,\s*0px\)\)\s*!important/);
   assert.doesNotMatch(stability, /bottom:\s*calc\(0\.75rem \+ env\(safe-area-inset-bottom/);
   assert.ok(stability.includes("top: auto !important"));
   assert.equal(stability.includes("var(--pwa-device-screen-height, 100dvh) - 0.5rem"), false);
