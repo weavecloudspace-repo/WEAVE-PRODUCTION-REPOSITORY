@@ -73,3 +73,30 @@
     padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px)) !important;
   }
 }
+
+/*
+ * iOS Safari can tint its floating bottom toolbar from the document canvas.
+ * While the navigation drawer is open, keep the canvas aligned with the
+ * actual painted surfaces instead of showing a full-width branded stripe:
+ * the drawer color continues on the left and the page color on the right.
+ *
+ * These rules affect browser mode only. Installed PWAs retain their existing
+ * safe-area/nav layout, and no fake bottom footer or fixed filler is created.
+ */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 767px) {
+    html[data-ios-browser="true"][data-ios-browser-drawer-open="true"],
+    html[data-ios-browser="true"][data-ios-browser-drawer-open="true"] body {
+      background-image: linear-gradient(
+        to right,
+        var(--weave-ios-browser-drawer-color) 0,
+        var(--weave-ios-browser-drawer-color)
+          var(--weave-ios-browser-drawer-width),
+        var(--weave-ios-browser-canvas)
+          var(--weave-ios-browser-drawer-width),
+        var(--weave-ios-browser-canvas) 100%
+      ) !important;
+      background-repeat: no-repeat !important;
+    }
+  }
+}
