@@ -20,9 +20,9 @@ test("installed PWA bottom nav stays at the lower edge after launch and resume",
 
   const navAnchor = getStandaloneNavRules(stabilityCss);
   assert.match(navAnchor, /position:\s*fixed\s*!important;/);
-  assert.match(navAnchor, /bottom:\s*max\(0\.5rem,\s*env\(safe-area-inset-bottom,\s*0px\)\)\s*!important;/);
+  assert.match(navAnchor, /bottom:\s*0\s*!important;/);
 
-  // One safe-area anchor owns the dock position; no platform-specific offset.
+  // One viewport anchor owns the dock position; no platform-specific offset.
   const platformRules = getStandaloneNavRules(platformCss);
   assert.doesNotMatch(
     platformRules,
@@ -48,8 +48,8 @@ test("the iOS PWA dock uses one CSS viewport anchor across launch and login", ()
   assert.match(runtime, /root\.style\.removeProperty\("--pwa-layout-height"\)/);
   assert.match(runtime, /const handleViewportResize = \(\) => \{[\s\S]*?setStableLayoutHeight\(\)/);
 
-  // Only one CSS rule controls the dock's safe-area-aware position.
-  assert.match(navAnchor, /bottom:\s*max\(0\.5rem,\s*env\(safe-area-inset-bottom,\s*0px\)\)\s*!important/);
+  // Only one CSS rule controls the dock's bottom position.
+  assert.match(navAnchor, /bottom:\s*0\s*!important/);
   assert.doesNotMatch(css, /bottom:\s*calc\(0\.75rem \+ env\(safe-area-inset-bottom/);
   assert.doesNotMatch(css, /top:\s*calc\(var\(--pwa-device-screen-height/);
   assert.doesNotMatch(runtime, /resolvePwaScreenHeight|--pwa-device-screen-height/);
