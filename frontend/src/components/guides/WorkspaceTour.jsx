@@ -46,10 +46,6 @@ export default function WorkspaceTour({
   const isAccountScope =
     ["parent_account", "teacher_account"].includes(actorType) &&
     !user?.tenant_id;
-  const subscriptionReady =
-    !subscription?.isTenantAdmin ||
-    Boolean(subscription?.entitlements) ||
-    Boolean(subscription?.errors?.entitlements);
   const manifestKey = [
     role,
     dedicated ? "dedicated" : "standard",
@@ -97,6 +93,9 @@ export default function WorkspaceTour({
     runtimeConfig,
     subscription,
   ]);
+  // The sidebar already filters pending and denied features. A replay should
+  // never wait indefinitely for *all* subscription entitlements to load.
+  const subscriptionReady = configuredItems.length > 0;
   const [steps, setSteps] = useState([]);
   const [index, setIndex] = useState(-1);
   const [geometry, setGeometry] = useState(null);
@@ -125,7 +124,10 @@ export default function WorkspaceTour({
         .map((node) => node.dataset.tourTarget),
     );
     const nextSteps = configuredItems
-      .filter((item) => rendered.has(item.tourTarget || item.to))
+      // On iOS the drawer may not have a measurable rect on the first frame.
+      // Reuse the already access-filtered navigation rather than disabling the
+      // welcome action when WebKit temporarily reports no visible targets.
+      .filter((item) => !rendered.size || rendered.has(item.tourTarget || item.to))
       .map((item) => ({
         ...tourContentForItem(role, item, { dedicated, dedicatedKind }),
         targetTo: item.tourTarget || item.to,

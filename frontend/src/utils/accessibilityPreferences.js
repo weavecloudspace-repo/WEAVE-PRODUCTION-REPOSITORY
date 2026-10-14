@@ -51,7 +51,7 @@ export const applyAccessibilityPreferences = (preferences = {}) => {
 
   const appleStatusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
   if (appleStatusBarMeta) {
-    appleStatusBarMeta.setAttribute("content", "black-translucent");
+    appleStatusBarMeta.setAttribute("content", resolvedTheme === "dark" ? "black" : "default");
   }
 
   scheduleThemeChromeSync();

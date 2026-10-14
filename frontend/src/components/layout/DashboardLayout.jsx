@@ -622,18 +622,6 @@ function DashboardShellFrame({
       data-dashboard-role={role}
       className="fixed inset-0 flex min-h-[100dvh] flex-col overflow-hidden bg-background text-text"
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 top-0 z-[70] hidden bg-surface md:hidden"
-        data-pwa-status-fill="true"
-        style={{ height: "env(safe-area-inset-top)" }}
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-30 hidden bg-background md:hidden"
-        data-pwa-safe-area-fill="true"
-        style={{ height: "calc(env(safe-area-inset-bottom) + 1rem)" }}
-      />
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-40 hidden border-r border-sidebar-border bg-sidebar-background text-sidebar-text transition-all duration-300 md:block",
