@@ -12,6 +12,8 @@ const IOS_BROWSER_THEME_RECHECK_DELAYS_MS = [180, 480];
 const THEME_COLOR_META_ID = "weave-theme-color";
 const COLOR_SCHEME_META_ID = "weave-color-scheme";
 const IOS_BROWSER_CANVAS_PROPERTY = "--weave-ios-browser-canvas";
+const IOS_BROWSER_DRAWER_COLOR_PROPERTY = "--weave-ios-browser-drawer-color";
+const IOS_BROWSER_DRAWER_WIDTH_PROPERTY = "--weave-ios-browser-drawer-width";
 
 let frameId = null;
 let paintFrameId = null;
@@ -116,12 +118,41 @@ const applyIosBrowserCanvas = (background) => {
   }
 };
 
+const syncIosBrowserDrawerCanvas = () => {
+  const root = document.documentElement;
+  const drawer = document.querySelector('[data-mobile-drawer="true"]');
+
+  if (!drawer) {
+    root.removeAttribute("data-ios-browser-drawer-open");
+    root.style.removeProperty(IOS_BROWSER_DRAWER_COLOR_PROPERTY);
+    root.style.removeProperty(IOS_BROWSER_DRAWER_WIDTH_PROPERTY);
+    return;
+  }
+
+  // Read the actual painted drawer color and measured width. Tenant-brand
+  // variables belong to the dashboard scope and are not on <html>.
+  const color = window.getComputedStyle(drawer).backgroundColor;
+  const width = drawer.getBoundingClientRect().width;
+
+  if (!color || !Number.isFinite(width) || width <= 0) {
+    root.removeAttribute("data-ios-browser-drawer-open");
+    root.style.removeProperty(IOS_BROWSER_DRAWER_COLOR_PROPERTY);
+    root.style.removeProperty(IOS_BROWSER_DRAWER_WIDTH_PROPERTY);
+    return;
+  }
+
+  root.style.setProperty(IOS_BROWSER_DRAWER_COLOR_PROPERTY, color);
+  root.style.setProperty(IOS_BROWSER_DRAWER_WIDTH_PROPERTY, `${width}px`);
+  root.dataset.iosBrowserDrawerOpen = "true";
+};
+
 const applyIosBrowserDocumentTheme = (background) => {
   const theme = resolvedTheme();
 
   document.documentElement.dataset.iosBrowser = "true";
   document.documentElement.style.colorScheme = theme;
   applyIosBrowserCanvas(background);
+  syncIosBrowserDrawerCanvas();
 
   if (document.body) {
     document.body.style.colorScheme = theme;
@@ -160,6 +191,9 @@ const applyDocumentTheme = ({ replaceBrowserMetas = false } = {}) => {
   }
 
   document.documentElement.style.removeProperty(IOS_BROWSER_CANVAS_PROPERTY);
+  document.documentElement.style.removeProperty(IOS_BROWSER_DRAWER_COLOR_PROPERTY);
+  document.documentElement.style.removeProperty(IOS_BROWSER_DRAWER_WIDTH_PROPERTY);
+  document.documentElement.removeAttribute("data-ios-browser-drawer-open");
   document.documentElement.style.colorScheme = theme;
   document.documentElement.style.backgroundColor = background;
   document.documentElement.style.removeProperty("background-image");
@@ -269,6 +303,7 @@ export const installThemeChromeSync = () => {
   window.addEventListener("storage", scheduleThemeChromeSync);
   window.addEventListener("pageshow", scheduleThemeChromeSync);
   window.addEventListener("focus", scheduleThemeChromeSync);
+  window.addEventListener("resize", scheduleThemeChromeSync);
   document.addEventListener("visibilitychange", syncWhenVisible);
   colorSchemeQuery?.addEventListener?.("change", scheduleThemeChromeSync);
 
@@ -279,6 +314,7 @@ export const installThemeChromeSync = () => {
     window.removeEventListener("storage", scheduleThemeChromeSync);
     window.removeEventListener("pageshow", scheduleThemeChromeSync);
     window.removeEventListener("focus", scheduleThemeChromeSync);
+    window.removeEventListener("resize", scheduleThemeChromeSync);
     document.removeEventListener("visibilitychange", syncWhenVisible);
     colorSchemeQuery?.removeEventListener?.("change", scheduleThemeChromeSync);
   };
