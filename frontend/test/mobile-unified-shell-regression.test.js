@@ -27,11 +27,23 @@ test("PWA navigation uses a single anchored shell and internal gesture clearance
   assert.doesNotMatch(nav, /border-t border-border\/70 bg-background px-2 pt-0\.5 pb-3/);
 });
 
-test("mobile drawer paints a theme-aware opaque iOS status area", () => {
+test("mobile drawer leaves its close button above the full-height opaque surface", () => {
   const drawer = read("../src/components/layout/MobileDrawer.jsx");
   const css = read("../src/styles/mobileDashboard.css");
-  assert.match(drawer, /data-mobile-drawer-status-surface="true"/);
-  assert.match(drawer, /height: "env\(safe-area-inset-top, 0px\)"/);
-  assert.match(css, /\[data-mobile-drawer-status-surface="true"\]\s*\{[^}]*--color-sidebar-background/s);
+  assert.doesNotMatch(drawer, /data-mobile-drawer-status-surface="true"/);
+  assert.doesNotMatch(css, /data-mobile-drawer-status-surface/);
+  assert.match(drawer, /className="relative z-10 flex h-12 shrink-0 items-center justify-end/);
+  assert.match(drawer, /relative z-10 inline-flex h-11 w-11/);
+  assert.match(drawer, /aria-label="Close navigation"/);
+  assert.match(drawer, /pt-\[max\(0\.75rem,env\(safe-area-inset-top\)\)\]/);
+  assert.match(css, /\[data-mobile-drawer="true"\]\s*\{[^}]*background-color:\s*rgb\(var\(--color-sidebar-background\)\)/s);
   assert.match(css, /\[data-mobile-drawer="true"\]\s*\{[^}]*backdrop-filter:\s*none\s*!important/s);
+});
+
+test("iOS home-screen install sees a non-translucent status bar before theme bootstrapping", () => {
+  const html = read("../index.html");
+  const statusMeta = '<meta name="apple-mobile-web-app-status-bar-style" content="default" />';
+  assert.ok(html.includes(statusMeta));
+  assert.ok(html.indexOf(statusMeta) < html.indexOf('<script src="/theme-init.js"></script>'));
+  assert.doesNotMatch(html, /content="black-translucent"/);
 });
