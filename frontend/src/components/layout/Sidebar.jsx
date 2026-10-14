@@ -220,9 +220,17 @@ export default function SidebarContent({
             </div>
           </div>
         ))}
+        {!collapsed && mobile ? (
+          <div data-mobile-sidebar-support="true" className="pt-2">
+            <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12px] text-sidebar-text/65">
+              <HelpCircle className="h-4 w-4" />
+              Help & Support
+            </div>
+          </div>
+        ) : null}
       </nav>
 
-      {!collapsed && (
+      {!collapsed && !mobile && (
         <div className="shrink-0 border-t border-border/60 p-2.5">
           <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12px] text-sidebar-text/65">
             <HelpCircle className="h-4 w-4" />

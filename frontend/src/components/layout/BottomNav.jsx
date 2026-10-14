@@ -366,7 +366,7 @@ function BottomNav({ role, onOpenMenu }) {
       <nav
         ref={shellRef}
         data-mobile-bottom-nav="true"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background px-2 pt-0.5 pb-3 shadow-[0_-14px_34px_rgba(15,23,42,0.14)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 bg-transparent px-2 md:hidden"
         aria-label="Primary mobile app navigation"
       >
         <div

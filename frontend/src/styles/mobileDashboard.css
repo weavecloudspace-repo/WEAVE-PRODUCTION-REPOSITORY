@@ -287,14 +287,6 @@
     display: none !important;
   }
 
-  html[data-standalone-pwa="true"] [data-pwa-status-fill="true"] {
-    display: block !important;
-  }
-
-  html[data-standalone-pwa="true"] [data-pwa-safe-area-fill="true"] {
-    display: block !important;
-  }
-
   button,
   a {
     touch-action: manipulation;
@@ -354,16 +346,6 @@
     backdrop-filter: none !important;
   }
 
-  [data-mobile-bottom-nav="true"] {
-    display: block !important;
-    position: fixed !important;
-    inset-inline: 0 !important;
-    bottom: 0 !important;
-    transform: translate3d(0, 0, 0) !important;
-    -webkit-transform: translate3d(0, 0, 0) !important;
-    touch-action: none !important;
-    overscroll-behavior: none !important;
-  }
 }
 
 @media (min-width: 768px) {
@@ -762,10 +744,18 @@
     box-shadow: 0 12px 28px rgb(2 6 23 / 0.16) !important;
   }
 
-  aside:has(button[aria-label="Close navigation"]) {
+  [data-mobile-drawer="true"] {
     width: min(84vw, 19.5rem) !important;
     border-top-right-radius: 1.35rem;
-    border-bottom-right-radius: 1.35rem;
+    border-bottom-right-radius: 0;
+    background-color: rgb(var(--color-sidebar-background));
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    filter: none !important;
+  }
+
+  [data-mobile-drawer-status-surface="true"] {
+    background-color: rgb(var(--color-sidebar-background));
   }
 
   aside:has(button[aria-label="Close navigation"]) > div:first-child {

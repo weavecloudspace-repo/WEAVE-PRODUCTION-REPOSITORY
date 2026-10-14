@@ -109,7 +109,7 @@ test("standalone PWA scrolling and floating dock geometry have one final authori
   );
   assert.match(
     stabilityCss,
-    /data-mobile-bottom-nav="true"[\s\S]*?bottom:\s*max\(0\.5rem,\s*env\(safe-area-inset-bottom,\s*0px\)\)\s*!important/,
+    /data-mobile-bottom-nav="true"[\s\S]*?bottom:\s*0\s*!important/,
   );
   assert.doesNotMatch(stabilityCss, /safe-area-inset-bottom, 0px\) - 1\.8rem/);
   assert.match(
