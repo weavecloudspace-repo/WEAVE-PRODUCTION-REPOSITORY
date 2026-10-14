@@ -101,8 +101,15 @@
       backdrop-filter: none !important;
     }
 
-    html[data-ios-browser="true"][data-ios-browser-drawer-open="true"],
-    html[data-ios-browser="true"][data-ios-browser-drawer-open="true"] body {
+    /*
+     * Safari samples html/body for its *single* native toolbar tint. A split
+     * gradient on either surface was collapsed into a full-width brand color,
+     * making the toolbar look like a footer. Keep those canvas backgrounds
+     * neutral, and paint the split on WEAVE's actual content layer instead.
+     * This is a full-page surface, never a pinned footer element.
+     */
+    html[data-ios-browser="true"][data-ios-browser-drawer-open="true"] #root {
+      background-color: var(--weave-ios-browser-canvas) !important;
       background-image: linear-gradient(
         to right,
         var(--weave-ios-browser-drawer-color) 0,

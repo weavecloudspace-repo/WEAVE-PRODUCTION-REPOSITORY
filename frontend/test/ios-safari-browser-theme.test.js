@@ -139,6 +139,12 @@ test("iOS Safari browser uses one document canvas for live theme switching", asy
   assert.match(css, /--weave-ios-browser-drawer-color/);
   assert.match(css, /--weave-ios-browser-drawer-width/);
   assert.match(css, /linear-gradient\(/);
+  // Native iOS browser chrome can only sample a single edge tint. Split
+  // colors must paint the page layer, never the browser's html/body canvas.
+  assert.match(css, /data-ios-browser-drawer-open="true"\] #root\s*\{/);
+  assert.doesNotMatch(css, /data-ios-browser-drawer-open="true"\],/);
+  assert.doesNotMatch(css, /data-ios-browser-drawer-open="true"\] body\s*\{/);
+  assert.match(css, /background-color: var\(--weave-ios-browser-canvas\) !important/);
   assert.match(css, /data-mobile-drawer-backdrop="true"/);
   assert.match(css, /background: transparent !important/);
   assert.match(css, /#root[\s\S]*background-color: transparent !important/);
