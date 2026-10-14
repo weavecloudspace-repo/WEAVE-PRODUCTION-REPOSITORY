@@ -649,6 +649,7 @@ function DashboardShellFrame({
       />
 
       <div
+        data-dashboard-main-frame="true"
         className={cn(
           "flex h-full min-h-0 flex-col overflow-hidden transition-[padding] duration-300",
           sidebarCollapsed && !tour.open
@@ -766,6 +767,7 @@ function DashboardShellFrame({
             {children}
           </main>
         </div>
+        <BottomNav role={role} onOpenMenu={() => setMobileNavOpen(true)} />
       </div>
 
       {tour.open ? (
@@ -790,8 +792,6 @@ function DashboardShellFrame({
           }
         />
       ) : null}
-
-      <BottomNav role={role} onOpenMenu={() => setMobileNavOpen(true)} />
 
       {onboardingModalEnabled ? (
         <LegalComplianceModal
