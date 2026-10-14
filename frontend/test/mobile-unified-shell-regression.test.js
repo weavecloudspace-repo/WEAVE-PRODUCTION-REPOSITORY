@@ -15,6 +15,16 @@ test("mobile Help & Support shares the drawer scroll; desktop footer remains int
   assert.match(drawer, /min-h-0 w-\[min\(88vw,20rem\)\]/);
 });
 
+test("browser-only drawer sync preserves the original mobile drawer structure", () => {
+  const drawer = read("../src/components/layout/MobileDrawer.jsx");
+  const css = read("../src/styles/iosSafariBrowserTheme.css");
+  assert.match(drawer, /scheduleThemeChromeSync\(\)/);
+  assert.match(drawer, /\[open\]/);
+  assert.match(drawer, /data-mobile-drawer="true"/);
+  assert.match(css, /data-ios-browser="true"\]\[data-ios-browser-drawer-open="true"\]/);
+  assert.doesNotMatch(css, /data-standalone-pwa="true"\]\[data-ios-browser-drawer-open/);
+});
+
 test("PWA navigation uses a single anchored shell and internal gesture clearance", () => {
   const styles = read("../src/styles/mobilePwaStability.css");
   const platform = read("../src/styles/mobilePlatformFixes.css");

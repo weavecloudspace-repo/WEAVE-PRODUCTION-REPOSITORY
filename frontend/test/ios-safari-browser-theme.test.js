@@ -121,6 +121,12 @@ test("iOS Safari browser uses one document canvas for live theme switching", asy
   assert.match(runtime, /root\.style\.backgroundColor = "transparent"/);
   assert.match(runtime, /document\.documentElement\.style\.backgroundImage = "none"/);
   assert.match(runtime, /updateStableIosBrowserMetas/);
+  assert.match(runtime, /syncIosBrowserDrawerCanvas/);
+  assert.match(runtime, /getComputedStyle\(drawer\)\.backgroundColor/);
+  assert.match(runtime, /drawer\.getBoundingClientRect\(\)\.width/);
+  assert.match(runtime, /dataset\.iosBrowserDrawerOpen = "true"/);
+  assert.match(runtime, /removeAttribute\("data-ios-browser-drawer-open"\)/);
+  assert.match(runtime, /window\.addEventListener\("resize", scheduleThemeChromeSync\)/);
   assert.match(runtime, /THEME_COLOR_META_ID = "weave-theme-color"/);
   assert.match(runtime, /COLOR_SCHEME_META_ID = "weave-color-scheme"/);
   assert.match(runtime, /replaceBrowserMetas: !standalone && !iosBrowser/);
@@ -129,6 +135,10 @@ test("iOS Safari browser uses one document canvas for live theme switching", asy
   assert.match(css, /data-ios-browser="true"/);
   assert.match(css, /--weave-ios-browser-canvas/);
   assert.match(css, /background-repeat: no-repeat !important/);
+  assert.match(css, /data-ios-browser-drawer-open="true"/);
+  assert.match(css, /--weave-ios-browser-drawer-color/);
+  assert.match(css, /--weave-ios-browser-drawer-width/);
+  assert.match(css, /linear-gradient\(/);
   assert.match(css, /#root[\s\S]*background-color: transparent !important/);
   assert.match(css, /\[data-dashboard-role\][\s\S]*background-color: transparent !important/);
   assert.match(css, /\[data-dashboard-role\]:not\(\[data-guide-page="true"\]\)/);

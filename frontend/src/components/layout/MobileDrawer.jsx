@@ -1,8 +1,17 @@
+import { useEffect } from "react";
 import { X } from "lucide-react";
+
+import { scheduleThemeChromeSync } from "../../utils/themeChromeSync";
 
 import SidebarContent from "./Sidebar";
 
 export default function MobileDrawer({ open, role, schoolName, schoolLogoUrl, onClose, tourMode = false }) {
+  // Safari's native bottom toolbar samples the document canvas. Keep its
+  // colors in sync with this drawer while preserving the PWA's separate shell.
+  useEffect(() => {
+    scheduleThemeChromeSync();
+  }, [open]);
+
   if (!open) return null;
 
   return (
