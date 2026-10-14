@@ -95,6 +95,31 @@ Shared shell, theme, navigation, modal, keyboard, viewport, scrolling, and safe-
 
 Do not fix one platform by breaking another. Preserve accessibility, keyboard support, scrolling, safe-area behavior, fixed navigation, and frontend authentication state.
 
+## Frozen mobile navigation and sidebar layouts (explicit owner approval required)
+
+**This is a user-approved layout freeze, not a request to fix the remaining Safari appearance.** The current installed iOS PWA bottom navigation is stable and must be preserved. The current mobile sidebars in PWA and browser mode are also accepted as-is, even if native Safari browser chrome still looks imperfect. Do not reinterpret unrelated bug reports, design work, CI cleanup, or "mobile improvements" as permission to redesign these areas.
+
+### Protected iOS standalone PWA bottom navigation
+
+- Preserve the **existing five-button design and exact placement** as a non-scrolling bottom flex row inside the dashboard's main frame. `DashboardLayout.jsx` renders `<BottomNav />` **after** `#dashboard-scroll-viewport` inside `[data-dashboard-main-frame="true"]`; do not relocate it.
+- Preserve the iOS standalone rules in `mobilePwaStability.css` that make `[data-dashboard-main-frame="true"] > [data-mobile-bottom-nav="true"]` a `position: relative`, `flex: 0 0 auto` row and keep the surrounding shell and scroll viewport behavior intact.
+- **Never revert to `position: fixed`, `position: absolute`, new bottom/transform offsets, independent viewport anchors, or extra safe-area/footer spacers for the iOS dock.** Do not restore height-vs-viewport positioning logic or double-reserve scroll clearance.
+- Preserve the dock's current appearance, tab ordering, dimensions, interaction, brand/theme integration, and behavior through login, logout, keyboard dismissal, navigation, and PWA resume. Do not change CSS selectors or ancestors in ways that indirectly reposition it.
+
+### Protected mobile sidebars in browser and PWA
+
+- Preserve the existing `MobileDrawer.jsx` + `Sidebar.jsx` structure, full-height panel, close button, separate scrolling menu, Help & Support behavior, current tenant branding, and light/dark theme behavior for both mobile browser and installed PWA.
+- Do not introduce an extra pinned sidebar footer, separate bottom overlay, clipping container, competing scroll region, or safe-area spacer; do not change the drawer's width, height, positioning, corner geometry, or stacking without explicit approval.
+- Preserve the current mobile Safari browser-only document/page canvas, drawer backdrop, and native toolbar interactions in `iosSafariBrowserTheme.css` and `themeChromeSync.js`. **The owner accepts the current Safari result for now: do not make further experimental fixes to the browser bottom strip or native toolbar tint.** Safari browser chrome is OS-controlled.
+- Do not apply browser-only drawer changes to standalone PWA or apply PWA navbar positioning overrides to browser mode. Keep desktop navigation and sidebar untouched.
+
+### Change authorization and verification
+
+- Treat these locations as **protected invariants** for every subsequent task. Before editing `DashboardLayout.jsx`, `BottomNav.jsx`, `MobileDrawer.jsx`, `Sidebar.jsx`, `mobilePwaStability.css`, `mobileDashboard.css`, `mobilePlatformFixes.css`, `iosSafariBrowserTheme.css`, or `themeChromeSync.js`, check whether the change can impact the frozen layouts. If so, keep the protected behavior untouched.
+- **Only a new, explicit instruction from the repository owner requesting a specific change to the protected navigation/sidebar layout overrides this freeze.** Explain its expected visual/behavioral impact and obtain approval before making it. General authorization to implement an unrelated feature, refactor, or bug fix is not sufficient.
+- If a necessary change conflicts with this freeze, stop and request that specific authorization; do not silently work around these rules through global CSS, DOM rearrangement, viewport meta tags, theming, or safe-area adjustments.
+- Whenever authorized changes touch these areas, add or maintain regression coverage for iOS browser, iOS standalone PWA (including repeated login/logout and keyboard transitions), Android, desktop, drawer scrolling/closing, and light/dark + tenant branding; require the normal staging-to-master CI gates and real-device verification before declaring the visual issue resolved.
+
 ## Configuration and sensitive data
 
 - Never commit credentials or private configuration.
