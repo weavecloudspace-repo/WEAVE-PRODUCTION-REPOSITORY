@@ -16,7 +16,7 @@ test("PWA nav has one safe-area anchor and no fake footer/status strips", () => 
   const css = read("../src/styles/mobilePwaStability.css");
   const platform = read("../src/styles/mobilePlatformFixes.css");
   const shell = read("../src/components/layout/DashboardLayout.jsx");
-  assert.match(css, /bottom: max\(0\.5rem, env\(safe-area-inset-bottom, 0px\)\) !important/);
+  assert.match(css, /bottom: 0 !important/);
   assert.doesNotMatch(platform, /--mobile-bottom-nav-clearance:/);
   assert.doesNotMatch(shell, /data-pwa-safe-area-fill/);
   assert.doesNotMatch(shell, /data-pwa-status-fill/);

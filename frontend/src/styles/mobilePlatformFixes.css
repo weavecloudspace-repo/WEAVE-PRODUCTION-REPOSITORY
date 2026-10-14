@@ -1,11 +1,6 @@
 @media (max-width: 767px) {
-  /*
-   * The bottom-nav vertical anchor and clearance are owned by
-   * mobilePwaStability.css; never offset them again in platform styling.
-   */
+  /* Nav positioning and safe-area padding are owned by mobilePwaStability.css. */
   html[data-standalone-pwa="true"] [data-mobile-bottom-nav="true"] {
-    padding-bottom: 0 !important;
-    padding-inline: max(1rem, env(safe-area-inset-left, 0px)) !important;
     background: transparent !important;
     border: 0 !important;
     box-shadow: none !important;

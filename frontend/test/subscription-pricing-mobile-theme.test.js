@@ -53,7 +53,7 @@ test("installed PWA nav uses the lower anchor and iOS header stays crisp", async
   const css = await read("src/styles/mobilePlatformFixes.css");
   assert.match(css, /data-standalone-pwa="true"\] \[data-mobile-bottom-nav="true"\]/);
   const anchorCss = await read("src/styles/mobilePwaStability.css");
-  assert.match(anchorCss, /bottom:\s*max\(0\.5rem,\s*env\(safe-area-inset-bottom,\s*0px\)\)\s*!important/);
+  assert.match(anchorCss, /bottom:\s*0\s*!important/);
   assert.doesNotMatch(css, /bottom:\s*calc\(1rem \+ env\(safe-area-inset-bottom/);
   assert.match(css, /data-pwa-platform="ios"/);
   assert.match(css, /\.dashboard-topbar/);
