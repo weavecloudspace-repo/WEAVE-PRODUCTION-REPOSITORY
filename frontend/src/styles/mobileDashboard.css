@@ -754,10 +754,6 @@
     filter: none !important;
   }
 
-  [data-mobile-drawer-status-surface="true"] {
-    background-color: rgb(var(--color-sidebar-background));
-  }
-
   aside:has(button[aria-label="Close navigation"]) > div:first-child {
     height: 3rem !important;
     padding-inline: 1rem !important;
