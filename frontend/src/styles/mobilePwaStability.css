@@ -4,7 +4,7 @@
     --pwa-layout-height: 100dvh;
     --virtual-keyboard-height: 0px;
     --mobile-bottom-nav-clearance: calc(
-      6.25rem + env(safe-area-inset-bottom, 0px)
+      5.5rem + max(0.5rem, env(safe-area-inset-bottom, 0px))
     );
     height: var(--pwa-layout-height);
     max-height: var(--pwa-layout-height);
@@ -145,15 +145,15 @@
   }
 
   /*
-   * One bottom anchor for every installed PWA. Do not apply a second iOS
-   * safe-area offset: it stacks with the app viewport and lifts the dock.
+   * One safe-area-aware bottom anchor for installed PWAs. The dock floats
+   * above the home gesture region; page clearance is measured from its rect.
    */
 
   html[data-standalone-pwa="true"] [data-mobile-bottom-nav="true"] {
     position: fixed !important;
     inset-inline: 0 !important;
     top: auto !important;
-    bottom: 0 !important;
+    bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)) !important;
     width: 100% !important;
     max-width: none !important;
     margin: 0 !important;

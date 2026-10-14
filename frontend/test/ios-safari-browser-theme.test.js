@@ -132,7 +132,8 @@ test("iOS Safari browser uses one document canvas for live theme switching", asy
   assert.match(css, /#root[\s\S]*background-color: transparent !important/);
   assert.match(css, /\[data-dashboard-role\][\s\S]*background-color: transparent !important/);
   assert.match(css, /\[data-dashboard-role\]:not\(\[data-guide-page="true"\]\)/);
-  assert.match(css, /position: absolute !important/);
+  assert.match(css, /position: relative !important/);
+  assert.doesNotMatch(css, /position: absolute !important/);
   assert.match(css, /#dashboard-scroll-viewport[\s\S]*background-color: transparent !important/);
   assert.match(css, /body::before/);
   assert.match(css, /display: none/);

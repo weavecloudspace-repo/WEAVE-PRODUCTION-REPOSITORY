@@ -95,21 +95,10 @@
 }
 
 .dashboard-topbar {
-  background: rgb(var(--color-surface));
-  transform: translateZ(0);
-  isolation: isolate;
+  /* The header owns its own safe-area padding and paints an opaque surface. */
+  background: rgb(var(--color-header-background));
 }
 
-.dashboard-topbar::before {
-  content: "";
-  position: fixed;
-  inset-inline: 0;
-  top: calc(-1 * max(env(safe-area-inset-top), 0px));
-  height: max(env(safe-area-inset-top), 1rem);
-  background: rgb(var(--color-surface));
-  pointer-events: none;
-  z-index: -1;
-}
 
 .page-header {
   display: flex;
