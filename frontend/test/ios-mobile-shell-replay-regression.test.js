@@ -24,8 +24,8 @@ test("PWA nav has one safe-area anchor and no fake footer/status strips", () => 
 
 test("iOS status bar and theme follow effective user appearance", () => {
   const prefs = read("../src/utils/accessibilityPreferences.js");
-  const startup = read("../../public/theme-init.js");
-  const html = read("../../index.html");
+  const startup = read("../public/theme-init.js");
+  const html = read("../index.html");
   assert.match(prefs, /resolvedTheme === "dark" \? "black" : "default"/);
   assert.match(startup, /resolvedTheme === "dark" \? "black" : "default"/);
   assert.match(html, /apple-mobile-web-app-status-bar-style" content="default"/);
