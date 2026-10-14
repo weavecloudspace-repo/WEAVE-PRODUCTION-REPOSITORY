@@ -85,6 +85,22 @@
  */
 @supports (-webkit-touch-callout: none) {
   @media (max-width: 767px) {
+
+    /*
+     * Safari browser mode: the open drawer is a colored panel over the
+     * existing themed page. Keep the uncovered page fully visible instead
+     * of dimming it to gray. The backdrop still captures outside taps so
+     * dismissing the drawer remains unchanged.
+     *
+     * PWA mode retains its current dimmed overlay and layout.
+     */
+    html[data-ios-browser="true"][data-ios-browser-drawer-open="true"]
+      [data-mobile-drawer-backdrop="true"] {
+      background: transparent !important;
+      -webkit-backdrop-filter: none !important;
+      backdrop-filter: none !important;
+    }
+
     html[data-ios-browser="true"][data-ios-browser-drawer-open="true"],
     html[data-ios-browser="true"][data-ios-browser-drawer-open="true"] body {
       background-image: linear-gradient(

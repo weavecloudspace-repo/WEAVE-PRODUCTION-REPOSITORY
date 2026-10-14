@@ -16,7 +16,7 @@ export default function MobileDrawer({ open, role, schoolName, schoolLogoUrl, on
 
   return (
     <div className="fixed inset-0 z-[90] md:hidden">
-      <div className="absolute inset-0 bg-black/35" onClick={onClose} />
+      <div data-mobile-drawer-backdrop="true" className="absolute inset-0 bg-black/35" onClick={onClose} />
       <aside
         data-mobile-drawer="true"
         data-tour-navigation={tourMode ? "true" : undefined}
