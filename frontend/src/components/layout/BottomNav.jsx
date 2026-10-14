@@ -169,11 +169,13 @@ function BottomNav({ role, onOpenMenu }) {
     const syncBottomNavClearance = () => {
       window.cancelAnimationFrame(frameId);
       frameId = window.requestAnimationFrame(() => {
-        const viewportHeight = Number(window.innerHeight || root.clientHeight || 0);
-        if (viewportHeight <= 0) return;
-
+        // A login or keyboard dismissal can change iOS window.innerHeight
+        // before the fixed dashboard shell settles. Measuring from viewport
+        // height minus rect.top mixes coordinate systems and creates unstable
+        // page clearance between authentication sessions. The actual dock
+        // height is stable and is all we need to reserve scrollable space.
         const rect = navElement.getBoundingClientRect();
-        const obstructionHeight = Math.max(0, viewportHeight - rect.top);
+        const obstructionHeight = Math.max(0, rect.height);
         if (obstructionHeight <= 0) return;
 
         root.style.setProperty(

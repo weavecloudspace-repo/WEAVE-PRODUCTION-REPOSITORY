@@ -135,6 +135,8 @@ test("installed bottom navigation publishes its measured obstruction as shared c
   assert.match(navSource, /BOTTOM_NAV_CONTENT_GAP_PX/);
   assert.match(navSource, /getBoundingClientRect\(\)/);
   assert.match(navSource, /obstructionHeight/);
+  assert.match(navSource, /Math\.max\(0, rect\.height\)/);
+  assert.doesNotMatch(navSource, /viewportHeight - rect\.top/);
   assert.match(navSource, /--mobile-bottom-nav-clearance/);
   assert.match(navSource, /ResizeObserver/);
   assert.match(
