@@ -116,6 +116,8 @@ test("every actor dashboard uses the shared vertically scrollable viewport and n
     /#dashboard-content[\s\S]*?height:\s*auto\s*!important[\s\S]*?overflow:\s*visible\s*!important[\s\S]*?padding-bottom:\s*var\(--mobile-bottom-nav-clearance\)\s*!important/,
   );
   assert.match(shellSource, /id="dashboard-scroll-viewport"/);
+  assert.match(shellSource, /data-dashboard-main-frame="true"/);
+  assert.match(shellSource, /<BottomNav role=\{role\}/);
   assert.match(shellSource, /min-h-0 flex-1 overflow-y-auto/);
   assert.match(shellSource, /id="dashboard-content"/);
 

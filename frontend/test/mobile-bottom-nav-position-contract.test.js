@@ -37,13 +37,17 @@ test("installed PWA bottom nav stays at the lower edge after launch and resume",
   );
 });
 
-test("the iOS PWA dock uses one CSS viewport anchor across launch and login", () => {
+test("the iOS PWA dock uses the dashboard flex row across launch and login", () => {
   const css = readSource("../src/styles/mobilePwaStability.css");
   const runtime = readSource("../src/utils/mobilePwaStability.js");
   const navAnchor = getStandaloneNavRules(css);
 
-  // The viewport height must follow iOS after an authentication transition.
+  // Installed iOS dashboards should not use a second independent viewport
+  // anchor, even if other PWA surfaces still use 100dvh.
   assert.match(css, /--pwa-layout-height:\s*100dvh/);
+  assert.match(css, /data-pwa-platform="ios"\]\s*\[data-dashboard-role\]\s*\{\s*height: auto !important;/);
+  assert.match(css, /data-pwa-platform="ios"\]\s*\[data-dashboard-main-frame="true"\] > \[data-mobile-bottom-nav="true"\]\s*\{\s*position: relative !important;/);
+  assert.doesNotMatch(css, /\[data-dashboard-role\] > \[data-mobile-bottom-nav="true"\]/);
   assert.doesNotMatch(runtime, /root\.style\.setProperty\(["']--pwa-layout-height/);
   assert.match(runtime, /root\.style\.removeProperty\("--pwa-layout-height"\)/);
   assert.match(runtime, /const handleViewportResize = \(\) => \{[\s\S]*?setStableLayoutHeight\(\)/);
