@@ -173,26 +173,49 @@
   }
 
   /*
-   * iOS standalone dashboards already have a fixed, viewport-sized shell.
-   * Anchor the dock inside that shell, not as a second independently fixed
-   * viewport layer: repeated login/logout and keyboard dismissal can leave
-   * WebKit's visual viewport temporarily out of sync with the layout viewport.
-   * This preserves the exact same visible bottom offset and safe-area padding.
+   * In iOS standalone, topbar / scroll viewport / dock are three flex rows
+   * inside the same fixed dashboard shell. The dock does not need fixed or
+   * absolute coordinates at all: it occupies the final, non-scrolling row.
+   * This eliminates viewport races on first login, logout and keyboard exit.
+   * The outer shell uses inset: 0 with auto height so WebKit cannot combine
+   * a stale 100dvh/100% height with the bottom inset.
+   *
+   * Browser mode and Android retain their existing fixed dock behavior.
    */
   html[data-standalone-pwa="true"][data-pwa-platform="ios"]
     [data-dashboard-role] {
+    height: auto !important;
     min-height: 0 !important;
-    height: 100% !important;
   }
 
   html[data-standalone-pwa="true"][data-pwa-platform="ios"]
-    [data-dashboard-role] > [data-mobile-bottom-nav="true"] {
-    position: absolute !important;
-    inset-inline: 0 !important;
-    bottom: 0 !important;
+    [data-dashboard-role] > [data-dashboard-main-frame="true"] {
+    flex: 1 1 0% !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  html[data-standalone-pwa="true"][data-pwa-platform="ios"]
+    [data-dashboard-main-frame="true"] > [data-mobile-bottom-nav="true"] {
+    position: relative !important;
+    flex: 0 0 auto !important;
+    inset: auto !important;
+    bottom: auto !important;
     transform: none !important;
     -webkit-transform: none !important;
     contain: none !important;
+  }
+
+  /* The final row owns the dock's space. Do not reserve that space twice
+     inside the independently scrolling content. */
+  html[data-standalone-pwa="true"][data-pwa-platform="ios"]
+    #dashboard-scroll-viewport {
+    scroll-padding-bottom: 1rem !important;
+  }
+
+  html[data-standalone-pwa="true"][data-pwa-platform="ios"]
+    #dashboard-content {
+    padding-bottom: 1rem !important;
   }
 
   html[data-standalone-pwa="true"] [data-mobile-bottom-nav="true"] > div {

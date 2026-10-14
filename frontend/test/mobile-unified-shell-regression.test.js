@@ -37,16 +37,21 @@ test("PWA navigation uses a single anchored shell and internal gesture clearance
   assert.doesNotMatch(nav, /border-t border-border\/70 bg-background px-2 pt-0\.5 pb-3/);
 });
 
-test("iOS PWA dock stays anchored to the dashboard shell across login and logout", () => {
+test("iOS PWA dock is a non-scrolling flex row, not a viewport overlay", () => {
   const css = read("../src/styles/mobilePwaStability.css");
   const nav = read("../src/components/layout/BottomNav.jsx");
   const shell = read("../src/components/layout/DashboardLayout.jsx");
+  const frameStart = shell.indexOf('data-dashboard-main-frame="true"');
+  const scrollStart = shell.indexOf('id="dashboard-scroll-viewport"', frameStart);
+  const navStart = shell.indexOf('<BottomNav role={role}', scrollStart);
+  const tourStart = shell.indexOf('{tour.open ? (', navStart);
 
-  assert.match(shell, /className="fixed inset-0 flex min-h-\[100dvh\]/);
-  assert.match(shell, /<BottomNav role=\{role\}/);
-  assert.match(css, /data-pwa-platform="ios"\]\s*\[data-dashboard-role\] > \[data-mobile-bottom-nav="true"\]/);
-  assert.match(css, /position: absolute !important/);
-  assert.match(css, /contain: none !important/);
+  assert.ok(frameStart > 0 && scrollStart > frameStart);
+  assert.ok(navStart > scrollStart && tourStart > navStart, "dock belongs to main frame after scroll viewport");
+  assert.match(css, /data-pwa-platform="ios"\]\s*\[data-dashboard-role\]\s*\{\s*height: auto !important;\s*min-height: 0 !important;/);
+  assert.match(css, /\[data-dashboard-main-frame="true"\] > \[data-mobile-bottom-nav="true"\]\s*\{\s*position: relative !important;\s*flex: 0 0 auto !important;/);
+  assert.doesNotMatch(css, /\[data-dashboard-role\] > \[data-mobile-bottom-nav="true"\]/);
+  assert.match(css, /data-pwa-platform="ios"\]\s*#dashboard-content\s*\{\s*padding-bottom: 1rem !important;/);
   assert.match(nav, /Math\.max\(0, rect\.height\)/);
   assert.doesNotMatch(nav, /window\.innerHeight \|\| root\.clientHeight/);
 });
