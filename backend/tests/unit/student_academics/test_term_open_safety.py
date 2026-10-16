@@ -239,9 +239,7 @@ async def test_second_term_dependency_preview_requires_its_own_active_calendar(
     assert preview.can_open is can_open
     assert preview.blocker_messages == calendar_blockers
     assert preview.dependency_counts["calendar_days"] == (0 if calendar_blockers else 90)
-    calendar_check.assert_awaited_once_with(
-        db, tenant_id=tenant_id, term_id=term.id
-    )
+    calendar_check.assert_awaited_once_with(db, tenant_id=tenant_id, term_id=term.id)
 
 
 @pytest.mark.asyncio
@@ -259,12 +257,14 @@ async def test_second_term_does_not_open_after_first_term_closes_without_active_
     admin_id = uuid.uuid4()
     session = _session(tenant_id)
     first_term = _term(
-        tenant_id, session.id,
+        tenant_id,
+        session.id,
         name=AcademicTermName.FIRST_TERM,
         status=AcademicTermStatus.CLOSED,
     )
     second_term = _term(
-        tenant_id, session.id,
+        tenant_id,
+        session.id,
         name=AcademicTermName.SECOND_TERM,
         status=AcademicTermStatus.DRAFT,
     )
@@ -317,9 +317,7 @@ async def test_second_term_does_not_open_after_first_term_closes_without_active_
             )
 
     assert exc_info.value is not None
-    calendar_check.assert_awaited_once_with(
-        db, tenant_id=tenant_id, term_id=second_term.id
-    )
+    calendar_check.assert_awaited_once_with(db, tenant_id=tenant_id, term_id=second_term.id)
     assert second_term.status == AcademicTermStatus.DRAFT
     assert second_term.is_current is False
     save_term.assert_not_awaited()
