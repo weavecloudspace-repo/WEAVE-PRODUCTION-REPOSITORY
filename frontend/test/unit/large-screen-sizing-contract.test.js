@@ -41,10 +41,10 @@ test("wide-screen changes apply only above 1600px outside installed PWAs", async
 
   assert.ok(selectors.length > 5);
   for (const selector of selectors) {
-    for (const segment of selector.split(",")) {
+    for (const segment of selector.split(/,\s*(?=html:not\()/)) {
       assert.match(
-        segment,
-        /html:not\(\[data-standalone-pwa="true"\]\)/,
+        segment.trim(),
+        /^html:not\(\[data-standalone-pwa="true"\]\)/,
         `Unscoped wide-screen selector: ${segment.trim()}`,
       );
     }
