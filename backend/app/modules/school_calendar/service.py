@@ -549,6 +549,17 @@ class SchoolCalendarService:
             raise NotFoundException("School calendar not found.")
         if calendar.status == SchoolCalendarStatus.ARCHIVED:
             return await SchoolCalendarService.build_calendar_response(db, calendar)
+        # Even forced archival must not leave an operational term without its calendar.
+        term = await StudentAcademicRepository.get_term_by_id(
+            db, tenant_id, calendar.academic_term_id, lock=True
+        )
+        if term is not None and term.status in {
+            AcademicTermStatus.OPEN,
+            AcademicTermStatus.CLOSING,
+        }:
+            raise ConflictException(
+                "An open or closing academic term must retain its active calendar."
+            )
         preview = await SchoolCalendarService.calendar_dependency_preview(
             db, tenant_id, calendar.id
         )

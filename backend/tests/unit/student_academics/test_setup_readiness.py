@@ -19,8 +19,13 @@ def result(*, mapping=None, rows=None, value=None):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("status,can_open", [("draft", False), ("draft", True), ("open", False)])
-async def test_readiness_uses_selected_term_configuration_and_canonical_blockers(status, can_open):
+@pytest.mark.parametrize(
+    "status,can_open,calendar_count",
+    [("draft", False, 1), ("draft", True, 1), ("open", False, 1), ("open", False, 0)],
+)
+async def test_readiness_uses_selected_term_configuration_and_canonical_blockers(
+    status, can_open, calendar_count
+):
     tenant_id, session_id, term_id = uuid4(), uuid4(), uuid4()
     session = SimpleNamespace(id=session_id, name="2026/27", status="open")
     term = SimpleNamespace(id=term_id, name="first_term", status=status, is_current=True)
@@ -34,7 +39,7 @@ async def test_readiness_uses_selected_term_configuration_and_canonical_blockers
                 result(rows=[session]),
                 result(rows=[term]),
                 result(value=3),
-                result(mapping={"calendar": 1, "students": 0, "assignments": 0}),
+                result(mapping={"calendar": calendar_count, "students": 0, "assignments": 0}),
             ]
         )
     )
@@ -84,12 +89,17 @@ async def test_readiness_uses_selected_term_configuration_and_canonical_blockers
     assert response.completion["students"] is False
     assert response.completion["assignments"] is False
     assert response.completion["grading"] is True
-    assert response.completion["readiness"] is (status == "open" or can_open)
+    assert response.completion["readiness"] is (
+        (calendar_count > 0) if status == "open" else can_open
+    )
     if status == "draft":
         preview.assert_awaited_once_with(db, tenant_id, term_id)
         assert response.blockers == ([] if can_open else ["Configure class specialization."])
     else:
         preview.assert_not_awaited()
+        assert response.blockers == (
+            [] if calendar_count else ["The current open term has no active calendar."]
+        )
     for call in db.execute.call_args_list:
         assert tenant_id in call.args[0].compile().params.values()
     evidence = db.execute.call_args_list[-1].args[0].compile()
