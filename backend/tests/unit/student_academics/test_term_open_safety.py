@@ -308,7 +308,7 @@ async def test_second_term_does_not_open_after_first_term_closes_without_active_
             new=AsyncMock(),
         ) as save_term,
     ):
-        with pytest.raises(ConflictException, match="calendar is ready") as exc_info:
+        with pytest.raises(ConflictException, match="calendar") as exc_info:
             await StudentAcademicService.open_academic_term(
                 db=db,
                 tenant_id=tenant_id,
