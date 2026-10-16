@@ -176,7 +176,11 @@ async def get_setup_readiness(db, tenant_id):
             blockers.extend(preview.blocker_messages)
             completion["readiness"] = preview.can_open
         else:
-            completion["readiness"] = True
+            # An already-open term is not operationally ready if its calendar
+            # was removed or was never activated (legacy/inconsistent data).
+            completion["readiness"] = completion["calendar"]
+            if not completion["calendar"]:
+                blockers.append("The current open term has no active calendar.")
     return {
         "completion": completion,
         "blockers": blockers,

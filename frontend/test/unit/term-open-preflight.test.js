@@ -115,3 +115,19 @@ test("academic hub checks a draft term before showing its opening confirmation",
   assert.match(workspace, /prepareTermTransition\(item, transition\);/);
   assert.match(workspace, /checkingTermId === item\.id\s*\? "Checking\.\.\."/);
 });
+
+test("missing Second Term calendar blocks opening in every frontend entry point", () => {
+  const preview = {
+    can_open: false,
+    blocker_messages: ["Generate and activate a calendar for this term."],
+    dependency_counts: { calendar_days: 0 },
+  };
+  assert.equal(
+    termOpenPreflightBlocker({
+      currentTerms: { items: [] },
+      targetTermId: "second-term",
+      dependencyPreview: preview,
+    }),
+    "Generate and activate a calendar for this term.",
+  );
+});

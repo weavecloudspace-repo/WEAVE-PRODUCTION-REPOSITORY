@@ -448,6 +448,15 @@ class StudentAcademicService:
             )
             counts.update(specialization_counts)
             blockers.extend(specialization_blockers)
+            from app.modules.school_calendar.service import SchoolCalendarService
+
+            # The UI preflight must enforce the same calendar requirement as the
+            # authoritative term-opening transition, for every term.
+            calendar_readiness = await SchoolCalendarService.term_calendar_readiness(
+                db, tenant_id=tenant_id, term_id=term_id
+            )
+            counts.update(calendar_readiness.get("counts", {}))
+            blockers.extend(calendar_readiness.get("blockers", []))
         if term.status in {AcademicTermStatus.OPEN, AcademicTermStatus.CLOSING}:
             if counts["draft_results"]:
                 blockers.append(

@@ -15,6 +15,7 @@ from app.modules.school_calendar.calendar_enums import (
 )
 from app.modules.school_calendar.models import SchoolCalendar, SchoolCalendarDay
 from app.modules.school_calendar.schemas import (
+    SchoolCalendarArchiveRequest,
     SchoolCalendarConfigurationCreate,
     SchoolCalendarConfigurationUpdate,
     SchoolCalendarDayUpdate,
@@ -905,3 +906,115 @@ async def test_regeneration_keeps_calendar_outdated_when_generated_days_are_skip
     assert calendar.generated_from_configuration_revision == 1
     assert response.calendar.configuration_outdated is True
     assert response.warnings
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "term_status",
+    [AcademicTermStatus.OPEN, AcademicTermStatus.CLOSING, AcademicTermStatus.CLOSED],
+)
+async def test_calendar_generation_rejects_terms_that_are_no_longer_draft(
+    term_status: AcademicTermStatus,
+) -> None:
+    tenant_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    term_id = uuid.uuid4()
+    session = AcademicSession(
+        id=session_id,
+        tenant_id=tenant_id,
+        name="2026/2027",
+        status=AcademicSessionStatus.OPEN,
+        is_current=True,
+    )
+    term = AcademicTerm(
+        id=term_id,
+        tenant_id=tenant_id,
+        academic_session_id=session_id,
+        name=AcademicTermName.SECOND_TERM,
+        start_date=date(2026, 4, 11),
+        end_date=date(2026, 8, 10),
+        status=term_status,
+        is_current=term_status in {AcademicTermStatus.OPEN, AcademicTermStatus.CLOSING},
+    )
+    db = AsyncMock()
+    with (
+        patch(
+            "app.modules.school_calendar.generation_service.StudentAcademicRepository.get_academic_session_by_id",
+            new=AsyncMock(return_value=session),
+        ),
+        patch(
+            "app.modules.school_calendar.generation_service.StudentAcademicRepository.get_term_by_id",
+            new=AsyncMock(return_value=term),
+        ),
+        patch(
+            "app.modules.school_calendar.generation_service.SchoolCalendarRepository.get_configuration",
+            new=AsyncMock(),
+        ) as get_configuration,
+    ):
+        with pytest.raises(ConflictException, match="Only draft academic terms"):
+            await SchoolCalendarGenerationService.generate(
+                db,
+                tenant_id=tenant_id,
+                payload=SchoolCalendarGenerateRequest(
+                    academic_session_id=session_id,
+                    academic_term_id=term_id,
+                ),
+                acting_admin_id=uuid.uuid4(),
+            )
+
+    get_configuration.assert_not_awaited()
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("term_status", [AcademicTermStatus.OPEN, AcademicTermStatus.CLOSING])
+async def test_force_archive_cannot_remove_operational_term_calendar(
+    term_status: AcademicTermStatus,
+) -> None:
+    tenant_id, session_id, term_id, calendar_id = (uuid.uuid4() for _ in range(4))
+    calendar = SchoolCalendar(
+        id=calendar_id,
+        tenant_id=tenant_id,
+        academic_session_id=session_id,
+        academic_term_id=term_id,
+        status=SchoolCalendarStatus.ACTIVE,
+    )
+    term = AcademicTerm(
+        id=term_id,
+        tenant_id=tenant_id,
+        academic_session_id=session_id,
+        name=AcademicTermName.SECOND_TERM,
+        status=term_status,
+        is_current=True,
+    )
+    db = AsyncMock()
+    with (
+        patch(
+            "app.modules.school_calendar.service.SchoolCalendarRepository.lock_calendar",
+            new=AsyncMock(return_value=calendar),
+        ),
+        patch(
+            "app.modules.school_calendar.service.StudentAcademicRepository.get_term_by_id",
+            new=AsyncMock(return_value=term),
+        ),
+        patch(
+            "app.modules.school_calendar.service.SchoolCalendarRepository.save_calendar",
+            new=AsyncMock(),
+        ) as save_calendar,
+    ):
+        with pytest.raises(ConflictException, match="retain its active calendar"):
+            await SchoolCalendarService.archive_calendar(
+                db,
+                tenant_id=tenant_id,
+                calendar_id=calendar_id,
+                payload=SchoolCalendarArchiveRequest(
+                    confirmation="ARCHIVE_SCHOOL_CALENDAR",
+                    force_replacement=True,
+                    reason="Attempt to replace calendar",
+                ),
+                acting_admin_id=uuid.uuid4(),
+            )
+
+    assert calendar.status == SchoolCalendarStatus.ACTIVE
+    save_calendar.assert_not_awaited()
+    db.commit.assert_not_awaited()

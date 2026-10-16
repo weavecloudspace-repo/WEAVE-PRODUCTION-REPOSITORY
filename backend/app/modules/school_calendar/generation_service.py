@@ -28,7 +28,7 @@ from app.modules.school_calendar.schemas import (
     SchoolCalendarGenerateRequest,
     SchoolCalendarGenerateResponse,
 )
-from app.modules.student_academics.models import AcademicSessionStatus
+from app.modules.student_academics.models import AcademicSessionStatus, AcademicTermStatus
 from app.modules.student_academics.repository import StudentAcademicRepository
 
 
@@ -72,6 +72,8 @@ class SchoolCalendarGenerationService:
         )
         if term is None:
             raise NotFoundException("Academic term not found.")
+        if term.status != AcademicTermStatus.DRAFT:
+            raise ConflictException("Only draft academic terms can generate a calendar.")
         if term.academic_session_id != session.id:
             raise BadRequestException("Academic term does not belong to the selected session.")
         if term.start_date is None or term.end_date is None:
