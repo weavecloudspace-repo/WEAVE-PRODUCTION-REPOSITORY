@@ -23,6 +23,7 @@ import "./styles/pwaInteractions.css";
 import "./styles/mobilePwaStability.css";
 import "./styles/notificationDropdown.css";
 import "./styles/studentDashboardCleanup.css";
+import "./styles/largeScreens.css";
 import {
   applyAccessibilityPreferences,
   getSavedAccessibilityPreferences,

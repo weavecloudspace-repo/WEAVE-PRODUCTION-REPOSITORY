@@ -1,0 +1,82 @@
+/*
+ * Large-browser sizing layer.
+ *
+ * Only opt in at 1600px+ CSS viewport width. All narrower desktop, tablet,
+ * mobile and installed-PWA layouts retain their current declarations.
+ * Keep this stylesheet last; don't modify frozen navigation, drawer or
+ * safe-area positioning to accommodate wide screens.
+ */
+@media screen and (min-width: 1600px) {
+  html:not([data-standalone-pwa="true"]) {
+    --weave-wide-gutter: clamp(2rem, 2.5vw, 3.5rem);
+    --weave-wide-public-width: min(90vw, 108rem);
+    --weave-wide-workspace-width: min(92vw, 118rem);
+  }
+
+  /* Landing, pricing and all other public pages share this container. */
+  html:not([data-standalone-pwa="true"]) .section-container {
+    max-width: var(--weave-wide-public-width);
+    padding-inline: var(--weave-wide-gutter);
+  }
+
+  /* Keep the dashboard body and topbar aligned, regardless of role or
+     whether the existing desktop sidebar is expanded or collapsed. */
+  html:not([data-standalone-pwa="true"]) .dashboard-topbar > div,
+  html:not([data-standalone-pwa="true"]) #dashboard-content {
+    max-width: var(--weave-wide-workspace-width);
+    padding-inline: var(--weave-wide-gutter);
+  }
+
+  html:not([data-standalone-pwa="true"]) #dashboard-content {
+    gap: clamp(1.5rem, 1.55vw, 2.125rem);
+  }
+
+  html:not([data-standalone-pwa="true"]) #dashboard-content .page-title {
+    font-size: clamp(1.5rem, 1.5vw, 1.875rem);
+  }
+
+  html:not([data-standalone-pwa="true"]) #dashboard-content .dashboard-title {
+    font-size: clamp(1.875rem, 1.85vw, 2.375rem);
+  }
+
+  html:not([data-standalone-pwa="true"]) #dashboard-content .section-title {
+    font-size: clamp(1.25rem, 1.32vw, 1.625rem);
+  }
+
+  html:not([data-standalone-pwa="true"]) #dashboard-content :is(
+    .dashboard-grid,
+    .stat-grid,
+    .dashboard-kpi-grid
+  ) {
+    gap: clamp(1rem, 1.2vw, 1.75rem);
+  }
+
+  /* Shared guide shell uses its own constrained header and main. */
+  html:not([data-standalone-pwa="true"]) [data-guide-page="true"] > header > div,
+  html:not([data-standalone-pwa="true"]) [data-guide-page="true"] > main {
+    max-width: var(--weave-wide-public-width);
+    padding-inline: var(--weave-wide-gutter);
+  }
+
+  /* Maintain the current auth split-screen, with a more readable form card. */
+  html:not([data-standalone-pwa="true"]) .auth-surface main > div {
+    max-width: clamp(28rem, 29vw, 36rem);
+  }
+
+  html:not([data-standalone-pwa="true"]) .auth-surface main > div > .public-panel-reveal {
+    padding: clamp(2rem, 2.25vw, 2.75rem);
+  }
+
+  html:not([data-standalone-pwa="true"]) .auth-surface main h1 {
+    font-size: clamp(1.5rem, 1.55vw, 1.875rem);
+  }
+
+  html:not([data-standalone-pwa="true"]) .auth-surface .auth-headline {
+    font-size: clamp(3rem, 3.3vw, 4.25rem);
+  }
+
+  /* Same landing content and hero composition, scaled for larger monitors. */
+  html:not([data-standalone-pwa="true"]) .public-page-shell #home h1 {
+    font-size: clamp(4.5rem, 4.5vw, 5.75rem);
+  }
+}
