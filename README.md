@@ -219,15 +219,30 @@ Refresh and logout requests use the HttpOnly refresh cookie and require both an 
 
 Student setup codes created by bulk import are encrypted at rest and available for access-slip generation only for the configured retention window.
 
-## CBT student hostname resolution (manual default)
+## CBT student hostname resolution (portable offline client setup)
 
-Until centrally managed local DNS is available, each Windows or Linux student
-computer must map the assigned CBT server FQDN to its school LAN IP in the OS
-hosts file. Windows users should flush their DNS cache with
-`ipconfig /flushdns`. Linux users edit `/etc/hosts` and can use
-`resolvectl flush-caches` if systemd-resolved is present. The optional CoreDNS
-feature and CLI commands are retained. See
-[manual CBT hostname setup](docs/cbt-manual-local-dns.md).
+After pairing and activating HTTPS on the local CBT server, administrators can
+generate an offline Windows **or** Linux student-PC setup package on a server
+running the corresponding operating system:
+
+```bash
+weave network client export --output <directory>
+```
+
+Copy the exported ZIP to a USB drive, extract it on each student computer and
+run `WEAVE-CBT-Client-Setup.exe` (Windows; approve UAC) or
+`sudo ./weave-cbt-client-setup` (Linux) from the extracted folder alongside
+`weave-client.json`. The utility uses the saved school LAN IP and paired HTTPS
+hostname, safely updates its own managed hosts entry, retains its previous
+configuration for subsequent domain/IP changes, and automatically flushes the
+available DNS cache after a change. Resolution and HTTPS checks are reported
+separately. No Python, Docker, WSL, or WEAVE CLI installation is needed on
+student PCs.
+
+Previously **manual/unmanaged** hosts entries are not overwritten; resolve any
+conflict deliberately. The optional CoreDNS and router/DHCP solution remains
+available for centrally managed school networks. See
+[CBT student hostname setup and manual fallback](docs/cbt-manual-local-dns.md).
 
 ## Deployment
 
