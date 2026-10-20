@@ -164,7 +164,7 @@ class TeacherResultService:
             component_by_id[component_id].name
             for component_id in requested_ids
             if is_assessment_component_examinable(component_by_id[component_id])
-            and not component_by_id[component_id].is_hybrid
+            and not getattr(component_by_id[component_id], "is_hybrid", False)
         ]
         if protected:
             raise ForbiddenException(
@@ -187,7 +187,7 @@ class TeacherResultService:
 
         for score_input in payload.component_scores:
             component = component_by_id[score_input.assessment_component_id]
-            if component.is_hybrid:
+            if getattr(component, "is_hybrid", False):
                 if score_input.cbt_score is not None or score_input.score is not None:
                     raise ForbiddenException("Teachers cannot edit the CBT portion of hybrid scores.")
                 if "theory_score" not in score_input.model_fields_set:
@@ -219,7 +219,7 @@ class TeacherResultService:
 
         total = sum(merged_scores.values(), Decimal("0"))
         complete = len(merged_scores) == len(components) and all(
-            not component.is_hybrid or component_is_complete(component, existing_by_component.get(component.id))
+            not getattr(component, "is_hybrid", False) or component_is_complete(component, existing_by_component.get(component.id))
             for component in components
         )
         grade = remark = None
