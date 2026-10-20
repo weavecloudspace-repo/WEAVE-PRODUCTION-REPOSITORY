@@ -15,6 +15,7 @@ const blankComponent = (position) => ({
   maximum_score: "",
   position,
   is_examinable: true,
+  is_hybrid: false,
 });
 const newDraft = () => ({ id: null, name: "", components: [blankComponent(0)] });
 
@@ -56,6 +57,7 @@ function AssessmentConfigWorkspace() {
         ...item,
         position,
         is_examinable: item.is_examinable !== false,
+        is_hybrid: item.is_hybrid === true,
       })),
     });
   };
@@ -64,7 +66,7 @@ function AssessmentConfigWorkspace() {
     setDraft((current) => ({
       ...current,
       components: current.components.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [field]: value } : item,
+        itemIndex === index ? { ...item, [field]: value, ...(field === "is_examinable" && !value ? { is_hybrid: false } : {}) } : item,
       ),
     }));
   };
@@ -84,6 +86,9 @@ function AssessmentConfigWorkspace() {
     if (!draft.components.length) return showWarning("Add at least one component."), false;
     if (draft.components.some((item) => !item.name.trim() || Number(item.maximum_score) <= 0)) {
       return showWarning("Every component needs a name and a maximum above zero."), false;
+    }
+    if (draft.components.some((item) => item.is_hybrid && item.is_examinable === false)) {
+      return showWarning("Hybrid components must also be examinable."), false;
     }
     if (requireTotal && total !== 100) {
       return showWarning("Component maximums must total 100 before activation."), false;
@@ -105,6 +110,7 @@ function AssessmentConfigWorkspace() {
             maximum_score: Number(item.maximum_score),
             position,
             is_examinable: item.is_examinable !== false,
+            is_hybrid: item.is_hybrid === true,
           })),
         });
       } else {
@@ -125,6 +131,7 @@ function AssessmentConfigWorkspace() {
               code: item.code?.trim() || null,
               maximum_score: Number(item.maximum_score),
               is_examinable: item.is_examinable !== false,
+              is_hybrid: item.is_hybrid === true,
             });
             orderedIds.push(item.id);
           } else {
@@ -134,6 +141,7 @@ function AssessmentConfigWorkspace() {
               maximum_score: Number(item.maximum_score),
               position: 1000 + position,
               is_examinable: item.is_examinable !== false,
+              is_hybrid: item.is_hybrid === true,
             });
             const created = saved.components.find((component) =>
               component.name === item.name.trim() && !orderedIds.includes(component.id));
@@ -201,19 +209,25 @@ function AssessmentConfigWorkspace() {
           <Input label="Scheme name" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
           <div className="space-y-2">
             {draft.components.map((item, index) => (
-              <div key={item.id || `new-${index}`} className="grid gap-2 rounded-xl border border-border p-3 sm:grid-cols-[minmax(0,1fr)_8rem_7rem_9rem_auto] sm:items-end">
+              <div key={item.id || `new-${index}`} className="grid gap-2 rounded-xl border border-border p-3 sm:grid-cols-[minmax(0,1fr)_8rem_7rem_12rem_auto] sm:items-end">
                 <Input label="Component" value={item.name} onChange={(event) => updateComponent(index, "name", event.target.value)} />
                 <Input label="Code" value={item.code || ""} onChange={(event) => updateComponent(index, "code", event.target.value)} />
                 <Input label="Maximum" type="number" min="0.01" max="100" step="0.01" value={item.maximum_score} onChange={(event) => updateComponent(index, "maximum_score", event.target.value)} />
-                <label className="flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm text-text">
-                  <input
-                    type="checkbox"
-                    checked={item.is_examinable !== false}
-                    onChange={(event) => updateComponent(index, "is_examinable", event.target.checked)}
-                    className="h-4 w-4 rounded border-border"
-                  />
-                  Examinable
-                </label>
+                <div className="space-y-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={item.is_examinable !== false}
+                      onChange={(event) => updateComponent(index, "is_examinable", event.target.checked)}
+                      className="h-4 w-4 rounded border-border" />
+                    Examinable
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={item.is_hybrid === true}
+                      disabled={item.is_examinable === false}
+                      onChange={(event) => updateComponent(index, "is_hybrid", event.target.checked)}
+                      className="h-4 w-4 rounded border-border" />
+                    Hybrid (CBT + theory)
+                  </label>
+                </div>
                 <div className="flex gap-1">
                   <Button type="button" variant="ghost" aria-label="Move up" onClick={() => moveComponent(index, -1)}><ArrowUp className="h-4 w-4" /></Button>
                   <Button type="button" variant="ghost" aria-label="Move down" onClick={() => moveComponent(index, 1)}><ArrowDown className="h-4 w-4" /></Button>
@@ -222,7 +236,7 @@ function AssessmentConfigWorkspace() {
               </div>
             ))}
           </div>
-          <p className="text-xs text-text-muted">Examinable components are CBT/admin-managed. Turn this off for teacher-entered components such as note marks, classwork, or other manual assessments.</p>
+          <p className="text-xs text-text-muted">Examinable components sync to CBT. Enable Hybrid to let CBT allocate part of the maximum to theory in WEAVE.</p>
           <div className={`rounded-xl border px-4 py-3 text-sm ${total === 100 ? "border-success/30 bg-success/5 text-success" : "border-error/30 bg-error/5 text-error"}`}>Configured total: <strong>{total} / 100</strong></div>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={() => setDraft((current) => ({ ...current, components: [...current.components, blankComponent(current.components.length)] }))}><Plus className="mr-2 h-4 w-4" />Add component</Button>
@@ -243,7 +257,7 @@ function AssessmentConfigWorkspace() {
 }
 
 function ComponentSummary({ components = [] }) {
-  return <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{components.map((item) => <div key={item.id} className="rounded-xl bg-surface-muted/40 px-4 py-3"><div className="flex items-start justify-between gap-2"><p className="text-xs uppercase tracking-wide text-text-muted">{item.name}</p><Badge variant={item.is_examinable === false ? "default" : "info"}>{item.is_examinable === false ? "Manual" : "CBT"}</Badge></div><p className="mt-1 text-xl font-semibold text-text">{item.maximum_score}</p></div>)}</div>;
+  return <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{components.map((item) => <div key={item.id} className="rounded-xl bg-surface-muted/40 px-4 py-3"><div className="flex items-start justify-between gap-2"><p className="text-xs uppercase tracking-wide text-text-muted">{item.name}</p><Badge variant={item.is_examinable === false ? "default" : "info"}>{item.is_examinable === false ? "Manual" : item.is_hybrid ? "Hybrid" : "CBT"}</Badge></div><p className="mt-1 text-xl font-semibold text-text">{item.maximum_score}</p></div>)}</div>;
 }
 
 export default AssessmentConfigWorkspace;
