@@ -17,16 +17,17 @@ def component_is_complete(
         return True
     if record.cbt_score is None or record.cbt_maximum_score is None:
         return False
-    return (
-        record.cbt_maximum_score == component.maximum_score
-        or record.theory_score is not None
-    )
+    return record.cbt_maximum_score == component.maximum_score or record.theory_score is not None
 
 
 def component_theory_maximum(
     component: AssessmentComponent, record: StudentAssessmentScore | None
 ) -> Decimal | None:
-    if not getattr(component, "is_hybrid", False) or record is None or record.cbt_maximum_score is None:
+    if (
+        not getattr(component, "is_hybrid", False)
+        or record is None
+        or record.cbt_maximum_score is None
+    ):
         return None
     return component.maximum_score - record.cbt_maximum_score
 
@@ -42,10 +43,18 @@ def component_score_response(
         maximum_score=component.maximum_score,
         score=record.score if record is not None else None,
         is_hybrid=getattr(component, "is_hybrid", False),
-        cbt_score=record.cbt_score if record is not None and getattr(component, "is_hybrid", False) else None,
-        cbt_maximum_score=record.cbt_maximum_score if record is not None and getattr(component, "is_hybrid", False) else None,
-        theory_score=record.theory_score if record is not None and getattr(component, "is_hybrid", False) else None,
+        cbt_score=record.cbt_score
+        if record is not None and getattr(component, "is_hybrid", False)
+        else None,
+        cbt_maximum_score=record.cbt_maximum_score
+        if record is not None and getattr(component, "is_hybrid", False)
+        else None,
+        theory_score=record.theory_score
+        if record is not None and getattr(component, "is_hybrid", False)
+        else None,
         theory_maximum_score=component_theory_maximum(component, record),
-        source_exam_id=record.source_exam_id if record is not None and getattr(component, "is_hybrid", False) else None,
+        source_exam_id=record.source_exam_id
+        if record is not None and getattr(component, "is_hybrid", False)
+        else None,
         is_complete=component_is_complete(component, record),
     )
