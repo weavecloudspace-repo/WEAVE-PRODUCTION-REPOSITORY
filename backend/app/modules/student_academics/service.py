@@ -2703,7 +2703,7 @@ class StudentAcademicService:
         for component in components:
             score_input = incoming.get(component.id)
             record = existing_by_component.get(component.id)
-            if component.is_hybrid:
+            if getattr(component, "is_hybrid", False):
                 # The CBT-sync event establishes allocation; admins cannot invent one.
                 if score_input is None:
                     if record is not None:
@@ -2752,7 +2752,7 @@ class StudentAcademicService:
 
         total = sum(provided.values(), Decimal("0"))
         complete = len(provided) == len(components) and all(
-            not component.is_hybrid or component_is_complete(component, existing_by_component.get(component.id))
+            not getattr(component, "is_hybrid", False) or component_is_complete(component, existing_by_component.get(component.id))
             for component in components
         )
         grade = remark = None
