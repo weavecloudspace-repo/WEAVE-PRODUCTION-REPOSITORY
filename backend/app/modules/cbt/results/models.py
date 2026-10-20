@@ -36,6 +36,32 @@ def _new_ingestion_reference() -> str:
     return f"CBT-{year}-{uuid.uuid4().hex[:16].upper()}"
 
 
+class CBTExamScoreAllocation(BaseModel):
+    """Frozen CBT portion for a source exam, established on first result sync."""
+
+    __tablename__ = "cbt_exam_score_allocations"
+
+    cbt_server_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey(f"{PUBLIC_SCHEMA}.cbt_servers.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    source_exam_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    academic_session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    academic_term_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    academic_level_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    curriculum_subject_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    assessment_component_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    component_maximum_score: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    cbt_maximum_score: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "cbt_server_id", "source_exam_id",
+                         name="uq_cbt_exam_allocation_tenant_server_exam"),
+        CheckConstraint("cbt_maximum_score > 0 AND cbt_maximum_score <= component_maximum_score",
+                        name="ck_cbt_exam_allocation_valid_maximum"),
+    )
+
+
 class CBTResultIngestionBatch(BaseModel):
     """
     Immutable audit record for one result batch received from a paired CBT server.
@@ -66,6 +92,7 @@ class CBTResultIngestionBatch(BaseModel):
     )
     source_exam_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    cbt_maximum_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
 
     academic_session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
