@@ -42,7 +42,8 @@ class CBTExamScoreAllocation(BaseModel):
     __tablename__ = "cbt_exam_score_allocations"
 
     cbt_server_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey(f"{PUBLIC_SCHEMA}.cbt_servers.id", ondelete="RESTRICT"),
+        UUID(as_uuid=True),
+        ForeignKey(f"{PUBLIC_SCHEMA}.cbt_servers.id", ondelete="RESTRICT"),
         nullable=False,
     )
     source_exam_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -55,10 +56,16 @@ class CBTExamScoreAllocation(BaseModel):
     cbt_maximum_score: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
 
     __table_args__ = (
-        UniqueConstraint("tenant_id", "cbt_server_id", "source_exam_id",
-                         name="uq_cbt_exam_allocation_tenant_server_exam"),
-        CheckConstraint("cbt_maximum_score > 0 AND cbt_maximum_score <= component_maximum_score",
-                        name="ck_cbt_exam_allocation_valid_maximum"),
+        UniqueConstraint(
+            "tenant_id",
+            "cbt_server_id",
+            "source_exam_id",
+            name="uq_cbt_exam_allocation_tenant_server_exam",
+        ),
+        CheckConstraint(
+            "cbt_maximum_score > 0 AND cbt_maximum_score <= component_maximum_score",
+            name="ck_cbt_exam_allocation_valid_maximum",
+        ),
     )
 
 
