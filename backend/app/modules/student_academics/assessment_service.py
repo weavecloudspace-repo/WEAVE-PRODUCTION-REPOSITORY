@@ -143,7 +143,10 @@ class AssessmentService:
         component = await AssessmentRepository.get_component(db, tenant_id, component_id)
         if component is None or component.assessment_scheme_id != scheme.id:
             raise NotFoundException("Assessment component not found.")
-        for field, value in payload.model_dump(exclude_unset=True).items():
+        changes = payload.model_dump(exclude_unset=True)
+        if changes.get("is_hybrid", component.is_hybrid) and not changes.get("is_examinable", component.is_examinable):
+            raise BadRequestException("Hybrid components must also be examinable.")
+        for field, value in changes.items():
             setattr(component, field, value)
         try:
             await db.commit()
