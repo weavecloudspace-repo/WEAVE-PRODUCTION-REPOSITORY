@@ -21,6 +21,7 @@ from app.modules.classes.repository import AcademicLevelRepository, ClassRoomRep
 from app.modules.parents.models import ParentMembership
 from app.modules.report_cards.models import ReportCardStatus
 from app.modules.student_academics.assessment_repository import AssessmentRepository
+from app.modules.student_academics.hybrid_scores import component_is_complete, component_score_response
 from app.modules.student_academics.curriculum_models import (
     ClassTermDepartmentAssignment,
     Curriculum,
@@ -2464,17 +2465,7 @@ class StudentAcademicService:
             component_rows = await StudentAcademicRepository.list_result_component_scores(
                 db, result.tenant_id, result
             )
-        components = [
-            AssessmentComponentScoreResponse(
-                assessment_component_id=component.id,
-                name=component.name,
-                code=component.code,
-                position=component.position,
-                maximum_score=component.maximum_score,
-                score=score.score if score is not None else None,
-            )
-            for component, score in component_rows
-        ]
+        components = [component_score_response(component, score) for component, score in component_rows]
         teacher_name = None
         if teacher is not None:
             teacher_name = (
@@ -2552,8 +2543,8 @@ class StudentAcademicService:
         rows = await StudentAcademicRepository.list_result_component_scores(
             db, result.tenant_id, result
         )
-        if not rows or any(score is None for _, score in rows):
-            raise BadRequestException("Every configured assessment component is required.")
+        if not rows or any(not component_is_complete(component, score) for component, score in rows):
+            raise BadRequestException("Every configured assessment component must be complete.")
 
         total_score = sum(
             (score.score for _, score in rows if score is not None),
@@ -2694,23 +2685,76 @@ class StudentAcademicService:
         ) != Decimal("100"):
             raise ConflictException("The active assessment scheme must total 100.")
         component_by_id = {item.id: item for item in components}
-        provided = {
-            item.assessment_component_id: item.score
-            for item in payload.component_scores
-            if item.score is not None
-        }
-        if set(provided) - set(component_by_id):
-            raise BadRequestException(
-                "One or more scores reference an invalid assessment component."
+        incoming = {item.assessment_component_id: item for item in payload.component_scores}
+        if set(incoming) - set(component_by_id):
+            raise BadRequestException("One or more scores reference an invalid assessment component.")
+
+        existing_by_component = {}
+        if existing is not None:
+            existing_rows = await StudentAcademicRepository.list_result_component_scores(
+                db, tenant_id, existing
             )
-        for component_id, score in provided.items():
-            component = component_by_id[component_id]
-            if score > component.maximum_score:
-                raise BadRequestException(
-                    f"{component.name} score cannot exceed {component.maximum_score}."
-                )
+            existing_by_component = {
+                component.id: row for component, row in existing_rows if row is not None
+            }
+
+        provided = {}
+        corrections = []
+        for component in components:
+            score_input = incoming.get(component.id)
+            record = existing_by_component.get(component.id)
+            if component.is_hybrid:
+                # The CBT-sync event establishes allocation; admins cannot invent one.
+                if score_input is None:
+                    if record is not None:
+                        provided[component.id] = record.score
+                    continue
+                if score_input.score is not None:
+                    raise BadRequestException("Use CBT/theory fields for hybrid assessment scores.")
+                if record is None or record.cbt_score is None or record.cbt_maximum_score is None:
+                    raise ConflictException("Hybrid theory and CBT edits require a synchronized CBT score.")
+                cbt_score = record.cbt_score
+                if score_input.cbt_score is not None and score_input.cbt_score != cbt_score:
+                    if not score_input.correction_reason:
+                        raise BadRequestException("Provide a reason to correct synchronized CBT marks.")
+                    if score_input.cbt_score > record.cbt_maximum_score:
+                        raise BadRequestException("Corrected CBT score exceeds its allocation.")
+                    corrections.append({
+                        "component_id": str(component.id),
+                        "source_exam_id": str(record.source_exam_id),
+                        "previous_cbt_score": str(cbt_score),
+                        "corrected_cbt_score": str(score_input.cbt_score),
+                        "reason": score_input.correction_reason,
+                    })
+                    cbt_score = score_input.cbt_score
+                theory_maximum = component.maximum_score - record.cbt_maximum_score
+                theory_score = record.theory_score
+                if "theory_score" in score_input.model_fields_set:
+                    theory_score = score_input.theory_score
+                if theory_maximum == 0 and theory_score is not None:
+                    raise BadRequestException("Full CBT assessments have no theory allocation.")
+                if theory_score is not None and theory_score > theory_maximum:
+                    raise BadRequestException(f"Theory score cannot exceed {theory_maximum}.")
+                record.cbt_score = cbt_score
+                record.theory_score = theory_score
+                provided[component.id] = cbt_score + (theory_score or Decimal("0"))
+                continue
+            if score_input is not None and (
+                score_input.cbt_score is not None or score_input.theory_score is not None
+            ):
+                raise BadRequestException("CBT/theory fields require a hybrid component.")
+            if score_input is not None and score_input.score is not None:
+                if score_input.score > component.maximum_score:
+                    raise BadRequestException(
+                        f"{component.name} score cannot exceed {component.maximum_score}."
+                    )
+                provided[component.id] = score_input.score
+
         total = sum(provided.values(), Decimal("0"))
-        complete = len(provided) == len(components)
+        complete = len(provided) == len(components) and all(
+            not component.is_hybrid or component_is_complete(component, existing_by_component.get(component.id))
+            for component in components
+        )
         grade = remark = None
         grading_scale_id = None
         if complete:
@@ -2720,7 +2764,7 @@ class StudentAcademicService:
                 remark = scale.remark
                 grading_scale_id = scale.id
         if payload.status == AcademicResultStatus.SUBMITTED and not complete:
-            raise BadRequestException("Every configured assessment component is required.")
+            raise BadRequestException("Every configured assessment component must be complete.")
         if payload.status == AcademicResultStatus.SUBMITTED and grade is None:
             raise ConflictException("An active grading scale must cover the final numeric score.")
         actor_type = StudentAcademicService._result_actor_type(actor)
@@ -2795,6 +2839,7 @@ class StudentAcademicService:
             previous_status=previous_status.value if previous_status else None,
             new_status=result.status.value,
             acting_admin_id=actor.id if isinstance(actor, TenantAdmin) else None,
+            metadata={"hybrid_cbt_corrections": corrections} if corrections else None,
         )
         await db.commit()
         return await StudentAcademicService._build_result_response(db, result)
@@ -3126,14 +3171,7 @@ class StudentAcademicService:
                     ),
                     assessment_scheme_name=(active_scheme.name if active_scheme else None),
                     components=[
-                        AssessmentComponentScoreResponse(
-                            assessment_component_id=component.id,
-                            name=component.name,
-                            code=component.code,
-                            position=component.position,
-                            maximum_score=component.maximum_score,
-                            score=score.score if score is not None else None,
-                        )
+                        component_score_response(component, score)
                         for component, score in component_rows
                     ],
                     maximum_score=sum(
