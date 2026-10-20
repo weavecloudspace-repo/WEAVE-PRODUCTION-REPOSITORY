@@ -31,7 +31,7 @@ export function buildManualScores(studentId, components, drafts, result = null) 
     const part = (result?.components || []).find((item) => item.assessment_component_id === component.id);
     const maximum = component.is_hybrid ? Number(part.theory_maximum_score) : Number(component.maximum_score);
     if (score !== null && (!Number.isFinite(score) || score < 0 || score > maximum)) {
-      throw new Error(`${component.name} must be between 0 and ${maximum}.`);
+      throw new Error(`${component.name} must be between 0 and ${component.is_hybrid ? maximum : component.maximum_score}.`);
     }
     return component.is_hybrid
       ? { assessment_component_id: component.id, theory_score: score }
