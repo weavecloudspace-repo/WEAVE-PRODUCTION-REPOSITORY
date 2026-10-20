@@ -15,7 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictException
 from app.modules.cbt.auth.schemas import AuthenticatedCBTServer
-from app.modules.cbt.results.models import CBTExamScoreAllocation, CBTResultIngestionBatch, CBTResultIngestionItem
+from app.modules.cbt.results.models import (
+    CBTExamScoreAllocation,
+    CBTResultIngestionBatch,
+    CBTResultIngestionItem,
+)
 from app.modules.cbt.enums import (
     CBTResultIngestionOutcome,
     CBTResultIngestionStatus,
@@ -131,7 +135,9 @@ class CBTResultIngestionService:
         }
 
         if payload.cbt_maximum_score is not None:
-            canonical_payload["cbt_maximum_score"] = f"{payload.cbt_maximum_score.quantize(_SCORE_QUANTUM):.2f}"
+            canonical_payload["cbt_maximum_score"] = (
+                f"{payload.cbt_maximum_score.quantize(_SCORE_QUANTUM):.2f}"
+            )
 
         encoded = json.dumps(
             canonical_payload,
@@ -742,18 +748,20 @@ class CBTResultIngestionService:
                 )
             ).scalar_one_or_none()
             if exam_allocation is None:
-                db.add(CBTExamScoreAllocation(
-                    tenant_id=tenant_id,
-                    cbt_server_id=server.server_id,
-                    source_exam_id=payload.source_exam_id,
-                    academic_session_id=payload.academic_session_id,
-                    academic_term_id=payload.academic_term_id,
-                    academic_level_id=payload.academic_level_id,
-                    curriculum_subject_id=payload.curriculum_subject_id,
-                    assessment_component_id=payload.assessment_component_id,
-                    component_maximum_score=context.component.maximum_score,
-                    cbt_maximum_score=allocation,
-                ))
+                db.add(
+                    CBTExamScoreAllocation(
+                        tenant_id=tenant_id,
+                        cbt_server_id=server.server_id,
+                        source_exam_id=payload.source_exam_id,
+                        academic_session_id=payload.academic_session_id,
+                        academic_term_id=payload.academic_term_id,
+                        academic_level_id=payload.academic_level_id,
+                        curriculum_subject_id=payload.curriculum_subject_id,
+                        assessment_component_id=payload.assessment_component_id,
+                        component_maximum_score=context.component.maximum_score,
+                        cbt_maximum_score=allocation,
+                    )
+                )
                 await db.flush()
             elif (
                 exam_allocation.academic_session_id != payload.academic_session_id
@@ -765,7 +773,9 @@ class CBTResultIngestionService:
                 or exam_allocation.cbt_maximum_score != allocation
             ):
                 return await cls._reject_entire_batch(
-                    db, batch=batch, payload=payload,
+                    db,
+                    batch=batch,
+                    payload=payload,
                     code="EXAM_ALLOCATION_CONFLICT",
                     detail="This CBT examination already has a different synchronized academic scope or score allocation.",
                 )
@@ -962,11 +972,7 @@ class CBTResultIngestionService:
                         incoming_score=item.score,
                         resolved_teacher_assignment_id=(assignment.id),
                         code="SCORE_EXCEEDS_COMPONENT_MAXIMUM",
-                        detail=(
-                            f"{context.component.name} score "
-                            f"cannot exceed "
-                            f"{allocation}."
-                        ),
+                        detail=(f"{context.component.name} score cannot exceed {allocation}."),
                     )
 
             candidate_student_ids = {
@@ -1069,10 +1075,18 @@ class CBTResultIngestionService:
                 if previous_component is not None:
                     # Exact duplicate = idempotent at score level.
                     if (
-                        (previous_component.cbt_score if previous_component.cbt_score is not None else previous_component.score) == item.score
+                        (
+                            previous_component.cbt_score
+                            if previous_component.cbt_score is not None
+                            else previous_component.score
+                        )
+                        == item.score
                         and (previous_component.source_exam_id in (None, payload.source_exam_id))
                         and (previous_component.cbt_maximum_score in (None, allocation))
-                        and (not getattr(context.component, "is_hybrid", False) or previous_component.cbt_score is not None)
+                        and (
+                            not getattr(context.component, "is_hybrid", False)
+                            or previous_component.cbt_score is not None
+                        )
                     ):
                         processed_at = datetime.now(timezone.utc)
 
