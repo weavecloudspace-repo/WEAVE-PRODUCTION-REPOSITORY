@@ -40,7 +40,7 @@ def upgrade() -> None:
         sa.Column("component_maximum_score", sa.Numeric(5, 2), nullable=False),
         sa.Column("cbt_maximum_score", sa.Numeric(5, 2), nullable=False),
         sa.Column("tenant_id", sa.UUID(), nullable=False),
-        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("id", sa.UUID(), primary_key=True, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.CheckConstraint("cbt_maximum_score > 0 AND cbt_maximum_score <= component_maximum_score",
