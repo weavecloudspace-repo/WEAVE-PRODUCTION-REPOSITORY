@@ -9,12 +9,17 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictException
 from app.modules.cbt.auth.schemas import AuthenticatedCBTServer
-from app.modules.cbt.results.models import CBTResultIngestionBatch, CBTResultIngestionItem
+from app.modules.cbt.results.models import (
+    CBTExamScoreAllocation,
+    CBTResultIngestionBatch,
+    CBTResultIngestionItem,
+)
 from app.modules.cbt.enums import (
     CBTResultIngestionOutcome,
     CBTResultIngestionStatus,
@@ -26,6 +31,7 @@ from app.modules.cbt.results.schemas import (
     CBTResultBulkResponse,
 )
 from app.modules.classes.repository import AcademicLevelRepository
+from app.modules.student_academics.hybrid_scores import component_is_complete
 from app.modules.student_academics.assessment_repository import (
     AssessmentRepository,
 )
@@ -127,6 +133,11 @@ class CBTResultIngestionService:
             "exam_date": payload.exam_date.isoformat(),
             "scores": scores,
         }
+
+        if payload.cbt_maximum_score is not None:
+            canonical_payload["cbt_maximum_score"] = (
+                f"{payload.cbt_maximum_score.quantize(_SCORE_QUANTUM):.2f}"
+            )
 
         encoded = json.dumps(
             canonical_payload,
@@ -335,6 +346,15 @@ class CBTResultIngestionService:
                 "The submitted assessment component is invalid or inactive.",
             )
 
+        allocation = payload.cbt_maximum_score or component.maximum_score
+        if allocation > component.maximum_score or (
+            not getattr(component, "is_hybrid", False) and allocation != component.maximum_score
+        ):
+            return None, (
+                "INVALID_CBT_ALLOCATION",
+                "The CBT allocation must not exceed the component maximum; only hybrid components allow a split.",
+            )
+
         scheme = await AssessmentRepository.get_scheme(
             db,
             tenant_id,
@@ -510,7 +530,9 @@ class CBTResultIngestionService:
                 Decimal("0"),
             )
 
-            complete = bool(rows) and all(score is not None for _component, score in rows)
+            complete = bool(rows) and all(
+                component_is_complete(component, score) for component, score in rows
+            )
 
             result.total_score = total
 
@@ -621,6 +643,7 @@ class CBTResultIngestionService:
             batch_id=payload.batch_id,
             source_exam_id=payload.source_exam_id,
             request_hash=request_hash,
+            cbt_maximum_score=payload.cbt_maximum_score,
             academic_session_id=payload.academic_session_id,
             academic_term_id=payload.academic_term_id,
             academic_level_id=payload.academic_level_id,
@@ -709,6 +732,53 @@ class CBTResultIngestionService:
                 )
 
             assert context is not None
+
+            # One immutable allocation for all batches of the same local exam.
+            # A local server may publish different batches at different times.
+            allocation = payload.cbt_maximum_score or context.component.maximum_score
+            exam_allocation = (
+                await db.execute(
+                    select(CBTExamScoreAllocation)
+                    .where(
+                        CBTExamScoreAllocation.tenant_id == tenant_id,
+                        CBTExamScoreAllocation.cbt_server_id == server.server_id,
+                        CBTExamScoreAllocation.source_exam_id == payload.source_exam_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if exam_allocation is None:
+                db.add(
+                    CBTExamScoreAllocation(
+                        tenant_id=tenant_id,
+                        cbt_server_id=server.server_id,
+                        source_exam_id=payload.source_exam_id,
+                        academic_session_id=payload.academic_session_id,
+                        academic_term_id=payload.academic_term_id,
+                        academic_level_id=payload.academic_level_id,
+                        curriculum_subject_id=payload.curriculum_subject_id,
+                        assessment_component_id=payload.assessment_component_id,
+                        component_maximum_score=context.component.maximum_score,
+                        cbt_maximum_score=allocation,
+                    )
+                )
+                await db.flush()
+            elif (
+                exam_allocation.academic_session_id != payload.academic_session_id
+                or exam_allocation.academic_term_id != payload.academic_term_id
+                or exam_allocation.academic_level_id != payload.academic_level_id
+                or exam_allocation.curriculum_subject_id != payload.curriculum_subject_id
+                or exam_allocation.assessment_component_id != payload.assessment_component_id
+                or exam_allocation.component_maximum_score != context.component.maximum_score
+                or exam_allocation.cbt_maximum_score != allocation
+            ):
+                return await cls._reject_entire_batch(
+                    db,
+                    batch=batch,
+                    payload=payload,
+                    code="EXAM_ALLOCATION_CONFLICT",
+                    detail="This CBT examination already has a different synchronized academic scope or score allocation.",
+                )
 
             # ----------------------------------------------------------
             # In-memory processing state
@@ -896,17 +966,13 @@ class CBTResultIngestionService:
                     )
                     continue
 
-                if item.score > context.component.maximum_score:
+                if item.score > allocation:
                     reject(
                         student_id=item.student_id,
                         incoming_score=item.score,
                         resolved_teacher_assignment_id=(assignment.id),
                         code="SCORE_EXCEEDS_COMPONENT_MAXIMUM",
-                        detail=(
-                            f"{context.component.name} score "
-                            f"cannot exceed "
-                            f"{context.component.maximum_score}."
-                        ),
+                        detail=(f"{context.component.name} score cannot exceed {allocation}."),
                     )
 
             candidate_student_ids = {
@@ -1008,7 +1074,20 @@ class CBTResultIngestionService:
 
                 if previous_component is not None:
                     # Exact duplicate = idempotent at score level.
-                    if previous_component.score == item.score:
+                    if (
+                        (
+                            previous_component.cbt_score
+                            if previous_component.cbt_score is not None
+                            else previous_component.score
+                        )
+                        == item.score
+                        and (previous_component.source_exam_id in (None, payload.source_exam_id))
+                        and (previous_component.cbt_maximum_score in (None, allocation))
+                        and (
+                            not getattr(context.component, "is_hybrid", False)
+                            or previous_component.cbt_score is not None
+                        )
+                    ):
                         processed_at = datetime.now(timezone.utc)
 
                         audit_items.append(
@@ -1122,6 +1201,9 @@ class CBTResultIngestionService:
                         student_subject_result_id=result.id,
                         assessment_component_id=(payload.assessment_component_id),
                         score=incoming.score,
+                        cbt_score=incoming.score,
+                        cbt_maximum_score=allocation,
+                        source_exam_id=payload.source_exam_id,
                     )
                 )
 

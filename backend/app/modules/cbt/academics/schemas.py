@@ -126,6 +126,7 @@ class CBTAssessmentComponentSnapshot(SnapshotBase):
     maximum_score: Decimal
     position: int
     is_active: bool
+    is_hybrid: bool = False
 
 
 class CBTAdminSnapshot(SnapshotBase):

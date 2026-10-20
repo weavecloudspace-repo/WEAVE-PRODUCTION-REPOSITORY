@@ -123,7 +123,7 @@ function ResultsPage() {
         results.forEach((result) => {
           (result.components || []).forEach((component) => {
             nextDrafts[scoreKey(result.student_id, component.assessment_component_id)] =
-              component.score ?? "";
+              component.is_hybrid ? (component.theory_score ?? "") : (component.score ?? "");
           });
         });
 
@@ -149,7 +149,7 @@ function ResultsPage() {
     [scheme],
   );
   const manualComponents = useMemo(
-    () => components.filter((component) => component.is_examinable === false),
+    () => components.filter((component) => component.is_examinable === false || component.is_hybrid === true),
     [components],
   );
   const selectedAssignment = assignments.find(
@@ -189,7 +189,8 @@ function ResultsPage() {
 
     setSavingStudentId(student.id);
     try {
-      const componentScores = buildManualScores(student.id, components, draftScores);
+      const componentScores = buildManualScores(student.id, components, draftScores, resultsByStudent[student.id]);
+      if (!componentScores.length) return;
 
       const saved = await academicService.saveTeacherResult({
         student_id: student.id,
@@ -204,7 +205,7 @@ function ResultsPage() {
       setDraftScores((current) => {
         const next = { ...current };
         (saved.components || []).forEach((component) => {
-          next[scoreKey(student.id, component.assessment_component_id)] = component.score ?? "";
+          next[scoreKey(student.id, component.assessment_component_id)] = component.is_hybrid ? (component.theory_score ?? "") : (component.score ?? "");
         });
         return next;
       });
@@ -232,9 +233,33 @@ function ResultsPage() {
       label: `${component.name} / ${component.maximum_score}`,
       render: (student) => {
         const result = resultsByStudent[student.id];
-        const storedScore = result?.components?.find((item) => item.assessment_component_id === component.id)?.score;
+        const part = result?.components?.find((item) => item.assessment_component_id === component.id);
+        const storedScore = part?.score;
         const examinable = component.is_examinable !== false;
         const locked = Boolean(result && result.status !== "draft");
+        if (component.is_hybrid) {
+          const theoryReady = part?.cbt_score != null && Number(part.theory_maximum_score) > 0;
+          return (
+            <div className="space-y-1">
+              <span className="block text-xs text-text-muted">
+                {part?.cbt_score != null ? `CBT ${part.cbt_score}/${part.cbt_maximum_score}` : "Awaiting CBT sync"}
+              </span>
+              {Number(part?.theory_maximum_score) === 0 ? (
+                <span className="text-xs text-text-muted">Full CBT · no theory</span>
+              ) : (
+                <input
+                  aria-label={`${studentName(student)} ${component.name} theory score`}
+                  type="number" min="0" max={part?.theory_maximum_score || 0} step="0.01"
+                  value={draftScores[scoreKey(student.id, component.id)] ?? ""}
+                  disabled={!theoryReady || locked || savingStudentId === student.id}
+                  placeholder={theoryReady ? `Theory / ${part.theory_maximum_score}` : "Locked"}
+                  onChange={(event) => updateScore(student.id, component.id, event.target.value)}
+                  className="h-9 w-full min-w-24 rounded-lg border border-border bg-background px-2 text-sm text-text disabled:bg-surface-muted disabled:text-text-muted"
+                />
+              )}
+            </div>
+          );
+        }
         if (examinable) {
           return (
             <span className="inline-flex items-center gap-2 text-text-muted">
@@ -353,7 +378,7 @@ function ResultsPage() {
                 key={component.id}
                 variant={component.is_examinable === false ? "success" : "default"}
               >
-                {component.name} · {component.maximum_score} · {component.is_examinable === false ? "Manual" : "CBT locked"}
+                {component.name} · {component.maximum_score} · {component.is_hybrid ? "CBT + theory" : component.is_examinable === false ? "Manual" : "CBT locked"}
               </Badge>
             ))}
           </div>

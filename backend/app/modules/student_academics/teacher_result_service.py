@@ -19,6 +19,7 @@ from app.core.exceptions import (
     ForbiddenException,
     NotFoundException,
 )
+from app.modules.student_academics.hybrid_scores import component_is_complete
 from app.modules.student_academics.assessment_examinability import (
     is_assessment_component_examinable,
 )
@@ -163,6 +164,7 @@ class TeacherResultService:
             component_by_id[component_id].name
             for component_id in requested_ids
             if is_assessment_component_examinable(component_by_id[component_id])
+            and not getattr(component_by_id[component_id], "is_hybrid", False)
         ]
         if protected:
             raise ForbiddenException(
@@ -171,18 +173,44 @@ class TeacherResultService:
             )
 
         merged_scores: dict = {}
+        existing_by_component = {}
         if existing is not None:
             existing_rows = await StudentAcademicRepository.list_result_component_scores(
                 db,
                 tenant_id,
                 existing,
             )
+            existing_by_component = {
+                component.id: score for component, score in existing_rows if score is not None
+            }
             merged_scores = {
-                component.id: score.score for component, score in existing_rows if score is not None
+                component_id: score.score for component_id, score in existing_by_component.items()
             }
 
         for score_input in payload.component_scores:
             component = component_by_id[score_input.assessment_component_id]
+            if getattr(component, "is_hybrid", False):
+                if score_input.cbt_score is not None or score_input.score is not None:
+                    raise ForbiddenException(
+                        "Teachers cannot edit the CBT portion of hybrid scores."
+                    )
+                if "theory_score" not in score_input.model_fields_set:
+                    raise BadRequestException("Provide theory_score for a hybrid component.")
+                record = existing_by_component.get(component.id)
+                if record is None or record.cbt_score is None or record.cbt_maximum_score is None:
+                    raise ConflictException("Theory entry requires a synchronized CBT result.")
+                theory_max = component.maximum_score - record.cbt_maximum_score
+                if theory_max <= 0:
+                    raise ConflictException("This examination allocated all marks to CBT.")
+                if score_input.theory_score is not None and score_input.theory_score > theory_max:
+                    raise BadRequestException(f"Theory score cannot exceed {theory_max}.")
+                record.theory_score = score_input.theory_score
+                merged_scores[component.id] = record.cbt_score + (
+                    record.theory_score or Decimal("0")
+                )
+                continue
+            if score_input.theory_score is not None or score_input.cbt_score is not None:
+                raise BadRequestException("CBT and theory portions require a hybrid component.")
             if score_input.score is None:
                 merged_scores.pop(component.id, None)
                 continue
@@ -196,7 +224,11 @@ class TeacherResultService:
             raise BadRequestException("At least one manual component must contain a score.")
 
         total = sum(merged_scores.values(), Decimal("0"))
-        complete = len(merged_scores) == len(components)
+        complete = len(merged_scores) == len(components) and all(
+            not getattr(component, "is_hybrid", False)
+            or component_is_complete(component, existing_by_component.get(component.id))
+            for component in components
+        )
         grade = remark = None
         grading_scale_id = None
         if complete:
