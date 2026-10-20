@@ -19,8 +19,12 @@ from app.modules.student_academics.hybrid_scores import (
 
 def _component(hybrid=True, maximum="50"):
     return SimpleNamespace(
-        id=uuid4(), name="Examination", code="EX",
-        position=0, maximum_score=Decimal(maximum), is_hybrid=hybrid,
+        id=uuid4(),
+        name="Examination",
+        code="EX",
+        position=0,
+        maximum_score=Decimal(maximum),
+        is_hybrid=hybrid,
     )
 
 
