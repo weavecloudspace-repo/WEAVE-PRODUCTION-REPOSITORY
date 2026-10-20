@@ -176,7 +176,9 @@ class TeacherResultService:
         existing_by_component = {}
         if existing is not None:
             existing_rows = await StudentAcademicRepository.list_result_component_scores(
-                db, tenant_id, existing,
+                db,
+                tenant_id,
+                existing,
             )
             existing_by_component = {
                 component.id: score for component, score in existing_rows if score is not None
@@ -189,7 +191,9 @@ class TeacherResultService:
             component = component_by_id[score_input.assessment_component_id]
             if getattr(component, "is_hybrid", False):
                 if score_input.cbt_score is not None or score_input.score is not None:
-                    raise ForbiddenException("Teachers cannot edit the CBT portion of hybrid scores.")
+                    raise ForbiddenException(
+                        "Teachers cannot edit the CBT portion of hybrid scores."
+                    )
                 if "theory_score" not in score_input.model_fields_set:
                     raise BadRequestException("Provide theory_score for a hybrid component.")
                 record = existing_by_component.get(component.id)
@@ -201,7 +205,9 @@ class TeacherResultService:
                 if score_input.theory_score is not None and score_input.theory_score > theory_max:
                     raise BadRequestException(f"Theory score cannot exceed {theory_max}.")
                 record.theory_score = score_input.theory_score
-                merged_scores[component.id] = record.cbt_score + (record.theory_score or Decimal("0"))
+                merged_scores[component.id] = record.cbt_score + (
+                    record.theory_score or Decimal("0")
+                )
                 continue
             if score_input.theory_score is not None or score_input.cbt_score is not None:
                 raise BadRequestException("CBT and theory portions require a hybrid component.")
@@ -219,7 +225,8 @@ class TeacherResultService:
 
         total = sum(merged_scores.values(), Decimal("0"))
         complete = len(merged_scores) == len(components) and all(
-            not getattr(component, "is_hybrid", False) or component_is_complete(component, existing_by_component.get(component.id))
+            not getattr(component, "is_hybrid", False)
+            or component_is_complete(component, existing_by_component.get(component.id))
             for component in components
         )
         grade = remark = None
