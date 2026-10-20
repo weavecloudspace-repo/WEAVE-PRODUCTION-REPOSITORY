@@ -27,6 +27,9 @@ const BLANK_FORM = {
   student_id: "",
   teacher_assignment_id: "",
   component_scores: {},
+  hybrid_parts: {},
+  cbt_changes: {},
+  correction_reasons: {},
 };
 
 const asItems = (response) =>
@@ -376,7 +379,9 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
   }, [assignments, filters.class_id]);
 
   const scoreTotal = (assessmentConfig?.components || []).reduce(
-    (sum, component) => sum + (Number(form.component_scores?.[component.id]) || 0),
+    (sum, component) => sum +
+      (Number(form.component_scores?.[component.id]) || 0) +
+      (component.is_hybrid ? (Number(form.cbt_changes?.[component.id] ?? form.hybrid_parts?.[component.id]?.cbt_score) || 0) : 0),
     0,
   );
   const totalMaximum = limitsConfigured ? Number(assessmentConfig.total_maximum_score) : null;
@@ -393,14 +398,24 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
       return false;
     }
     for (const component of assessmentConfig.components) {
+      const part = form.hybrid_parts?.[component.id];
+      const maximum = component.is_hybrid && part ? Number(part.theory_maximum_score) : Number(component.maximum_score);
       const value = form.component_scores?.[component.id];
-      if (
-        value !== "" &&
-        value !== undefined &&
-        (Number(value) < 0 || Number(value) > Number(component.maximum_score))
-      ) {
-        showWarning(`${component.name} must be between 0 and ${component.maximum_score}.`);
+      if (value !== "" && value != null && (Number(value) < 0 || Number(value) > maximum)) {
+        showWarning(`${component.name} must be between 0 and ${maximum}.`);
         return false;
+      }
+      if (component.is_hybrid && part?.cbt_score != null) {
+        const corrected = form.cbt_changes?.[component.id];
+        if (corrected !== undefined && (corrected === "" || Number(corrected) < 0 || Number(corrected) > Number(part.cbt_maximum_score))) {
+          showWarning("Corrected CBT score exceeds its allocated maximum.");
+          return false;
+        }
+        if (corrected !== undefined && Number(corrected) !== Number(part.cbt_score) &&
+            !form.correction_reasons?.[component.id]?.trim()) {
+          showWarning("Enter a reason for the CBT score correction.");
+          return false;
+        }
       }
     }
     return true;
@@ -424,10 +439,22 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
         teacher_assignment_id: form.teacher_assignment_id,
         academic_session_id: filters.academic_session_id,
         academic_term_id: filters.academic_term_id,
-        component_scores: assessmentConfig.components.map((component) => ({
-          assessment_component_id: component.id,
-          score: scoreValue(form.component_scores?.[component.id]),
-        })),
+        component_scores: assessmentConfig.components.map((component) => {
+          if (!component.is_hybrid) return {
+            assessment_component_id: component.id,
+            score: scoreValue(form.component_scores?.[component.id]),
+          };
+          const part = form.hybrid_parts?.[component.id];
+          if (part?.cbt_score == null) return null;
+          const corrected = form.cbt_changes?.[component.id];
+          return {
+            assessment_component_id: component.id,
+            theory_score: scoreValue(form.component_scores?.[component.id]),
+            ...(corrected !== undefined && Number(corrected) !== Number(part.cbt_score)
+              ? { cbt_score: Number(corrected), correction_reason: form.correction_reasons?.[component.id]?.trim() }
+              : {}),
+          };
+        }).filter(Boolean),
         status: "draft",
       });
       showSuccess(form.result_id ? "Draft result updated." : "Draft result created.");
@@ -457,9 +484,15 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
       component_scores: Object.fromEntries(
         (item.components || []).map((component) => [
           component.assessment_component_id,
-          component.score ?? "",
+          component.is_hybrid ? (component.theory_score ?? "") : (component.score ?? ""),
         ]),
       ),
+      hybrid_parts: Object.fromEntries(
+        (item.components || []).filter((component) => component.is_hybrid && component.cbt_score != null)
+          .map((component) => [component.assessment_component_id, component]),
+      ),
+      cbt_changes: {},
+      correction_reasons: {},
     });
     selectView("entry");
   };
@@ -590,6 +623,9 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
                     student_id: value,
                     teacher_assignment_id: "",
                     component_scores: {},
+                    hybrid_parts: {},
+                    cbt_changes: {},
+                    correction_reasons: {},
                   }));
                 }}
                 options={studentOptions}
@@ -601,13 +637,18 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
                 value={form.teacher_assignment_id}
                 onChange={(value) => {
                   const assignment = assignments.find((item) => item.id === value);
+                  const prior = entryResults.find((item) => item.curriculum_subject_id === assignment?.curriculum_subject_id);
                   setForm((current) => ({
                     ...current,
                     teacher_assignment_id: value,
-                    component_scores: componentScoresForAssignment(
-                      entryResults,
-                      assignment,
-                    ),
+                    component_scores: prior ? Object.fromEntries((prior.components || []).map((part) => [
+                      part.assessment_component_id, part.is_hybrid ? (part.theory_score ?? "") : (part.score ?? ""),
+                    ])) : componentScoresForAssignment(entryResults, assignment),
+                    hybrid_parts: prior ? Object.fromEntries((prior.components || [])
+                      .filter((part) => part.is_hybrid && part.cbt_score != null)
+                      .map((part) => [part.assessment_component_id, part])) : {},
+                    cbt_changes: {},
+                    correction_reasons: {},
                   }));
                 }}
                 options={assignmentOptions}
@@ -645,26 +686,53 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
               </p>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {(assessmentConfig?.components || []).map((component) => (
-                <Input
-                  key={component.id}
-                  label={`${component.name} (0–${component.maximum_score})`}
-                  type="number"
-                  min="0"
-                  max={component.maximum_score}
-                  value={form.component_scores?.[component.id] ?? ""}
-                  disabled={!periodEditable || !limitsConfigured}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      component_scores: {
-                        ...current.component_scores,
-                        [component.id]: event.target.value,
-                      },
-                    }))
-                  }
-                />
-              ))}
+              {(assessmentConfig?.components || []).map((component) => {
+                const part = form.hybrid_parts?.[component.id];
+                if (component.is_hybrid) return (
+                  <div key={component.id} className="space-y-2 rounded-lg border border-border p-3">
+                    <p className="text-sm font-medium text-text">{component.name} · Hybrid / {component.maximum_score}</p>
+                    {part?.cbt_score == null ? (
+                      <p className="text-xs text-text-muted">Awaiting student's CBT score synchronization</p>
+                    ) : (
+                      <>
+                        <Input label={`CBT (0–${part.cbt_maximum_score})`} type="number" min="0"
+                          max={part.cbt_maximum_score} step="0.01"
+                          value={form.cbt_changes?.[component.id] ?? part.cbt_score}
+                          disabled={!periodEditable || !limitsConfigured}
+                          onChange={(event) => setForm((current) => ({
+                            ...current, cbt_changes: { ...current.cbt_changes, [component.id]: event.target.value },
+                          }))} />
+                        {form.cbt_changes?.[component.id] !== undefined &&
+                          Number(form.cbt_changes[component.id]) !== Number(part.cbt_score) ? (
+                          <Input label="Reason for CBT correction" value={form.correction_reasons?.[component.id] || ""}
+                            disabled={!periodEditable || !limitsConfigured}
+                            onChange={(event) => setForm((current) => ({
+                              ...current, correction_reasons: { ...current.correction_reasons, [component.id]: event.target.value },
+                            }))} />
+                        ) : null}
+                        {Number(part.theory_maximum_score) > 0 ? (
+                          <Input label={`Theory (0–${part.theory_maximum_score})`} type="number"
+                            min="0" max={part.theory_maximum_score} step="0.01"
+                            value={form.component_scores?.[component.id] ?? ""}
+                            disabled={!periodEditable || !limitsConfigured}
+                            onChange={(event) => setForm((current) => ({
+                              ...current, component_scores: { ...current.component_scores, [component.id]: event.target.value },
+                            }))} />
+                        ) : <p className="text-xs text-text-muted">Full CBT allocation; no theory entry.</p>}
+                      </>
+                    )}
+                  </div>
+                );
+                return (
+                  <Input key={component.id} label={`${component.name} (0–${component.maximum_score})`}
+                    type="number" min="0" max={component.maximum_score}
+                    value={form.component_scores?.[component.id] ?? ""}
+                    disabled={!periodEditable || !limitsConfigured}
+                    onChange={(event) => setForm((current) => ({
+                      ...current, component_scores: { ...current.component_scores, [component.id]: event.target.value },
+                    }))} />
+                );
+              })}
             </div>
             <div className="rounded-xl border border-border/70 bg-surface-muted/30 px-3 py-2 text-sm text-text-muted">
               Combined score: <span className="font-semibold text-text">{scoreTotal}</span>
@@ -847,7 +915,7 @@ function ResultInspector({ item, actions }) {
             {(item.components || []).map((component) => (
               <div key={component.assessment_component_id || component.name} className="flex justify-between gap-4">
                 <dt className="text-text-muted">{component.name}</dt>
-                <dd className="font-semibold text-text">{component.score ?? "–"}{component.maximum_score != null ? `/${component.maximum_score}` : ""}</dd>
+                <dd className="font-semibold text-text">{component.score ?? "–"}{component.maximum_score != null ? `/${component.maximum_score}` : ""}{component.is_hybrid && component.cbt_score != null ? ` (CBT ${component.cbt_score}/${component.cbt_maximum_score}${component.theory_maximum_score > 0 ? ` · Theory ${component.theory_score ?? "–"}/${component.theory_maximum_score}` : ""})` : ""}</dd>
               </div>
             ))}
             <div className="flex justify-between gap-4 border-t border-border/70 pt-2">

@@ -76,4 +76,5 @@ def project_assessment_component(
         maximum_score=row.maximum_score,
         position=row.position,
         is_active=row.is_active,
+        is_hybrid=getattr(row, "is_hybrid", False),
     ).model_dump(mode="json")

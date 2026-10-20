@@ -28,6 +28,13 @@ class AssessmentComponentCreate(AssessmentInput):
     maximum_score: Decimal = Field(gt=0, le=100, max_digits=5, decimal_places=2)
     position: int = Field(ge=0)
     is_examinable: bool = True
+    is_hybrid: bool = False
+
+    @model_validator(mode="after")
+    def validate_hybrid(self):
+        if self.is_hybrid and not self.is_examinable:
+            raise ValueError("Hybrid components must be examinable.")
+        return self
 
 
 class AssessmentComponentUpdate(AssessmentInput):
@@ -37,8 +44,9 @@ class AssessmentComponentUpdate(AssessmentInput):
         default=None, gt=0, le=100, max_digits=5, decimal_places=2
     )
     is_examinable: bool | None = None
+    is_hybrid: bool | None = None
 
-    @field_validator("name", "maximum_score", "is_examinable", mode="before")
+    @field_validator("name", "maximum_score", "is_examinable", "is_hybrid", mode="before")
     @classmethod
     def reject_null_non_clearable_fields(cls, value, info):
         if value is None:
@@ -49,6 +57,8 @@ class AssessmentComponentUpdate(AssessmentInput):
     def require_patch_field(self) -> "AssessmentComponentUpdate":
         if not self.model_fields_set:
             raise ValueError("at least one assessment component field must be provided")
+        if self.is_hybrid is True and self.is_examinable is False:
+            raise ValueError("Hybrid components must be examinable.")
         return self
 
 
@@ -61,6 +71,7 @@ class AssessmentComponentResponse(AssessmentOutput):
     position: int
     is_active: bool
     is_examinable: bool = True
+    is_hybrid: bool = False
 
 
 class AssessmentSchemeCreate(AssessmentInput):

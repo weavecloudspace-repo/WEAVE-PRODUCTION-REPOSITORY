@@ -391,6 +391,9 @@ class TeacherAssignmentResponse(OutputBase):
 class StudentAssessmentScoreUpsert(InputBase):
     assessment_component_id: uuid.UUID
     score: Decimal | None = Field(default=None, ge=0)
+    theory_score: Decimal | None = Field(default=None, ge=0)
+    cbt_score: Decimal | None = Field(default=None, ge=0)
+    correction_reason: str | None = Field(default=None, min_length=3, max_length=1000)
 
 
 class StudentSubjectResultUpsert(InputBase):
@@ -416,6 +419,13 @@ class AssessmentComponentScoreResponse(OutputBase):
     position: int
     maximum_score: Decimal
     score: Decimal | None = None
+    is_hybrid: bool = False
+    cbt_score: Decimal | None = None
+    cbt_maximum_score: Decimal | None = None
+    theory_score: Decimal | None = None
+    theory_maximum_score: Decimal | None = None
+    source_exam_id: uuid.UUID | None = None
+    is_complete: bool = False
 
 
 class StudentSubjectResultStatusUpdate(InputBase):
