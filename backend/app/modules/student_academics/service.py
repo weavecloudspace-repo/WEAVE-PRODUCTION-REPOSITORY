@@ -21,7 +21,10 @@ from app.modules.classes.repository import AcademicLevelRepository, ClassRoomRep
 from app.modules.parents.models import ParentMembership
 from app.modules.report_cards.models import ReportCardStatus
 from app.modules.student_academics.assessment_repository import AssessmentRepository
-from app.modules.student_academics.hybrid_scores import component_is_complete, component_score_response
+from app.modules.student_academics.hybrid_scores import (
+    component_is_complete,
+    component_score_response,
+)
 from app.modules.student_academics.curriculum_models import (
     ClassTermDepartmentAssignment,
     Curriculum,
@@ -2465,7 +2468,9 @@ class StudentAcademicService:
             component_rows = await StudentAcademicRepository.list_result_component_scores(
                 db, result.tenant_id, result
             )
-        components = [component_score_response(component, score) for component, score in component_rows]
+        components = [
+            component_score_response(component, score) for component, score in component_rows
+        ]
         teacher_name = None
         if teacher is not None:
             teacher_name = (
@@ -2543,7 +2548,9 @@ class StudentAcademicService:
         rows = await StudentAcademicRepository.list_result_component_scores(
             db, result.tenant_id, result
         )
-        if not rows or any(not component_is_complete(component, score) for component, score in rows):
+        if not rows or any(
+            not component_is_complete(component, score) for component, score in rows
+        ):
             raise BadRequestException("Every configured assessment component must be complete.")
 
         total_score = sum(
@@ -2687,7 +2694,9 @@ class StudentAcademicService:
         component_by_id = {item.id: item for item in components}
         incoming = {item.assessment_component_id: item for item in payload.component_scores}
         if set(incoming) - set(component_by_id):
-            raise BadRequestException("One or more scores reference an invalid assessment component.")
+            raise BadRequestException(
+                "One or more scores reference an invalid assessment component."
+            )
 
         existing_by_component = {}
         if existing is not None:
@@ -2712,20 +2721,26 @@ class StudentAcademicService:
                 if score_input.score is not None:
                     raise BadRequestException("Use CBT/theory fields for hybrid assessment scores.")
                 if record is None or record.cbt_score is None or record.cbt_maximum_score is None:
-                    raise ConflictException("Hybrid theory and CBT edits require a synchronized CBT score.")
+                    raise ConflictException(
+                        "Hybrid theory and CBT edits require a synchronized CBT score."
+                    )
                 cbt_score = record.cbt_score
                 if score_input.cbt_score is not None and score_input.cbt_score != cbt_score:
                     if not score_input.correction_reason:
-                        raise BadRequestException("Provide a reason to correct synchronized CBT marks.")
+                        raise BadRequestException(
+                            "Provide a reason to correct synchronized CBT marks."
+                        )
                     if score_input.cbt_score > record.cbt_maximum_score:
                         raise BadRequestException("Corrected CBT score exceeds its allocation.")
-                    corrections.append({
-                        "component_id": str(component.id),
-                        "source_exam_id": str(record.source_exam_id),
-                        "previous_cbt_score": str(cbt_score),
-                        "corrected_cbt_score": str(score_input.cbt_score),
-                        "reason": score_input.correction_reason,
-                    })
+                    corrections.append(
+                        {
+                            "component_id": str(component.id),
+                            "source_exam_id": str(record.source_exam_id),
+                            "previous_cbt_score": str(cbt_score),
+                            "corrected_cbt_score": str(score_input.cbt_score),
+                            "reason": score_input.correction_reason,
+                        }
+                    )
                     cbt_score = score_input.cbt_score
                 theory_maximum = component.maximum_score - record.cbt_maximum_score
                 theory_score = record.theory_score
@@ -2752,7 +2767,8 @@ class StudentAcademicService:
 
         total = sum(provided.values(), Decimal("0"))
         complete = len(provided) == len(components) and all(
-            not getattr(component, "is_hybrid", False) or component_is_complete(component, existing_by_component.get(component.id))
+            not getattr(component, "is_hybrid", False)
+            or component_is_complete(component, existing_by_component.get(component.id))
             for component in components
         )
         grade = remark = None
