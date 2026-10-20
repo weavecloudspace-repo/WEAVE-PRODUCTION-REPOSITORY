@@ -345,10 +345,14 @@ class AssessmentComponent(BaseModel):
         Boolean, default=True, server_default="true", nullable=False
     )
 
-    is_hybrid: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    is_hybrid: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
 
     __table_args__ = (
-        CheckConstraint("NOT is_hybrid OR is_examinable", name="ck_assessment_component_hybrid_examinable"),
+        CheckConstraint(
+            "NOT is_hybrid OR is_examinable", name="ck_assessment_component_hybrid_examinable"
+        ),
         UniqueConstraint(
             "assessment_scheme_id", "name", name="uq_assessment_component_scheme_name"
         ),
@@ -800,9 +804,17 @@ class StudentAssessmentScore(BaseModel):
     source_exam_id: Mapped[uuid.UUID | None] = mapped_column(UUID, nullable=True)
 
     __table_args__ = (
-        CheckConstraint("cbt_score IS NULL OR cbt_score >= 0", name="ck_student_assessment_cbt_nonnegative"),
-        CheckConstraint("theory_score IS NULL OR theory_score >= 0", name="ck_student_assessment_theory_nonnegative"),
-        CheckConstraint("cbt_maximum_score IS NULL OR cbt_maximum_score > 0", name="ck_student_assessment_cbt_max_positive"),
+        CheckConstraint(
+            "cbt_score IS NULL OR cbt_score >= 0", name="ck_student_assessment_cbt_nonnegative"
+        ),
+        CheckConstraint(
+            "theory_score IS NULL OR theory_score >= 0",
+            name="ck_student_assessment_theory_nonnegative",
+        ),
+        CheckConstraint(
+            "cbt_maximum_score IS NULL OR cbt_maximum_score > 0",
+            name="ck_student_assessment_cbt_max_positive",
+        ),
         UniqueConstraint(
             "student_subject_result_id",
             "assessment_component_id",
