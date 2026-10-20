@@ -342,7 +342,7 @@ class CBTResultIngestionService:
 
         allocation = payload.cbt_maximum_score or component.maximum_score
         if allocation > component.maximum_score or (
-            not component.is_hybrid and allocation != component.maximum_score
+            not getattr(component, "is_hybrid", False) and allocation != component.maximum_score
         ):
             return None, (
                 "INVALID_CBT_ALLOCATION",
@@ -1072,7 +1072,7 @@ class CBTResultIngestionService:
                         (previous_component.cbt_score if previous_component.cbt_score is not None else previous_component.score) == item.score
                         and (previous_component.source_exam_id in (None, payload.source_exam_id))
                         and (previous_component.cbt_maximum_score in (None, allocation))
-                        and (not context.component.is_hybrid or previous_component.cbt_score is not None)
+                        and (not context.getattr(component, "is_hybrid", False) or previous_component.cbt_score is not None)
                     ):
                         processed_at = datetime.now(timezone.utc)
 
