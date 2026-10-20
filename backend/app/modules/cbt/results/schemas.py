@@ -54,6 +54,8 @@ class CBTResultBulkRequest(CBTResultInputBase):
     curriculum_subject_id: UUID
     assessment_component_id: UUID
     exam_date: date
+    # Older CBT clients omit this, meaning the full component maximum.
+    cbt_maximum_score: Decimal | None = Field(default=None, gt=0, max_digits=5, decimal_places=2)
     scores: list[CBTResultBulkScoreItem] = Field(
         min_length=1,
         max_length=1000,
