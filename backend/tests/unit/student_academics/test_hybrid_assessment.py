@@ -20,15 +20,20 @@ from app.modules.student_academics.hybrid_scores import (
 
 def _component(*, hybrid=True):
     return SimpleNamespace(
-        id=uuid4(), name="Examination", code="EXAM", position=2,
-        maximum_score=Decimal("50"), is_hybrid=hybrid,
+        id=uuid4(),
+        name="Examination",
+        code="EXAM",
+        position=2,
+        maximum_score=Decimal("50"),
+        is_hybrid=hybrid,
     )
 
 
 def _record(*, cbt="16", allocation="20", theory=None):
     return SimpleNamespace(
         score=Decimal(cbt) + (Decimal(theory) if theory is not None else Decimal("0")),
-        cbt_score=Decimal(cbt), cbt_maximum_score=Decimal(allocation),
+        cbt_score=Decimal(cbt),
+        cbt_maximum_score=Decimal(allocation),
         theory_score=Decimal(theory) if theory is not None else None,
         source_exam_id=uuid4(),
     )
@@ -68,9 +73,13 @@ def test_legacy_components_remain_complete_with_existing_canonical_score():
 
 def test_sync_hash_tracks_allocation_without_changing_legacy_payload_shape():
     ids = dict(
-        batch_id=uuid4(), source_exam_id=uuid4(), academic_session_id=uuid4(),
-        academic_term_id=uuid4(), academic_level_id=uuid4(),
-        curriculum_subject_id=uuid4(), assessment_component_id=uuid4(),
+        batch_id=uuid4(),
+        source_exam_id=uuid4(),
+        academic_session_id=uuid4(),
+        academic_term_id=uuid4(),
+        academic_level_id=uuid4(),
+        curriculum_subject_id=uuid4(),
+        assessment_component_id=uuid4(),
         exam_date=date(2026, 10, 10),
         scores=[CBTResultBulkScoreItem(student_id=uuid4(), score=Decimal("16"))],
     )
@@ -78,5 +87,9 @@ def test_sync_hash_tracks_allocation_without_changing_legacy_payload_shape():
     partial = CBTResultBulkRequest(**ids, cbt_maximum_score=Decimal("20"))
     full = CBTResultBulkRequest(**ids, cbt_maximum_score=Decimal("50"))
     assert legacy.cbt_maximum_score is None
-    assert CBTResultIngestionService._request_hash(legacy) != CBTResultIngestionService._request_hash(partial)
-    assert CBTResultIngestionService._request_hash(partial) != CBTResultIngestionService._request_hash(full)
+    assert CBTResultIngestionService._request_hash(
+        legacy
+    ) != CBTResultIngestionService._request_hash(partial)
+    assert CBTResultIngestionService._request_hash(
+        partial
+    ) != CBTResultIngestionService._request_hash(full)
