@@ -81,6 +81,29 @@ test("ring handles missing limits and clamps visual fill to its range", () => {
   assert.match(ring(-2, 100).props.style.background, /0deg/);
 });
 
+test("draft subject cards show recorded components without releasing official totals", () => {
+  const card = {
+    id: "subject",
+    subject_name: "Mathematics",
+    status: "in_progress",
+    total_score: null,
+    maximum_score: 100,
+    grade: null,
+    components: [{
+      assessment_component_id: "exam",
+      name: "CBT Exam",
+      score: "0",
+      maximum_score: "60",
+    }],
+  };
+  const nodes = elements(cardComponent({ card }));
+  assert.equal(ring(null, 100).props.role, "img");
+  const contents = nodes.map((node) => JSON.stringify(node.props?.children ?? "")).join(" ");
+  assert.match(contents, /In progress/);
+  assert.match(contents, /CBT Exam/);
+  assert.doesNotMatch(contents, /Awaiting marks/);
+});
+
 async function panelHarness(workspace, onSave) {
   const state = [];
   let cursor = 0;
