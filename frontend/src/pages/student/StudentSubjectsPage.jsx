@@ -17,6 +17,8 @@ import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
 import { academicService } from "../../services/academicService";
 import { getErrorMessage } from "../../services/api";
+import { invalidateDashboardSessionCache } from "../../services/dashboardSessionCache";
+import { realtimeClient } from "../../services/realtimeClient";
 import { cleanText } from "../../utils/academicDashboard";
 import { cn } from "../../utils/cn";
 
@@ -66,9 +68,33 @@ function StudentSubjectsPage() {
       }
       setIsLoading(false);
     }
-    loadSubjects();
+    void loadSubjects();
+    const refreshScores = async () => {
+      // The dashboard keeps an independent 10-minute snapshot. Evict it
+      // before refetching so navigating back cannot resurrect old marks.
+      invalidateDashboardSessionCache();
+      try {
+        const response = await academicService.listMySubjectCards();
+        if (mounted) {
+          setSubjectCards(response?.items || []);
+          setContext(response?.context || null);
+          setLoadError(null);
+        }
+      } catch (error) {
+        if (mounted) setLoadError(getErrorMessage(error, "Failed to refresh subjects."));
+      }
+    };
+    const unsubscribeScores = realtimeClient.subscribe(
+      "academic.component_score.updated", () => { void refreshScores(); },
+    );
+    const handleVisible = () => {
+      if (document.visibilityState === "visible") void refreshScores();
+    };
+    document.addEventListener("visibilitychange", handleVisible);
     return () => {
       mounted = false;
+      unsubscribeScores();
+      document.removeEventListener("visibilitychange", handleVisible);
     };
   }, []);
 

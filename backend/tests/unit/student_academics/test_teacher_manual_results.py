@@ -212,6 +212,7 @@ async def test_teacher_manual_edit_preserves_existing_exam_score(monkeypatch, co
         flush=AsyncMock(),
         commit=AsyncMock(),
         rollback=AsyncMock(),
+        info={},
     )
     payload = StudentSubjectResultUpsert(
         student_id=context.student.id,
@@ -241,6 +242,11 @@ async def test_teacher_manual_edit_preserves_existing_exam_score(monkeypatch, co
     assert existing.total_score == Decimal("58")
     assert existing.recorded_by_actor_type == "teacher"
     assert existing.recorded_by_actor_id == context.teacher.id
+    queued = db.info["weave_pending_realtime_messages"]
+    assert len(queued) == 1
+    assert queued[0].event.type == "academic.component_score.updated"
+    assert queued[0].audience.actor_id == context.student.id
+    assert queued[0].audience.tenant_id == context.tenant_id
 
 
 @pytest.mark.asyncio

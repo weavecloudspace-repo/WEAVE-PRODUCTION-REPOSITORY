@@ -8,6 +8,8 @@ import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
 import { academicService } from "../../services/academicService";
 import { getErrorMessage } from "../../services/api";
+import { invalidateDashboardSessionCache } from "../../services/dashboardSessionCache";
+import { realtimeClient } from "../../services/realtimeClient";
 import { cleanText } from "../../utils/academicDashboard";
 import { cn } from "../../utils/cn";
 import {
@@ -30,7 +32,10 @@ function StudentSubjectDetailsPage() {
     async function loadResults() {
       try {
         const response = await academicService.listMySubjectCards();
-        if (mounted) setResults(response?.items || []);
+        if (mounted) {
+          setResults(response?.items || []);
+          setLoadError(null);
+        }
       } catch (error) {
         if (mounted)
           setLoadError(
@@ -40,9 +45,24 @@ function StudentSubjectDetailsPage() {
         if (mounted) setIsLoading(false);
       }
     }
-    loadResults();
+    void loadResults();
+    const refreshScores = () => {
+      // Subject updates can arrive while the dashboard is unmounted.
+      // Bust its persisted snapshot before the next dashboard navigation.
+      invalidateDashboardSessionCache();
+      void loadResults();
+    };
+    const unsubscribeScores = realtimeClient.subscribe(
+      "academic.component_score.updated", refreshScores,
+    );
+    const handleVisible = () => {
+      if (document.visibilityState === "visible") refreshScores();
+    };
+    document.addEventListener("visibilitychange", handleVisible);
     return () => {
       mounted = false;
+      unsubscribeScores();
+      document.removeEventListener("visibilitychange", handleVisible);
     };
   }, []);
 
@@ -127,7 +147,7 @@ function StudentSubjectDetailsPage() {
               <Badge variant={statusVariant(result.status)}>
                 {hasValue(result.total_score)
                   ? displayStatusLabel(result.status)
-                  : "Awaiting marks"}
+                  : scoredComponents > 0 ? "In progress" : "Awaiting marks"}
               </Badge>
             </div>
             <nav
@@ -217,7 +237,8 @@ function StudentSubjectDetailsPage() {
                                 hasValue(component.maximum_score) &&
                                 Number.isFinite(score) &&
                                 Number.isFinite(maximum) &&
-                                maximum > 0
+                                maximum > 0 &&
+                                (!component.is_hybrid || component.is_complete)
                                   ? `${((score / maximum) * 100).toFixed(1)}%`
                                   : "--";
                               return (
@@ -229,6 +250,18 @@ function StudentSubjectDetailsPage() {
                                     <span className="block">
                                       {component.name}
                                     </span>
+                                    {component.is_hybrid && hasValue(component.cbt_score) && (
+                                      <span className="mt-1 block text-xs font-normal text-text-muted">
+                                        CBT: {scoreDisplayValue(component.cbt_score)} / {scoreDisplayValue(component.cbt_maximum_score)}
+                                      </span>
+                                    )}
+                                    {component.is_hybrid && hasValue(component.cbt_score) && (
+                                      <span className="mt-1 block text-xs font-normal text-text-muted">
+                                        Theory: {hasValue(component.theory_score)
+                                          ? `${scoreDisplayValue(component.theory_score)} / ${scoreDisplayValue(component.theory_maximum_score)}`
+                                          : "Awaiting marks"}
+                                      </span>
+                                    )}
                                     {!hasValue(component.score) && (
                                       <span className="mt-1 block text-xs font-normal text-text-muted">
                                         Awaiting marks

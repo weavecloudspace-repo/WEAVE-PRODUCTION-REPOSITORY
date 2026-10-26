@@ -65,3 +65,30 @@ test("a pre-mutation request cannot overwrite fresh memory or session snapshots"
   await pending;
   assert.equal((await cache.getCachedDashboardBundle("hub", () => assert.fail("fresh snapshot expected"))).count, 2);
 });
+
+
+test("student score events evict persisted dashboard bundles on subject pages", async () => {
+  const { cache, sessionStorage } = await setup();
+  let latestMark = 12;
+  const loadDashboard = () =>
+    cache.getCachedDashboardBundle("student:dashboard", async () => ({ mark: latestMark }));
+
+  assert.equal((await loadDashboard()).mark, 12);
+  assert.ok(sessionStorage.length > 0, "dashboard snapshot should be persisted");
+
+  // Both pages can be active while the dashboard's own WebSocket subscription is unmounted.
+  for (const page of ["StudentSubjectsPage.jsx", "StudentSubjectDetailsPage.jsx"]) {
+    const source = await readFile(
+      new URL(`../../src/pages/student/${page}`, import.meta.url),
+      "utf8",
+    );
+    assert.match(source, /import \{ invalidateDashboardSessionCache \} from "\.\.\/\.\.\/services\/dashboardSessionCache"/);
+    assert.match(source, /"academic\.component_score\.updated"/);
+    assert.match(source, /const refreshScores = [\s\S]*?invalidateDashboardSessionCache\(\);/);
+
+    latestMark += 1;
+    cache.invalidateDashboardSessionCache();
+    assert.equal(sessionStorage.length, 0, "old snapshot must be removed");
+    assert.equal((await loadDashboard()).mark, latestMark);
+  }
+});

@@ -8,6 +8,19 @@ from app.modules.student_academics.models import AssessmentComponent, StudentAss
 from app.modules.student_academics.schemas import AssessmentComponentScoreResponse
 
 
+def has_recorded_component_scores(rows) -> bool:
+    """A recorded zero is visible; absent score rows are not."""
+    return any(
+        record is not None
+        and (
+            record.score is not None
+            or record.cbt_score is not None
+            or record.theory_score is not None
+        )
+        for _, record in rows
+    )
+
+
 def component_is_complete(
     component: AssessmentComponent, record: StudentAssessmentScore | None
 ) -> bool:
