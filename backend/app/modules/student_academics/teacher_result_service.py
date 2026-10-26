@@ -19,6 +19,7 @@ from app.core.exceptions import (
     ForbiddenException,
     NotFoundException,
 )
+from app.modules.realtime.publisher import RealtimePublisher
 from app.modules.student_academics.hybrid_scores import component_is_complete
 from app.modules.student_academics.assessment_examinability import (
     is_assessment_component_examinable,
@@ -295,4 +296,12 @@ class TeacherResultService:
             metadata={"source": "teacher_manual_components"},
         )
         await db.commit()
+        RealtimePublisher.defer_to_actor(
+            db,
+            event_type="academic.component_score.updated",
+            actor_type="student",
+            actor_id=student.id,
+            tenant_id=tenant_id,
+            data={"academic_term_id": str(term.id)},
+        )
         return await StudentAcademicService._build_result_response(db, result)
