@@ -326,21 +326,22 @@ class MetricsService:
             )
         ).all()
 
-        submitted_rows = [row for row in rows if row.status == AcademicResultStatus.SUBMITTED]
+        # Only locked academic results count as official student performance.
+        finalized_rows = [row for row in rows if row.status == AcademicResultStatus.LOCKED]
         total_rows = len(rows)
-        submitted_count = len(submitted_rows)
+        finalized_count = len(finalized_rows)
         average = (
             round(
-                sum(float(row.total_score or 0) for row in submitted_rows) / submitted_count,
+                sum(float(row.total_score or 0) for row in finalized_rows) / finalized_count,
                 2,
             )
-            if submitted_count
+            if finalized_count
             else 0
         )
         grade_counts: dict[str, int] = {}
         period_scores: dict[str, list[float]] = {}
         subject_scores: dict[str, list[float]] = {}
-        for row in submitted_rows:
+        for row in finalized_rows:
             grade_label = MetricsService._label(row.grade, "Ungraded")
             grade_counts[grade_label] = grade_counts.get(grade_label, 0) + 1
             period_label = f"{row.session_name} / {MetricsService._enum_label(row.term_name).replace('_', ' ')}"
@@ -366,10 +367,10 @@ class MetricsService:
         }
         stats = {
             "current_average": average,
-            "published_results": submitted_count,
-            "pending_results": max(total_rows - submitted_count, 0),
+            "published_results": finalized_count,
+            "pending_results": max(total_rows - finalized_count, 0),
             "result_rows_total": total_rows,
-            "result_completion_percent": MetricsService._percent(submitted_count, total_rows),
+            "result_completion_percent": MetricsService._percent(finalized_count, total_rows),
         }
         return stats, charts
 

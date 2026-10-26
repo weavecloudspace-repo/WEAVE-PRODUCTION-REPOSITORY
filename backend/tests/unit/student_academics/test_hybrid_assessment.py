@@ -15,6 +15,7 @@ from app.modules.student_academics.assessment_schemas import (
 from app.modules.student_academics.hybrid_scores import (
     component_is_complete,
     component_score_response,
+    has_recorded_component_scores,
 )
 
 
@@ -93,3 +94,18 @@ def test_sync_hash_tracks_allocation_without_changing_legacy_payload_shape():
     assert CBTResultIngestionService._request_hash(
         partial
     ) != CBTResultIngestionService._request_hash(full)
+
+
+def test_recorded_component_visibility_accepts_draft_zero_and_hybrid_partial():
+    component = _component()
+    assert not has_recorded_component_scores([(component, None)])
+    assert not has_recorded_component_scores(
+        [(component, SimpleNamespace(score=None, cbt_score=None, theory_score=None))]
+    )
+    assert has_recorded_component_scores(
+        [(component, SimpleNamespace(score=Decimal("0"), cbt_score=None, theory_score=None))]
+    )
+    assert has_recorded_component_scores(
+        [(component, SimpleNamespace(score=None, cbt_score=Decimal("0"), theory_score=None))]
+    )
+    assert has_recorded_component_scores([(component, _record(theory=None))])
