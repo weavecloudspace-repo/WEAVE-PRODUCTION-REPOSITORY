@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictException
 from app.modules.cbt.auth.schemas import AuthenticatedCBTServer
+from app.modules.realtime.publisher import RealtimePublisher
 from app.modules.cbt.results.models import (
     CBTExamScoreAllocation,
     CBTResultIngestionBatch,
@@ -1308,6 +1309,18 @@ class CBTResultIngestionService:
 
             # Canonical results + ledger commit together.
             await db.commit()
+
+            # Only newly applied scores are announced. Actor-specific signals
+            # contain no marks; clients re-read the authorized subject cards.
+            for student_id in applied_student_ids:
+                RealtimePublisher.defer_to_actor(
+                    db,
+                    event_type="academic.component_score.updated",
+                    actor_type="student",
+                    actor_id=student_id,
+                    tenant_id=tenant_id,
+                    data={"academic_term_id": str(payload.academic_term_id)},
+                )
 
             errors = [
                 errors_by_student[item.student_id]
