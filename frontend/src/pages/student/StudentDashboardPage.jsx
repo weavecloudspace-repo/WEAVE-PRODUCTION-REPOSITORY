@@ -31,8 +31,10 @@ import { dashboardService } from "../../services/dashboard.service";
 import {
   getCachedDashboardBundle,
   getDashboardSessionCacheKey,
+  invalidateDashboardSessionCache,
 } from "../../services/dashboardSessionCache";
 import { reportCardService } from "../../services/reportCardService";
+import { realtimeClient } from "../../services/realtimeClient";
 import { studentService } from "../../services/studentService";
 import {
   averageByAcademicPeriod,
@@ -104,9 +106,11 @@ function StudentDashboardPage() {
 
   useEffect(() => {
     let mounted = true;
+    let requestVersion = 0;
     const controller = new AbortController();
 
-    async function loadDashboard() {
+    async function loadDashboard(force = false) {
+      const version = ++requestVersion;
       setIsLoading(true);
       setLoadError(null);
 
@@ -115,7 +119,7 @@ function StudentDashboardPage() {
           signal: controller.signal,
         });
 
-        if (!mounted || controller.signal.aborted) return;
+        if (!mounted || controller.signal.aborted || version !== requestVersion) return;
 
         if (!isCompleteStudentProfile(studentProfile)) {
           const incompleteBundle = emptyDashboardBundle(studentProfile);
@@ -160,9 +164,9 @@ function StudentDashboardPage() {
             subjectCards: subjectCardsResponse?.items || [],
             subjectContext: subjectCardsResponse?.context || null,
           };
-        });
+        }, { force });
 
-        if (!mounted || controller.signal.aborted) return;
+        if (!mounted || controller.signal.aborted || version !== requestVersion) return;
         setStudent(studentProfile);
         setParentLinks(bundle.parentLinks);
         setParentLinkRequests(bundle.parentLinkRequests);
@@ -172,21 +176,34 @@ function StudentDashboardPage() {
         setSubjectCards(bundle.subjectCards);
         setSubjectContext(bundle.subjectContext);
       } catch (error) {
-        if (mounted && !isAbortError(error)) {
+        if (mounted && version === requestVersion && !isAbortError(error)) {
           setLoadError(
             getErrorMessage(error, "Failed to load student dashboard."),
           );
         }
       } finally {
-        if (mounted && !controller.signal.aborted) setIsLoading(false);
+        if (mounted && !controller.signal.aborted && version === requestVersion) setIsLoading(false);
       }
     }
 
     loadDashboard();
-    const handlePullRefresh = () => loadDashboard();
+    const refreshScores = () => {
+      invalidateDashboardSessionCache();
+      void loadDashboard(true);
+    };
+    const handleVisible = () => {
+      if (document.visibilityState === "visible") refreshScores();
+    };
+    const unsubscribeScores = realtimeClient.subscribe(
+      "academic.component_score.updated", refreshScores,
+    );
+    const handlePullRefresh = () => refreshScores();
     window.addEventListener("weave:pull-refresh", handlePullRefresh);
+    document.addEventListener("visibilitychange", handleVisible);
 
     return () => {
+      unsubscribeScores();
+      document.removeEventListener("visibilitychange", handleVisible);
       window.removeEventListener("weave:pull-refresh", handlePullRefresh);
       mounted = false;
       controller.abort();
@@ -558,11 +575,16 @@ function StudentDashboardPage() {
                         <p className="mt-1 truncate text-xs text-text-muted">
                           {cleanText(card.teacher_name, "Teacher not assigned")}
                         </p>
+                        {card.components?.filter((item) => hasValue(item.score)).slice(0, 2).map((item) => (
+                          <p key={item.assessment_component_id} className="mt-2 text-xs font-medium text-primary">
+                            {item.name}: {scoreDisplayValue(item.score)} / {scoreDisplayValue(item.maximum_score)}
+                          </p>
+                        ))}
                       </div>
                       <span className="rounded-full bg-surface-muted px-2 py-1 text-[10px] font-semibold text-text-muted">
                         {displayStatusLabel(
                           card.status,
-                          card.result_id ? "Pending" : "Awaiting marks",
+                          "Awaiting marks",
                         )}
                       </span>
                     </div>
