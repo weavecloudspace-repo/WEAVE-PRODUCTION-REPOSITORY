@@ -24,6 +24,7 @@ from app.modules.student_academics.assessment_repository import AssessmentReposi
 from app.modules.student_academics.hybrid_scores import (
     component_is_complete,
     component_score_response,
+    has_recorded_component_scores,
 )
 from app.modules.student_academics.curriculum_models import (
     ClassTermDepartmentAssignment,
@@ -3164,13 +3165,7 @@ class StudentAcademicService:
                 if result is not None
                 else [(component, None) for component in active_components]
             )
-            has_recorded_marks = any(
-                score is not None and (
-                    score.score is not None or score.cbt_score is not None
-                    or score.theory_score is not None
-                )
-                for _, score in component_rows
-            )
+            has_recorded_marks = has_recorded_component_scores(component_rows)
             cards.append(
                 StudentSubjectCardResponse(
                     id=curriculum_subject.curriculum_subject_id,
@@ -3215,7 +3210,9 @@ class StudentAcademicService:
                     total_score=result.total_score if locked else None,
                     grade=result.grade if locked else None,
                     remark=result.remark if locked else None,
-                    status="locked" if locked else "in_progress" if has_recorded_marks else "pending",
+                    status=(
+                        "locked" if locked else "in_progress" if has_recorded_marks else "pending"
+                    ),
                     is_complete=locked,
                 )
             )
