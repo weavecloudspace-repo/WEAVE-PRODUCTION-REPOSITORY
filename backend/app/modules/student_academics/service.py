@@ -3145,13 +3145,21 @@ class StudentAcademicService:
                 if teacher is not None
                 else None
             ) or None
+            # Draft components are student-visible; official totals remain locked.
             locked = bool(result is not None and result.status == AcademicResultStatus.LOCKED)
             component_rows = (
                 await StudentAcademicRepository.list_result_component_scores(
                     db, actor.tenant_id, result
                 )
-                if locked
+                if result is not None
                 else [(component, None) for component in active_components]
+            )
+            has_recorded_marks = any(
+                score is not None and (
+                    score.score is not None or score.cbt_score is not None
+                    or score.theory_score is not None
+                )
+                for _, score in component_rows
             )
             cards.append(
                 StudentSubjectCardResponse(
@@ -3197,7 +3205,7 @@ class StudentAcademicService:
                     total_score=result.total_score if locked else None,
                     grade=result.grade if locked else None,
                     remark=result.remark if locked else None,
-                    status="locked" if locked else "pending",
+                    status="locked" if locked else "in_progress" if has_recorded_marks else "pending",
                     is_complete=locked,
                 )
             )
