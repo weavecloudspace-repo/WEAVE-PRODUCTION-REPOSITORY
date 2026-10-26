@@ -2858,6 +2858,16 @@ class StudentAcademicService:
             metadata={"hybrid_cbt_corrections": corrections} if corrections else None,
         )
         await db.commit()
+        from app.modules.realtime.publisher import RealtimePublisher
+
+        RealtimePublisher.defer_to_actor(
+            db,
+            event_type="academic.component_score.updated",
+            actor_type="student",
+            actor_id=student.id,
+            tenant_id=tenant_id,
+            data={"academic_term_id": str(term.id)},
+        )
         return await StudentAcademicService._build_result_response(db, result)
 
     @staticmethod
