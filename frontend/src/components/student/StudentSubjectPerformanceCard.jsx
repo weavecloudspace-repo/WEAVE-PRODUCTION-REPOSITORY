@@ -123,12 +123,18 @@ function StudentSubjectPerformanceCard({
             <Badge variant={statusVariant(card?.status)}>
               {hasValue(card?.total_score)
                 ? displayStatusLabel(card?.status)
-                : "Awaiting marks"}
+                : card?.components?.some((item) => hasValue(item.score))
+                  ? "In progress" : "Awaiting marks"}
             </Badge>
             {electiveGroupName && (
               <span className="text-xs font-medium text-primary">Elective</span>
             )}
           </div>
+          {card?.components?.filter((item) => hasValue(item.score)).slice(0, 2).map((item) => (
+            <p key={item.assessment_component_id} className="mt-2 text-xs font-medium text-primary">
+              {item.name}: {scoreDisplayValue(item.score)} / {scoreDisplayValue(item.maximum_score)}
+            </p>
+          ))}
         </div>
         <ScoreRing score={card?.total_score} maximum={card?.maximum_score} />
       </div>
