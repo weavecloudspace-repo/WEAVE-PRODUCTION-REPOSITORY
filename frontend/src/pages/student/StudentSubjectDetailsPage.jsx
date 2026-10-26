@@ -8,6 +8,7 @@ import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
 import { academicService } from "../../services/academicService";
 import { getErrorMessage } from "../../services/api";
+import { invalidateDashboardSessionCache } from "../../services/dashboardSessionCache";
 import { realtimeClient } from "../../services/realtimeClient";
 import { cleanText } from "../../utils/academicDashboard";
 import { cn } from "../../utils/cn";
@@ -45,11 +46,17 @@ function StudentSubjectDetailsPage() {
       }
     }
     void loadResults();
+    const refreshScores = () => {
+      // Subject updates can arrive while the dashboard is unmounted.
+      // Bust its persisted snapshot before the next dashboard navigation.
+      invalidateDashboardSessionCache();
+      void loadResults();
+    };
     const unsubscribeScores = realtimeClient.subscribe(
-      "academic.component_score.updated", () => { void loadResults(); },
+      "academic.component_score.updated", refreshScores,
     );
     const handleVisible = () => {
-      if (document.visibilityState === "visible") void loadResults();
+      if (document.visibilityState === "visible") refreshScores();
     };
     document.addEventListener("visibilitychange", handleVisible);
     return () => {
