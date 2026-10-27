@@ -802,8 +802,10 @@ class StudentAssessmentScore(BaseModel):
     cbt_maximum_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     theory_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     source_exam_id: Mapped[uuid.UUID | None] = mapped_column(UUID, nullable=True)
+    cbt_source_batch_id: Mapped[uuid.UUID | None] = mapped_column(UUID, nullable=True)
 
     __table_args__ = (
+        Index("ix_student_assessment_cbt_batch", "tenant_id", "cbt_source_batch_id"),
         CheckConstraint(
             "cbt_score IS NULL OR cbt_score >= 0", name="ck_student_assessment_cbt_nonnegative"
         ),

@@ -14,6 +14,8 @@ from app.config.logging import get_logger  # noqa: E402
 from app.config.sentry import flush_sentry, initialize_sentry  # noqa: E402
 from app.core.queue.sentry import capture_worker_exceptions  # noqa: E402
 from app.core.queue.arq import HEAVY_QUEUE_NAME, get_arq_redis_settings  # noqa: E402
+from app.modules.cbt.results.rollback_worker import process_cbt_result_rollback_job, recover_cbt_result_rollbacks  # noqa: E402
+from arq import cron  # noqa: E402
 from app.core.queue.context import (  # noqa: E402
     reset_current_bulk_import_job_id,
     set_current_bulk_import_job_id,
@@ -211,8 +213,10 @@ class WorkerSettings:
     functions = [
         process_bulk_import_job,
         process_session_progression_job,
+        process_cbt_result_rollback_job,
     ]
 
+    cron_jobs = [cron(recover_cbt_result_rollbacks, minute=set(range(0, 60, 2)), unique=True)]
     on_startup = startup
     on_shutdown = shutdown
     max_jobs = 1
