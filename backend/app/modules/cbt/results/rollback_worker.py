@@ -1,4 +1,5 @@
 """Bounded ARQ processing and PostgreSQL-ledger recovery of CBT rollbacks."""
+
 from __future__ import annotations
 from typing import Any
 from uuid import UUID
@@ -17,24 +18,34 @@ async def process_cbt_result_rollback_job(ctx: dict[str, Any], operation_id: str
         redis = ctx.get("redis")
         if redis is not None:
             await redis.enqueue_job(
-                "process_cbt_result_rollback_job", operation_id,
-                _queue_name=HEAVY_QUEUE_NAME, _defer_by=1,
+                "process_cbt_result_rollback_job",
+                operation_id,
+                _queue_name=HEAVY_QUEUE_NAME,
+                _defer_by=1,
             )
     return processed
 
 
 async def recover_cbt_result_rollbacks(ctx: dict[str, Any]) -> int:
     async with AsyncSessionLocal() as db:
-        pending = list((await db.execute(
-            select(CBTResultRollbackOperation.operation_id).where(
-                CBTResultRollbackOperation.status.in_(("pending", "processing"))
-            ).order_by(CBTResultRollbackOperation.created_at).limit(100)
-        )).scalars().all())
+        pending = list(
+            (
+                await db.execute(
+                    select(CBTResultRollbackOperation.operation_id)
+                    .where(CBTResultRollbackOperation.status.in_(("pending", "processing")))
+                    .order_by(CBTResultRollbackOperation.created_at)
+                    .limit(100)
+                )
+            )
+            .scalars()
+            .all()
+        )
     redis = ctx.get("redis")
     if redis is not None:
         for operation_id in pending:
             await redis.enqueue_job(
-                "process_cbt_result_rollback_job", str(operation_id),
+                "process_cbt_result_rollback_job",
+                str(operation_id),
                 _queue_name=HEAVY_QUEUE_NAME,
             )
     return len(pending)

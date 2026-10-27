@@ -14,7 +14,10 @@ from app.config.logging import get_logger  # noqa: E402
 from app.config.sentry import flush_sentry, initialize_sentry  # noqa: E402
 from app.core.queue.sentry import capture_worker_exceptions  # noqa: E402
 from app.core.queue.arq import HEAVY_QUEUE_NAME, get_arq_redis_settings  # noqa: E402
-from app.modules.cbt.results.rollback_worker import process_cbt_result_rollback_job, recover_cbt_result_rollbacks  # noqa: E402
+from app.modules.cbt.results.rollback_worker import (
+    process_cbt_result_rollback_job,
+    recover_cbt_result_rollbacks,
+)  # noqa: E402
 from arq import cron  # noqa: E402
 from app.core.queue.context import (  # noqa: E402
     reset_current_bulk_import_job_id,

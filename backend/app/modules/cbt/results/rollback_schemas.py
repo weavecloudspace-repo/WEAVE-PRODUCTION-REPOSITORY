@@ -1,4 +1,5 @@
 """Wire contract for draft-only result withdrawal."""
+
 from __future__ import annotations
 from datetime import datetime
 from typing import Literal
