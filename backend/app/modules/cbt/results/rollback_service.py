@@ -372,16 +372,16 @@ class CBTResultRollbackService:
             await RealtimePublisher.publish_deferred_after_commit(db)
 
     @classmethod
-    async def process_pending(cls, db_factory, *, operation_id: UUID) -> int:
+    async def process_pending(cls, db_factory, *, operation_pk: UUID) -> int:
         async with db_factory() as db:
             operation = await db.scalar(
                 select(CBTResultRollbackOperation).where(
-                    CBTResultRollbackOperation.operation_id == operation_id
+                    CBTResultRollbackOperation.id == operation_pk
                 )
             )
             if operation is None or operation.status not in ("pending", "processing"):
                 return 0
-            operation_pk = operation.id
+            resolved_pk = operation.id
             rows = list(
                 (
                     await db.execute(
@@ -400,5 +400,5 @@ class CBTResultRollbackService:
             await db.rollback()
         for student_id in rows:
             async with db_factory() as db:
-                await cls._withdraw_one(db, operation_pk=operation_pk, student_id=student_id)
+                await cls._withdraw_one(db, operation_pk=resolved_pk, student_id=student_id)
         return len(rows)

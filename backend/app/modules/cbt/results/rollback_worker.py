@@ -10,16 +10,16 @@ from app.modules.cbt.results.rollback_models import CBTResultRollbackOperation
 from app.modules.cbt.results.rollback_service import CBTResultRollbackService
 
 
-async def process_cbt_result_rollback_job(ctx: dict[str, Any], operation_id: str) -> int:
+async def process_cbt_result_rollback_job(ctx: dict[str, Any], operation_pk: str) -> int:
     processed = await CBTResultRollbackService.process_pending(
-        AsyncSessionLocal, operation_id=UUID(operation_id)
+        AsyncSessionLocal, operation_pk=UUID(operation_pk)
     )
     if processed:
         redis = ctx.get("redis")
         if redis is not None:
             await redis.enqueue_job(
                 "process_cbt_result_rollback_job",
-                operation_id,
+                operation_pk,
                 _queue_name=HEAVY_QUEUE_NAME,
                 _defer_by=1,
             )
@@ -31,7 +31,7 @@ async def recover_cbt_result_rollbacks(ctx: dict[str, Any]) -> int:
         pending = list(
             (
                 await db.execute(
-                    select(CBTResultRollbackOperation.operation_id)
+                    select(CBTResultRollbackOperation.id)
                     .where(CBTResultRollbackOperation.status.in_(("pending", "processing")))
                     .order_by(CBTResultRollbackOperation.created_at)
                     .limit(100)
@@ -42,10 +42,10 @@ async def recover_cbt_result_rollbacks(ctx: dict[str, Any]) -> int:
         )
     redis = ctx.get("redis")
     if redis is not None:
-        for operation_id in pending:
+        for operation_pk in pending:
             await redis.enqueue_job(
                 "process_cbt_result_rollback_job",
-                str(operation_id),
+                str(operation_pk),
                 _queue_name=HEAVY_QUEUE_NAME,
             )
     return len(pending)

@@ -140,9 +140,12 @@ async def request_result_rollback(
         try:
             redis = await create_pool(get_arq_redis_settings(), default_queue_name=HEAVY_QUEUE_NAME)
             try:
+                saved = await CBTResultRollbackService.get_operation(
+                    db, server=current_server, operation_id=operation.operation_id
+                )
                 await redis.enqueue_job(
                     "process_cbt_result_rollback_job",
-                    str(operation.operation_id),
+                    str(saved.id),
                     _queue_name=HEAVY_QUEUE_NAME,
                 )
             finally:
