@@ -57,6 +57,10 @@ export const curriculumService = {
     api.get(
       `/tenant-admin/academics/classes/${classId}/terms/${termId}/subjects`,
     ),
+  getResolvedStudentSubjects: (studentId, termId) =>
+    api.get(
+      `/tenant-admin/academics/students/${studentId}/terms/${termId}/subjects`,
+    ),
   createTeacherAssignmentsBulk: (payload) =>
     api.post("/tenant-admin/academics/teacher-assignments/bulk", payload),
   updateSpecializationPolicy: (levelId, termPosition) =>
