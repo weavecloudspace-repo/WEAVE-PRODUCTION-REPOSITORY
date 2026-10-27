@@ -61,7 +61,7 @@ test("create-result UI loads student-period availability and keeps editing in re
   assert.match(workspace, /academic_term_id: filters\.academic_term_id/);
   assert.match(workspace, /assignmentsAvailableForEntry/);
   assert.match(workspace, /componentScoresForAssignment/);
-  assert.match(workspace, /Use Back to\s+results to edit or reopen an existing result deliberately/);
+  assert.match(workspace, /Use Back to\s+results to\s+edit or reopen an existing result deliberately/);
   assert.match(workspace, /setForm\(\{ \.\.\.BLANK_FORM, student_id: form\.student_id \}\)/);
 });
 
