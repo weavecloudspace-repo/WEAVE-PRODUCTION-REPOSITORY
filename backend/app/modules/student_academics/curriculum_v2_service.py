@@ -1515,9 +1515,11 @@ class AcademicCurriculumService:
                 curriculum_subject_id=item.curriculum_subject_id,
                 subject_id=item.subject_id,
                 subject_name=subjects[item.subject_id].name
-                if item.subject_id in subjects else None,
+                if item.subject_id in subjects
+                else None,
                 subject_code=subjects[item.subject_id].code
-                if item.subject_id in subjects else None,
+                if item.subject_id in subjects
+                else None,
                 is_elective=item.is_elective,
                 elective_group_id=item.elective_group_id,
                 is_general=item.is_general,
