@@ -445,6 +445,14 @@ class StudentSubjectResultReopenRequest(InputBase):
     reason: str = Field(min_length=3, max_length=1000)
 
 
+class ResultSubjectOptionResponse(OutputBase):
+    """Subject with at least one result in a particular class and period."""
+
+    id: uuid.UUID
+    name: str
+    code: str | None = None
+
+
 class StudentSubjectResultResponse(OutputBase):
     id: uuid.UUID
     tenant_id: uuid.UUID

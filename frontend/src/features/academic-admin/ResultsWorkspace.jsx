@@ -8,6 +8,7 @@ import Modal from "../../components/ui/Modal";
 import { useToast } from "../../hooks/useToast";
 import { academicService } from "../../services/academicService";
 import { classService } from "../../services/academicsService";
+import { curriculumService } from "../../services/curriculumService";
 import { getErrorMessage } from "../../services/api";
 import { studentService } from "../../services/studentService";
 import {
@@ -18,7 +19,9 @@ import {
 } from "./AcademicWorkspacePrimitives";
 import {
   assignmentsAvailableForEntry,
+  buildResultSubjectOptions,
   componentScoresForAssignment,
+  loadClassTeacherAssignments,
 } from "./resultEntryAvailability";
 
 const PAGE_SIZE = 100;
@@ -93,6 +96,13 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
   const [terms, setTerms] = useState([]);
   const [classes, setClasses] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [assignmentError, setAssignmentError] = useState("");
+  const [classSubjects, setClassSubjects] = useState([]);
+  const [recordedSubjects, setRecordedSubjects] = useState([]);
+  const [studentSubjects, setStudentSubjects] = useState([]);
+  const [studentSubjectLoading, setStudentSubjectLoading] = useState(false);
+  const [studentSubjectError, setStudentSubjectError] = useState("");
   const [students, setStudents] = useState([]);
   const [results, setResults] = useState([]);
   const [resultTotal, setResultTotal] = useState(0);
@@ -132,12 +142,11 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
     setLoading(true);
     setError("");
     try {
-      const [sessionResponse, termResponse, classResponse, assignmentResponse, configResponse] =
+      const [sessionResponse, termResponse, classResponse, configResponse] =
         await Promise.all([
           academicService.listSessions({ limit: 100 }),
           academicService.listTerms({ limit: 100 }),
           classService.getClasses({ limit: 100, activeOnly: true }),
-          academicService.listTeacherAssignments({ status: "current", limit: 100 }),
           academicService.getActiveAssessmentScheme().catch(() => null),
         ]);
 
@@ -159,7 +168,6 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
       setSessions(nextSessions);
       setTerms(nextTerms);
       setClasses(nextClasses);
-      setAssignments(asItems(assignmentResponse));
       setAssessmentConfig(configResponse || null);
       setFilters((current) => ({
         ...current,
@@ -178,6 +186,83 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
       setLoading(false);
     }
   }, [onContextChange, showError]);
+
+  useEffect(() => {
+    const classId = filters.class_id;
+    const controller = new AbortController();
+    setAssignments([]);
+    setAssignmentError("");
+    if (!classId) {
+      setAssignmentLoading(false);
+      return undefined;
+    }
+    setAssignmentLoading(true);
+    loadClassTeacherAssignments(
+      (params) => academicService.listTeacherAssignments(params, { signal: controller.signal }),
+      classId,
+    ).then((rows) => {
+      if (!controller.signal.aborted) setAssignments(rows);
+    }).catch((requestError) => {
+      if (!controller.signal.aborted) {
+        setAssignmentError(getErrorMessage(requestError, "Could not load class teacher assignments."));
+        setAssignments([]);
+      }
+    }).finally(() => {
+      if (!controller.signal.aborted) setAssignmentLoading(false);
+    });
+    return () => controller.abort();
+  }, [filters.class_id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const { class_id: classId, academic_session_id: sessionId, academic_term_id: termId } = filters;
+    setClassSubjects([]);
+    setRecordedSubjects([]);
+    if (!classId || !sessionId || !termId) return undefined;
+
+    Promise.allSettled([
+      curriculumService.getResolvedClassSubjects(classId, termId),
+      academicService.listResultSubjectOptions({
+        class_id: classId,
+        academic_session_id: sessionId,
+        academic_term_id: termId,
+      }),
+    ]).then(([curriculum, recorded]) => {
+      if (cancelled) return;
+      if (curriculum.status === "fulfilled") setClassSubjects(asItems(curriculum.value));
+      if (recorded.status === "fulfilled") setRecordedSubjects(asItems(recorded.value));
+      if (curriculum.status === "rejected" && recorded.status === "rejected") {
+        showError("Could not load subjects for the selected class and academic period.");
+      }
+    });
+    return () => { cancelled = true; };
+  }, [filters.class_id, filters.academic_session_id, filters.academic_term_id, showError]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const studentId = form.student_id;
+    const termId = filters.academic_term_id;
+    setStudentSubjects([]);
+    setStudentSubjectError("");
+    if (activeTab !== "entry" || form.result_id || !studentId || !termId) {
+      setStudentSubjectLoading(false);
+      return undefined;
+    }
+    setStudentSubjectLoading(true);
+    curriculumService.getResolvedStudentSubjects(studentId, termId)
+      .then((response) => {
+        if (!cancelled) setStudentSubjects(asItems(response));
+      })
+      .catch((requestError) => {
+        if (!cancelled) setStudentSubjectError(
+          getErrorMessage(requestError, "Could not resolve student subject eligibility."),
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setStudentSubjectLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeTab, filters.academic_term_id, form.result_id, form.student_id]);
 
   const loadStudents = useCallback(async () => {
     if (!filters.class_id) {
@@ -337,46 +422,48 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
     () => classes.map((item) => ({ value: item.id, label: classLabel(item) })),
     [classes],
   );
-  const assignmentOptions = useMemo(
-    () => {
-      const availableAssignments = form.result_id
-        ? assignments.filter((item) => item.class_id === filters.class_id)
-        : form.student_id && !entryResultsLoading && !entryResultsError
-          ? assignmentsAvailableForEntry(assignments, entryResults, filters.class_id)
-          : [];
-      return availableAssignments.map((item) => ({
-        value: item.id,
-        label: assignmentLabel(item),
-      }));
-    },
-    [
-      assignments,
-      entryResults,
-      entryResultsError,
-      entryResultsLoading,
-      filters.class_id,
-      form.result_id,
-      form.student_id,
-    ],
-  );
+  const assignmentOptions = useMemo(() => {
+    if (form.result_id) {
+      return assignments
+        .filter((item) => item.class_id === filters.class_id)
+        .map((item) => ({ value: item.id, label: assignmentLabel(item) }));
+    }
+    if (!form.student_id || entryResultsLoading || entryResultsError ||
+        studentSubjectLoading || studentSubjectError || assignmentLoading || assignmentError) {
+      return [];
+    }
+    const available = new Set(
+      assignmentsAvailableForEntry(assignments, entryResults, filters.class_id)
+        .map((item) => item.id),
+    );
+    const byCurriculum = new Map(
+      assignments.map((item) => [item.curriculum_subject_id, item]),
+    );
+    return studentSubjects.flatMap((subject) => {
+      const assignment = byCurriculum.get(subject.curriculum_subject_id);
+      const label = subject.subject_name || subject.subject_code || "Subject";
+      if (!assignment) return [{
+        value: `unassigned:${subject.curriculum_subject_id}`,
+        label: `${label} · No active teacher assignment`,
+        disabled: true,
+      }];
+      if (!available.has(assignment.id)) return [];
+      return [{ value: assignment.id, label: assignmentLabel(assignment) }];
+    }).sort((a, b) => a.label.localeCompare(b.label));
+  }, [
+    assignments, assignmentError, assignmentLoading,
+    entryResults, entryResultsError, entryResultsLoading,
+    filters.class_id, form.result_id, form.student_id,
+    studentSubjects, studentSubjectError, studentSubjectLoading,
+  ]);
   const studentOptions = useMemo(
     () => students.map((item) => ({ value: item.id, label: studentLabel(item) })),
     [students],
   );
-  const subjectOptions = useMemo(() => {
-    const rows = new Map();
-    assignments
-      .filter((item) => !filters.class_id || item.class_id === filters.class_id)
-      .forEach((item) => {
-        if (!item.subject_id || rows.has(item.subject_id)) return;
-        rows.set(item.subject_id, {
-          value: item.subject_id,
-          label:
-            [item.subject_name, item.subject_code].filter(Boolean).join(" · ") || "Subject",
-        });
-      });
-    return [...rows.values()];
-  }, [assignments, filters.class_id]);
+  const subjectOptions = useMemo(
+    () => buildResultSubjectOptions(classSubjects, recordedSubjects),
+    [classSubjects, recordedSubjects],
+  );
 
   const scoreTotal = (assessmentConfig?.components || []).reduce(
     (sum, component) => sum +
@@ -390,6 +477,8 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
     setResultPage(0);
     setFilters((current) => ({ ...current, ...patch }));
     resetForm();
+    setStudentSubjects([]);
+    setStudentSubjectError("");
   };
 
   const validateScores = () => {
@@ -618,6 +707,9 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
                   setEntryResults([]);
                   setEntryResultsError("");
                   setEntryResultsLoading(Boolean(value));
+                  setStudentSubjects([]);
+                  setStudentSubjectError("");
+                  setStudentSubjectLoading(Boolean(value));
                   setForm((current) => ({
                     ...current,
                     student_id: value,
@@ -655,13 +747,13 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
                 placeholder={
                   !form.student_id
                     ? "Select a student first"
-                    : entryResultsLoading
-                      ? "Checking unfinished subjects..."
-                      : entryResultsError
+                    : entryResultsLoading || studentSubjectLoading || assignmentLoading
+                      ? "Checking subject availability..."
+                      : entryResultsError || studentSubjectError || assignmentError
                         ? "Subject availability unavailable"
                         : assignmentOptions.length
                           ? "Select unfinished subject"
-                          : "All assigned subjects are complete"
+                          : "No eligible subjects available"
                 }
                 disabled={
                   !periodEditable ||
@@ -669,20 +761,25 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
                   Boolean(form.result_id) ||
                   !form.student_id ||
                   entryResultsLoading ||
-                  Boolean(entryResultsError)
+                  studentSubjectLoading ||
+                  assignmentLoading ||
+                  Boolean(entryResultsError) ||
+                  Boolean(studentSubjectError) ||
+                  Boolean(assignmentError)
                 }
                 required
               />
             </div>
-            {entryResultsError ? (
+            {entryResultsError || studentSubjectError || assignmentError ? (
               <p className="rounded-xl border border-error/30 bg-error-soft px-4 py-3 text-sm text-error">
-                {entryResultsError} Refresh the page before entering another result.
+                {entryResultsError || studentSubjectError || assignmentError} Refresh the page before entering another result.
               </p>
             ) : null}
             {!form.result_id && form.student_id && !entryResultsLoading && !entryResultsError ? (
               <p className="text-sm text-text-muted">
-                Subjects with every assessment component filled are hidden here. Use Back to
-                results to edit or reopen an existing result deliberately.
+                Subjects with every assessment component filled are hidden here. Subjects without
+                an active teacher assignment are shown as unavailable. Use Back to results to
+                edit or reopen an existing result deliberately.
               </p>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
