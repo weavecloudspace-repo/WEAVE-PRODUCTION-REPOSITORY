@@ -1205,6 +1205,7 @@ class CBTResultIngestionService:
                         cbt_score=incoming.score,
                         cbt_maximum_score=allocation,
                         source_exam_id=payload.source_exam_id,
+                        cbt_source_batch_id=payload.batch_id,
                     )
                 )
 

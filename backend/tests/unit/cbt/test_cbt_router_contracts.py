@@ -22,6 +22,8 @@ def _route_keys(router) -> set[tuple[str, str]]:
 
 def test_machine_cbt_routes_expose_result_ingestion_and_branding_projection() -> None:
     assert ("POST", "/results") in _route_keys(results_router)
+    assert ("POST", "/results/rollbacks") in _route_keys(results_router)
+    assert ("GET", "/results/rollbacks/{operation_id}") in _route_keys(results_router)
     assert ("GET", "/branding") in _route_keys(branding_router)
 
 
