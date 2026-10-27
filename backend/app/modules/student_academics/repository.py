@@ -925,6 +925,33 @@ class StudentAcademicRepository:
         )
         return list(rows), int(total)
 
+    @staticmethod
+    async def list_result_subject_options(
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        *,
+        class_id: uuid.UUID,
+        academic_session_id: uuid.UUID,
+        academic_term_id: uuid.UUID,
+    ) -> list[dict]:
+        """Distinct subjects recorded in this class and period, independent of staffing."""
+        rows = (
+            await db.execute(
+                select(Subject.id, Subject.name, Subject.code)
+                .join(StudentSubjectResult, StudentSubjectResult.subject_id == Subject.id)
+                .where(
+                    StudentSubjectResult.tenant_id == tenant_id,
+                    Subject.tenant_id == tenant_id,
+                    StudentSubjectResult.class_id == class_id,
+                    StudentSubjectResult.academic_session_id == academic_session_id,
+                    StudentSubjectResult.academic_term_id == academic_term_id,
+                )
+                .distinct()
+                .order_by(Subject.name.asc(), Subject.id.asc())
+            )
+        ).all()
+        return [{"id": row.id, "name": row.name, "code": row.code} for row in rows]
+
     # ------------------------------------------------------------------
     # Teacher assignments
     # ------------------------------------------------------------------

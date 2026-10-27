@@ -27,6 +27,7 @@ def test_heavy_worker_registration_imports_cleanly() -> None:
     assert _function_names(HeavyWorkerSettings) == {
         "process_bulk_import_job",
         "process_session_progression_job",
+        "process_cbt_result_rollback_job",
     }
     assert HeavyWorkerSettings.max_jobs == 1
     assert HeavyWorkerSettings.job_timeout == 3600

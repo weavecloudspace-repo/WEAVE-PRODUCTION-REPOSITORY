@@ -105,6 +105,27 @@ class CBTResultIngestionService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _can_fill_unpublished_hybrid(
+        record: StudentAssessmentScore,
+        *,
+        component: AssessmentComponent,
+        cbt_maximum_score: Decimal,
+    ) -> bool:
+        """Fill CBT contribution only when hybrid theory evidence is intact.
+
+        The existing record is preserved; this is not a general score overwrite.
+        """
+        return (
+            bool(getattr(component, "is_hybrid", False))
+            and record.cbt_score is None
+            and record.theory_score is not None
+            and record.source_exam_id is None
+            and record.cbt_source_batch_id is None
+            and record.cbt_maximum_score in (None, cbt_maximum_score)
+            and record.score == record.theory_score
+        )
+
+    @staticmethod
     def _request_hash(payload: CBTResultBulkRequest) -> str:
         """
         Generate a deterministic SHA-256 hash for a logical CBT batch.
@@ -1011,6 +1032,7 @@ class CBTResultIngestionService:
             )
 
             apply_existing: set[UUID] = set()
+            restore_hybrid: dict[UUID, StudentAssessmentScore] = {}
             create_new: set[UUID] = set()
 
             # ----------------------------------------------------------
@@ -1074,6 +1096,16 @@ class CBTResultIngestionService:
                 # ------------------------------------------------------
 
                 if previous_component is not None:
+                    if cls._can_fill_unpublished_hybrid(
+                        previous_component,
+                        component=context.component,
+                        cbt_maximum_score=allocation,
+                    ):
+                        # A withdrawn CBT contribution leaves the theory mark
+                        # in place. Restore just the missing CBT portion.
+                        restore_hybrid[item.student_id] = previous_component
+                        apply_existing.add(item.student_id)
+                        continue
                     # Exact duplicate = idempotent at score level.
                     if (
                         (
@@ -1195,6 +1227,14 @@ class CBTResultIngestionService:
             for student_id in applied_student_ids:
                 result = all_results[student_id]
                 incoming = score_by_student[student_id]
+                if student_id in restore_hybrid:
+                    existing = restore_hybrid[student_id]
+                    existing.cbt_score = incoming.score
+                    existing.cbt_maximum_score = allocation
+                    existing.source_exam_id = payload.source_exam_id
+                    existing.cbt_source_batch_id = payload.batch_id
+                    existing.score = incoming.score + existing.theory_score
+                    continue
 
                 new_component_scores.append(
                     StudentAssessmentScore(
@@ -1205,6 +1245,7 @@ class CBTResultIngestionService:
                         cbt_score=incoming.score,
                         cbt_maximum_score=allocation,
                         source_exam_id=payload.source_exam_id,
+                        cbt_source_batch_id=payload.batch_id,
                     )
                 )
 

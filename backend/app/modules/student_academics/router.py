@@ -51,6 +51,7 @@ from app.modules.student_academics.schemas import (
     GradingScaleResponse,
     GradingScaleUpdate,
     StudentSubjectCardListResponse,
+    ResultSubjectOptionResponse,
     StudentSubjectResultListResponse,
     StudentSubjectResultReopenRequest,
     StudentSubjectResultResponse,
@@ -630,6 +631,27 @@ async def cancel_scheduled_teacher_assignment(
         assignment_id,
         payload,
         acting_admin_id=current_admin.id,
+    )
+
+
+@tenant_admin_router.get(
+    "/results/subject-options",
+    response_model=list[ResultSubjectOptionResponse],
+)
+async def list_result_subject_options(
+    db: DbSession,
+    current_admin: CurrentTenantAdmin,
+    class_id: UUID,
+    academic_session_id: UUID,
+    academic_term_id: UUID,
+) -> list[ResultSubjectOptionResponse]:
+    """Historical result subjects remain filterable after teachers are reassigned."""
+    return await StudentAcademicService.list_result_subject_options(
+        db,
+        current_admin,
+        class_id=class_id,
+        academic_session_id=academic_session_id,
+        academic_term_id=academic_term_id,
     )
 
 
