@@ -106,7 +106,9 @@ class CBTResultIngestionService:
 
     @staticmethod
     def _can_fill_unpublished_hybrid(
-        record: StudentAssessmentScore, *, component: AssessmentComponent,
+        record: StudentAssessmentScore,
+        *,
+        component: AssessmentComponent,
         cbt_maximum_score: Decimal,
     ) -> bool:
         """Fill CBT contribution only when hybrid theory evidence is intact.
@@ -1095,7 +1097,8 @@ class CBTResultIngestionService:
 
                 if previous_component is not None:
                     if cls._can_fill_unpublished_hybrid(
-                        previous_component, component=context.component,
+                        previous_component,
+                        component=context.component,
                         cbt_maximum_score=allocation,
                     ):
                         # A withdrawn CBT contribution leaves the theory mark
