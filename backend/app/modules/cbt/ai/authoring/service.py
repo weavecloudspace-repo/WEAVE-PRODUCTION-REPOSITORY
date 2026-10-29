@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, cast
 
+from app.modules.cbt.ai.authoring.assessment_integrity import assessment_context
 from app.modules.cbt.ai.authoring.flow_logging import get_question_generation_logger
 from app.modules.cbt.ai.authoring.image_resolver import ImageResolver
 from app.modules.cbt.ai.authoring.providers.base import (
@@ -313,12 +314,14 @@ class QuestionAuthoringService:
         question_image: ImageResolutionResult | None = None
         option_images: dict[int, ImageResolutionResult] = {}
         usages: list[ProviderUsage] = []
+        review_context = assessment_context(question)
 
         if question.image is not None:
             question_image = await self.image_resolver.resolve(
                 requirement=question.image.requirement,
                 search_query=question.image.search_query,
                 generation_prompt=question.image.generation_prompt,
+                assessment_context=review_context,
             )
             usages.extend(self._image_resolution_usages(question_image))
 
@@ -329,6 +332,7 @@ class QuestionAuthoringService:
                 requirement=option.image.requirement,
                 search_query=option.image.search_query,
                 generation_prompt=option.image.generation_prompt,
+                assessment_context=review_context,
             )
             option_images[index] = resolution
             usages.extend(self._image_resolution_usages(resolution))
