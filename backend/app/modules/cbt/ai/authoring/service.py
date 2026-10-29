@@ -97,7 +97,9 @@ class QuestionAuthoringService:
         # This internal hint is never part of the public CBT request schema.
         # It ensures both initial generation and one-shot repair use the
         # same count, while Text-only mode remains unaffected.
-        count = expected_count if expected_count is not None else request_payload.get("question_count")
+        count = (
+            expected_count if expected_count is not None else request_payload.get("question_count")
+        )
         if visual_mode == "auto" and type(count) is int and count > 0:
             request_payload["visual_question_target"] = target_visual_question_count(count)
         repaired = False
