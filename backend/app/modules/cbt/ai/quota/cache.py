@@ -38,7 +38,10 @@ async def _generation(tenant_id: UUID) -> str | None:
 
 
 async def get_cached_quota(
-    *, tenant_id: UUID, identity: str, response_type: type[T],
+    *,
+    tenant_id: UUID,
+    identity: str,
+    response_type: type[T],
     fetcher: Callable[[], Awaitable[T]],
 ) -> T:
     version = await _generation(tenant_id)
@@ -55,7 +58,8 @@ async def get_cached_quota(
     result = await fetcher()
     if await _generation(tenant_id) == version:
         await CacheManager.set_json(
-            key, result.model_dump(mode="json"),
+            key,
+            result.model_dump(mode="json"),
             settings.AI_QUOTA_READ_CACHE_TTL_SECONDS,
         )
     return result
