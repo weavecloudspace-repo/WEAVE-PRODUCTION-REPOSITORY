@@ -291,9 +291,9 @@ class OpenRouterImageGenerationProvider(_OpenRouterHTTP, BaseImageGenerationProv
             data = base64.b64decode(b64, validate=True)
         except (ValueError, TypeError) as exc:
             raise OpenRouterProviderError("OpenRouter returned invalid base64 image data.") from exc
-        if data.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+        if data.startswith(b"\x89PNG\r\n\x1a\n"):
             media_type = "image/png"
-        elif data.startswith(b"\\xff\\xd8\\xff"):
+        elif data.startswith(b"\xff\xd8\xff"):
             media_type = "image/jpeg"
         elif data.startswith(b"RIFF") and data[8:12] == b"WEBP":
             media_type = "image/webp"
