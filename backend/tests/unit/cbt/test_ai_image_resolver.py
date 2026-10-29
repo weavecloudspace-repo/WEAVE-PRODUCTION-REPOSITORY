@@ -98,7 +98,7 @@ class FakeMaterializer:
 
 def _candidate(index: int) -> ImageCandidate:
     return ImageCandidate(
-        source="openverse",
+        source="ddgs",
         source_url=f"https://example.com/source/{index}",
         image_url=f"https://example.com/image/{index}.jpg",
         thumbnail_url=f"https://example.com/thumb/{index}.jpg",
