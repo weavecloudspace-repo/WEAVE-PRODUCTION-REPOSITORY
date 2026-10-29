@@ -25,8 +25,13 @@ class WebResearchError(ValueError):
 def safe_public_https(url: str) -> bool:
     try:
         parsed = urlparse(url)
-        if (parsed.scheme != "https" or not parsed.hostname or parsed.username
-                or parsed.password or parsed.port not in (None, 443)):
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.port not in (None, 443)
+        ):
             return False
         if parsed.hostname in ("localhost",) or parsed.hostname.endswith(".localhost"):
             return False
@@ -57,9 +62,11 @@ class DDGSWebResearch:
         self.search_calls += 1
 
         def run():
-            return list(DDGS(timeout=settings.DDGS_REQUEST_TIMEOUT_SECONDS).text(
-                query, safesearch="on", max_results=5
-            ))
+            return list(
+                DDGS(timeout=settings.DDGS_REQUEST_TIMEOUT_SECONDS).text(
+                    query, safesearch="on", max_results=5
+                )
+            )
         rows = await asyncio.wait_for(
             asyncio.to_thread(run), timeout=settings.DDGS_REQUEST_TIMEOUT_SECONDS + 3
         )
@@ -71,11 +78,13 @@ class DDGSWebResearch:
             if not isinstance(url, str) or not safe_public_https(url):
                 continue
             self.allowed_urls.add(url)
-            results.append({
-                "title": str(row.get("title") or "")[:200],
-                "url": url,
-                "snippet": str(row.get("body") or "")[:750],
-            })
+            results.append(
+                {
+                    "title": str(row.get("title") or "")[:200],
+                    "url": url,
+                    "snippet": str(row.get("body") or "")[:750],
+                }
+            )
             if len(results) >= 5:
                 break
         return {"results": results, "unverified_sources": True}
