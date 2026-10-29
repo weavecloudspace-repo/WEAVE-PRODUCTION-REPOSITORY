@@ -176,7 +176,8 @@ class AnswerLeakageEvaluator:
         if self.calls == 1:
             assert contact_sheet_candidate_count(images) == 2
             return ProviderImageEvaluationResult(
-                decision="use_candidate", selected_index=0,
+                decision="use_candidate",
+                selected_index=0,
             )
         if self.calls == 2:
             assert len(images) == 1
