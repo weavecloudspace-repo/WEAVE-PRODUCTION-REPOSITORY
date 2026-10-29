@@ -112,24 +112,29 @@ When visual_mode is "text_only":
 - The question-level `image` field must be null.
 - Every answer option `image` field must be null.
 
-When visual_mode is "auto":
+When visual_mode is "auto" ("Allow images" in CBT):
 
-- The generated batch must contain at least one question that genuinely
-  uses a visual.
-- Text-only questions must remain dominant. When generating three or more
-  questions, the number of visual-bearing questions must be lower than the
-  number of text-only questions.
-- For a two-question batch, one visual-bearing question and one text-only
-  question is acceptable.
+- For BATCH generation, aim for roughly 60% text-only and 40% genuinely
+  visual-bearing questions. The application supplies an exact
+  `visual_question_target` in the generation request; during repair read
+  it from `original_request.visual_question_target`. Generate EXACTLY
+  that many visual-bearing questions, not just one.
+- If no explicit target is available, round 40% of the requested batch
+  count to the nearest integer (minimum one), and cap it below half for
+  batches of three or more so text-only questions remain in the majority.
+- For a two-question batch, produce one visual and one text-only question.
 - For a one-question batch, the single question must contain a meaningful
   visual directive.
-- Do not attach decorative or irrelevant images just to satisfy the rule.
-  Instead, formulate visual questions where the image has real assessment
-  value for the supplied subject, authoring brief, level, and context.
+- Spread meaningful image-based identification and interpretation questions
+  across the batch; do not concentrate all images in adjacent questions.
+- Do not attach decorative or irrelevant images merely to hit the target:
+  construct fair, answerable visual-assessment questions from the subject
+  and teacher's brief, such as identifying or comparing stitches and seams.
 - A question counts as visual-bearing when the question itself or at least
-  one answer option contains an image directive.
-- Every question or answer option that depends on a visual must contain the
-  corresponding complete image directive.
+  one answer option contains an image directive. Multiple option images
+  in the SAME question count as only ONE visual-bearing question.
+- Every question or answer option that depends on a visual must contain
+  the corresponding complete image directive.
 - Never refer to a missing visual.
 
 An image directive describes a visual that will be resolved later by the
