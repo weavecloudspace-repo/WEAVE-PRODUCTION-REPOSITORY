@@ -8,6 +8,10 @@ from typing import Any, Mapping, Sequence
 
 import httpx
 
+from app.modules.cbt.ai.authoring.assessment_integrity import (
+    assessment_review_requirement,
+    assessment_safe_generation_prompt,
+)
 from app.modules.cbt.ai.authoring.flow_logging import get_question_generation_logger
 from app.modules.cbt.ai.authoring.image_materializer import (
     ImageMaterializationError,
@@ -22,6 +26,7 @@ from app.modules.cbt.ai.authoring.providers.base import (
     ProviderImageEvaluationResult,
     ProviderImageGenerationResult,
     ProviderImageInput,
+    ProviderUsage,
 )
 
 logger = get_question_generation_logger("image_resolver")
@@ -377,6 +382,7 @@ class ImageResolver:
         search_metadata: Mapping[str, Any] | None = None,
         generation_metadata: Mapping[str, Any] | None = None,
         reference_images: Sequence[ProviderImageInput] | None = None,
+        assessment_context: str | None = None,
     ) -> ImageResolutionResult:
         """Resolve one requested visual into sourced or generated image bytes."""
 
@@ -388,10 +394,13 @@ class ImageResolver:
         if not normalized_search_query:
             raise ValueError("Image search query cannot be empty.")
 
-        normalized_generation_prompt = (
-            generation_prompt.strip()
-            if isinstance(generation_prompt, str) and generation_prompt.strip()
-            else normalized_requirement
+        normalized_generation_prompt = assessment_safe_generation_prompt(
+            (
+                generation_prompt.strip()
+                if isinstance(generation_prompt, str) and generation_prompt.strip()
+                else normalized_requirement
+            ),
+            assessment_context,
         )
         search_queries = _build_parallel_search_queries(
             normalized_requirement,
@@ -447,6 +456,7 @@ class ImageResolver:
                 metadata=generation_metadata,
                 reference_images=reference_images,
                 evaluation=None,
+                assessment_context=assessment_context,
             )
 
         candidates = _dedupe_candidates(candidate_groups)
@@ -511,6 +521,7 @@ class ImageResolver:
                 metadata=generation_metadata,
                 reference_images=reference_images,
                 evaluation=None,
+                assessment_context=assessment_context,
             )
 
         evaluation: ProviderImageEvaluationResult | None = None
@@ -528,7 +539,9 @@ class ImageResolver:
             )
             try:
                 evaluation = await self.evaluation_provider.evaluate_images(
-                    requirement=normalized_requirement,
+                    requirement=assessment_review_requirement(
+                        normalized_requirement, assessment_context
+                    ),
                     images=[image for _, image in materialized_candidates],
                 )
                 break
@@ -596,6 +609,7 @@ class ImageResolver:
                 metadata=generation_metadata,
                 reference_images=reference_images,
                 evaluation=evaluation,
+                assessment_context=assessment_context,
             )
 
         if evaluation.decision != "use_candidate":
@@ -773,10 +787,12 @@ class ImageResolver:
         metadata: Mapping[str, Any] | None,
         reference_images: Sequence[ProviderImageInput] | None,
         evaluation: ProviderImageEvaluationResult | None,
+        assessment_context: str | None = None,
     ) -> ImageResolutionResult:
-        """Generate a fallback visual and retry once if its payload is unusable."""
+        """Generate a fallback visual; reject images that reveal answer text."""
 
         generation_attempts: list[ProviderImageGenerationResult] = []
+        integrity_review_usages: list[ProviderUsage] = []
         last_error: ImageMaterializationError | None = None
 
         for attempt_index in range(1, self.MAX_GENERATION_MATERIALIZATION_ATTEMPTS + 1):
@@ -838,6 +854,27 @@ class ImageResolver:
                 )
                 continue
 
+            if assessment_context:
+                # Validate the FINAL generated binary, not just its prompt.
+                # A generation model can still render an answer-revealing title.
+                integrity_review = await self.evaluation_provider.evaluate_images(
+                    requirement=assessment_review_requirement(prompt, assessment_context),
+                    images=[image],
+                )
+                integrity_review_usages.append(integrity_review.usage)
+                if (
+                    integrity_review.decision != "use_candidate"
+                    or integrity_review.selected_index != 0
+                ):
+                    logger.warning(
+                        "cbt.ai.image_resolution.generated_image.answer_leakage_rejected",
+                        extra={
+                            "image_generation_attempt": attempt_index,
+                            "image_integrity_reason": integrity_review.reason,
+                        },
+                    )
+                    continue
+
             logger.info(
                 "cbt.ai.image_resolution.generation.completed",
                 extra={
@@ -855,8 +892,9 @@ class ImageResolver:
                 generation=generation,
                 generation_attempts=generation_attempts,
                 evaluation=evaluation,
+                integrity_review_usages=integrity_review_usages,
             )
 
         raise ImageResolverError(
-            "Image generation provider returned unusable image data after retry."
+            "Image generation returned unusable or assessment-unsafe image data after retry."
         ) from last_error
