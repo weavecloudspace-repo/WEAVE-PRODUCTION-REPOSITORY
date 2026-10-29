@@ -155,3 +155,117 @@ async def test_reference_image_regeneration_uses_vision_before_text(monkeypatch)
     assert result.usage.input_tokens == 85
     assert result.usage.output_tokens == 28
     assert result.usage.provider_cost == pytest.approx(0.005)
+
+
+@pytest.mark.asyncio
+async def test_vision_429_respects_retry_after_and_retries_without_spamming(monkeypatch):
+    from unittest.mock import AsyncMock
+    from app.modules.cbt.ai.authoring.providers import openrouter
+
+    attempts = []
+    waits = []
+    cooldowns = []
+    monkeypatch.setattr(openrouter.settings, "OPENROUTER_429_MAX_RETRIES", 2)
+    monkeypatch.setattr(openrouter.settings, "OPENROUTER_VISION_MIN_INTERVAL_SECONDS", 4.0)
+    monkeypatch.setattr(
+        openrouter.vision_request_pacer,
+        "wait_for_slot",
+        AsyncMock(side_effect=lambda **kwargs: waits.append(kwargs)),
+    )
+    monkeypatch.setattr(
+        openrouter.vision_request_pacer,
+        "cooldown",
+        AsyncMock(side_effect=lambda **kwargs: cooldowns.append(kwargs)),
+    )
+
+    async def post(self, url, *, headers, json):
+        attempts.append(json["model"])
+        if len(attempts) == 1:
+            return httpx.Response(
+                429,
+                headers={"Retry-After": "5"},
+                json={"error": {"code": "rate_limit", "message": "Temporary capacity limit"}},
+                request=httpx.Request("POST", url),
+            )
+        return fake_response(
+            {"choices": [{"message": {"content": '{"decision":"generate_image"}'}}]}
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", post)
+    from app.modules.cbt.ai.authoring.providers.base import ProviderImageInput
+
+    image = ProviderImageInput(
+        data=b"image", content_type="image/png", sha256="0" * 64, width=10, height=10
+    )
+    result = await OpenRouterImageEvaluationProvider(api_key="fake-key").evaluate_images(
+        requirement="An unlabeled organ", images=[image]
+    )
+    assert result.decision == "generate_image"
+    assert attempts == ["qwen/qwen3-vl-8b-instruct"] * 2
+    assert len(waits) == 2
+    assert len(cooldowns) == 1
+    assert cooldowns[0]["delay"] == 5
+
+
+@pytest.mark.asyncio
+async def test_daily_quota_429_fails_without_retrying(monkeypatch):
+    from app.modules.cbt.ai.authoring.providers import openrouter
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(
+        openrouter.vision_request_pacer, "wait_for_slot", AsyncMock()
+    )
+    attempts = []
+
+    async def post(self, url, *, headers, json):
+        attempts.append(True)
+        return httpx.Response(
+            429,
+            headers={"Retry-After": "120"},
+            json={"error": {"code": "insufficient_quota", "message": "Daily quota exhausted"}},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", post)
+    provider = OpenRouterQuestionGenerationProvider(api_key="fake-key")
+    with pytest.raises(OpenRouterProviderError) as caught:
+        await provider.generate_questions(request={})
+    assert caught.value.status_code == 429
+    assert caught.value.quota_exhausted
+    assert caught.value.error_code == "insufficient_quota"
+    assert caught.value.retry_after_seconds == 120
+    assert len(attempts) == 1
+
+
+@pytest.mark.asyncio
+async def test_excessive_retry_after_fails_fast_and_does_not_sleep(monkeypatch):
+    from app.modules.cbt.ai.authoring.providers import openrouter
+
+    attempts = []
+    monkeypatch.setattr(openrouter.settings, "OPENROUTER_429_MAX_BACKOFF_SECONDS", 15.0)
+
+    async def post(self, url, *, headers, json):
+        attempts.append(True)
+        return httpx.Response(
+            429,
+            headers={"Retry-After": "3600"},
+            json={"error": {"code": 429, "message": "Provider temporarily rate limited"}},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", post)
+    with pytest.raises(OpenRouterProviderError) as caught:
+        await OpenRouterQuestionGenerationProvider(api_key="fake-key").generate_questions(
+            request={}
+        )
+    assert not caught.value.quota_exhausted
+    assert caught.value.retry_after_seconds == 3600
+    assert len(attempts) == 1
+
+
+def test_retry_after_parses_seconds_and_invalid_dates():
+    from app.modules.cbt.ai.authoring.providers.openrouter import _parse_retry_after
+
+    assert _parse_retry_after("2.5") == 2.5
+    assert _parse_retry_after("-1") is None
+    assert _parse_retry_after("nonsense") is None
