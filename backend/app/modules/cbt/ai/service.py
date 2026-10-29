@@ -30,6 +30,7 @@ from app.modules.cbt.ai.authoring.service import (
     QuestionGenerationResult,
     QuestionRegenerationResult,
 )
+from app.modules.cbt.ai.quota.cache import get_cached_quota
 from app.modules.cbt.ai.quota.models import (
     AIQuotaActorType,
     AIQuotaPurchaseStatus,
@@ -185,13 +186,22 @@ class CBTAIService:
         actor: AuthenticatedCBTActor,
     ) -> AIQuotaStatusResponse:
         actor_type, actor_id = cls._resolve_quota_actor(actor)
-        return await cls._run_quota(
-            AIQuotaService.get_quota_status(
-                db,
-                tenant_id=actor.tenant_id,
-                actor_type=actor_type,
-                actor_id=actor_id,
+
+        async def fetch() -> AIQuotaStatusResponse:
+            return await cls._run_quota(
+                AIQuotaService.get_quota_status(
+                    db,
+                    tenant_id=actor.tenant_id,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                )
             )
+
+        return await get_cached_quota(
+            tenant_id=actor.tenant_id,
+            identity=f"actor:{actor_type.value}:{actor_id}",
+            response_type=AIQuotaStatusResponse,
+            fetcher=fetch,
         )
 
     @classmethod
@@ -258,12 +268,21 @@ class CBTAIService:
         actor: AuthenticatedCBTActor,
     ) -> AITenantQuotaSummaryResponse:
         admin_id = cls._require_admin(actor)
-        return await cls._run_quota(
-            AIQuotaService.get_tenant_quota_summary(
-                db,
-                tenant_id=actor.tenant_id,
-                tenant_admin_id=admin_id,
+
+        async def fetch() -> AITenantQuotaSummaryResponse:
+            return await cls._run_quota(
+                AIQuotaService.get_tenant_quota_summary(
+                    db,
+                    tenant_id=actor.tenant_id,
+                    tenant_admin_id=admin_id,
+                )
             )
+
+        return await get_cached_quota(
+            tenant_id=actor.tenant_id,
+            identity=f"summary:admin:{admin_id}",
+            response_type=AITenantQuotaSummaryResponse,
+            fetcher=fetch,
         )
 
     @classmethod
@@ -274,12 +293,21 @@ class CBTAIService:
         actor: AuthenticatedCBTActor,
     ) -> AIActorQuotaBalanceListResponse:
         admin_id = cls._require_admin(actor)
-        return await cls._run_quota(
-            AIQuotaService.list_actor_quota_balances(
-                db,
-                tenant_id=actor.tenant_id,
-                tenant_admin_id=admin_id,
+
+        async def fetch() -> AIActorQuotaBalanceListResponse:
+            return await cls._run_quota(
+                AIQuotaService.list_actor_quota_balances(
+                    db,
+                    tenant_id=actor.tenant_id,
+                    tenant_admin_id=admin_id,
+                )
             )
+
+        return await get_cached_quota(
+            tenant_id=actor.tenant_id,
+            identity=f"actors:admin:{admin_id}",
+            response_type=AIActorQuotaBalanceListResponse,
+            fetcher=fetch,
         )
 
     @classmethod
