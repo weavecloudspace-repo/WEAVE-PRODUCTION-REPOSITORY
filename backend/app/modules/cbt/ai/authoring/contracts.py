@@ -130,6 +130,12 @@ When visual_mode is "auto" ("Allow images" in CBT):
 - Do not attach decorative or irrelevant images merely to hit the target:
   construct fair, answerable visual-assessment questions from the subject
   and teacher's brief, such as identifying or comparing stitches and seams.
+- NEVER request a labelled image whose heading, caption, annotation, or
+  diagram title reveals the correct answer to the question. When asking
+  candidates to identify an object or sewing technique, request an
+  unlabelled examination image instead of a tutorial with its name printed.
+- The image generation_prompt must explicitly forbid rendering the name of
+  the correct option or an equivalent answer-revealing label.
 - A question counts as visual-bearing when the question itself or at least
   one answer option contains an image directive. Multiple option images
   in the SAME question count as only ONE visual-bearing question.
