@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import base64
-import json
-from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -64,7 +62,7 @@ async def test_unauthorized_response_is_normalized(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_image_generation_accepts_valid_png(monkeypatch):
-    png = base64.b64encode(b"\\x89PNG\\r\\n\\x1a\\n" + b"payload").decode()
+    png = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"payload").decode()
     async def post(self, url, *, headers, json):
         assert url.endswith("/images")
         assert json["model"] == "qwen/qwen-image-2.1-turbo"
