@@ -128,7 +128,16 @@ class ContactSheetImageResolver(ImageResolver):
             candidate_groups.append(result)
 
         if not candidate_groups and search_failures:
-            raise search_failures[0]
+            logger.warning(
+                "cbt.ai.image_resolution.search_unavailable_fallback_to_generation",
+                extra={"image_error_type": type(search_failures[0]).__name__},
+            )
+            return await self._generate(
+                prompt=normalized_generation_prompt,
+                metadata=generation_metadata,
+                reference_images=reference_images,
+                evaluation=None,
+            )
 
         candidates = _dedupe_candidates(candidate_groups)
         logger.info(
