@@ -368,3 +368,43 @@ async def test_text_only_batch_does_not_add_visual_target_or_resolve_images() ->
     assert result.repaired is False
     assert "visual_question_target" not in provider.generate_request
     assert resolver.calls == []
+
+
+@pytest.mark.asyncio
+async def test_image_resolver_receives_correct_choice_for_assessment_integrity() -> None:
+    question = _single("What seam is shown?", visual=True, option_visual=True)
+    question["options"][0]["text"] = "Flat-felled seam"
+    question["options"][1]["text"] = "French seam"
+    provider = FakeQuestionProvider(generated=[question])
+    service, resolver = _service(provider)
+
+    await service.generate_questions(
+        request={"visual_mode": "auto"},
+        expected_count=1,
+    )
+
+    assert len(resolver.calls) == 2
+    assert all(
+        '"correct_answer_text": ["Flat-felled seam"]' in call["assessment_context"]
+        for call in resolver.calls
+    )
+    assert all("What seam is shown?" in call["assessment_context"] for call in resolver.calls)
+
+
+def test_integrity_review_costs_are_included_in_question_usage() -> None:
+    result = ImageResolutionResult(
+        source="search",
+        image=_materialized(),
+        integrity_review_usages=[
+            ProviderUsage(
+                input_tokens=25,
+                output_tokens=8,
+                provider_cost=0.002,
+                currency="USD",
+            )
+        ],
+    )
+    usages = QuestionAuthoringService._image_resolution_usages(result)
+    assert sum(usage.input_tokens for usage in usages) == 25
+    assert sum(usage.output_tokens for usage in usages) == 8
+    assert sum(usage.provider_cost or 0 for usage in usages) == pytest.approx(0.002)
