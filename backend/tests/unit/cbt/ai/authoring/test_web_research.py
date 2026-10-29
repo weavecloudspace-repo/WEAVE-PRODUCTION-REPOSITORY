@@ -1,4 +1,5 @@
 """DDGS web research never accepts arbitrary model-supplied read URLs."""
+
 from __future__ import annotations
 
 import json
