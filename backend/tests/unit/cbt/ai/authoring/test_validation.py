@@ -277,35 +277,22 @@ def test_visual_target_rejects_invalid_question_counts(count: object) -> None:
 
 
 def test_fifteen_question_auto_batch_requires_six_visual_questions() -> None:
-    questions = [
-        _single(f"Question {index}", visual=index < 6)
-        for index in range(15)
-    ]
-    result = validate_generated_question_batch(
-        questions, expected_count=15, visual_mode="auto"
-    )
+    questions = [_single(f"Question {index}", visual=index < 6) for index in range(15)]
+    result = validate_generated_question_batch(questions, expected_count=15, visual_mode="auto")
     assert len(result) == 15
 
 
 def test_one_visual_in_fifteen_triggers_structured_repair_feedback() -> None:
-    questions = [
-        _single(f"Question {index}", visual=index == 0)
-        for index in range(15)
-    ]
+    questions = [_single(f"Question {index}", visual=index == 0) for index in range(15)]
     with pytest.raises(AIResponseValidationError) as error:
-        validate_generated_question_batch(
-            questions, expected_count=15, visual_mode="auto"
-        )
+        validate_generated_question_batch(questions, expected_count=15, visual_mode="auto")
     assert "visual_distribution_mismatch" in _issue_codes(error.value)
     feedback = error.value.to_repair_feedback()
     assert "exactly 6 visual-bearing" in feedback["issues"][0]["message"]
 
 
 def test_more_than_six_visual_questions_also_misses_distribution() -> None:
-    questions = [
-        _single(f"Question {index}", visual=index < 7)
-        for index in range(15)
-    ]
+    questions = [_single(f"Question {index}", visual=index < 7) for index in range(15)]
     with pytest.raises(AIResponseValidationError) as error:
         validate_generated_question_batch(questions, visual_mode="auto")
     assert "visual_distribution_mismatch" in _issue_codes(error.value)
@@ -313,8 +300,7 @@ def test_more_than_six_visual_questions_also_misses_distribution() -> None:
 
 def test_visual_question_with_option_images_counts_only_once() -> None:
     questions = [
-        _single(f"Question {index}", visual=index < 5,
-                option_visual=index == 5)
+        _single(f"Question {index}", visual=index < 5, option_visual=index == 5)
         for index in range(15)
     ]
     result = validate_generated_question_batch(questions, visual_mode="auto")
@@ -323,6 +309,9 @@ def test_visual_question_with_option_images_counts_only_once() -> None:
 
 def test_text_only_still_allows_fifteen_text_questions_without_images() -> None:
     questions = [_single(f"Question {index}") for index in range(15)]
-    assert len(validate_generated_question_batch(
-        questions, expected_count=15, visual_mode="text_only"
-    )) == 15
+    assert (
+        len(
+            validate_generated_question_batch(questions, expected_count=15, visual_mode="text_only")
+        )
+        == 15
+    )
