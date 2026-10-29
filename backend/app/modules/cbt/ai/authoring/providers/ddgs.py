@@ -1,4 +1,5 @@
 """DDGS search adapter for existing CBT image candidate resolution."""
+
 from __future__ import annotations
 
 import asyncio
@@ -24,6 +25,7 @@ class DDGSImageSearchProvider(BaseImageSearchProvider):
             raise ValueError("Image search query cannot be blank.")
         if type(limit) is not int or not 1 <= limit <= 30:
             raise ValueError("Image search limit must be between 1 and 30.")
+
         # Restrict discovery to commercial-modification candidates. This is a
         # search filter, NOT proof of a license; independent verification is required.
         def _search() -> list[dict[str, Any]]:
@@ -35,6 +37,7 @@ class DDGSImageSearchProvider(BaseImageSearchProvider):
                     max_results=limit,
                 )
             )
+
         rows = await asyncio.wait_for(
             asyncio.to_thread(_search),
             timeout=settings.DDGS_REQUEST_TIMEOUT_SECONDS + 3,
