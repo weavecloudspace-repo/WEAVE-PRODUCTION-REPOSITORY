@@ -4,6 +4,7 @@ Balance writes never use this cache. PostgreSQL remains authoritative, and a
 monotonic Redis generation prevents older in-flight reads from repopulating the
 active cache namespace after a committed credit mutation.
 """
+
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
