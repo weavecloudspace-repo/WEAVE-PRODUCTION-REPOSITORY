@@ -140,11 +140,15 @@ async def test_reference_image_regeneration_uses_vision_before_text(monkeypatch)
     from app.modules.cbt.ai.authoring.providers.base import ProviderImageInput
 
     image = ProviderImageInput(
-        data=b"test-image", content_type="image/png",
-        sha256="0" * 64, width=80, height=80,
+        data=b"test-image",
+        content_type="image/png",
+        sha256="0" * 64,
+        width=80,
+        height=80,
     )
     result = await OpenRouterQuestionGenerationProvider(api_key="test").regenerate_question(
-        request={"existing_question": {"stem": "Old"}}, reference_images=[image],
+        request={"existing_question": {"stem": "Old"}},
+        reference_images=[image],
     )
     assert len(calls) == 2
     assert result.question["stem"] == "Which triangle?"
