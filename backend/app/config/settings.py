@@ -476,7 +476,13 @@ class Settings(BaseSettings):
         return normalized
 
     @field_validator(
-        "MINIMAX_TEXT_MODEL", "MINIMAX_IMAGE_MODEL", "GEMINI_TEXT_MODEL", "GEMINI_IMAGE_MODEL", "OPENROUTER_TEXT_MODEL", "OPENROUTER_VISION_MODEL", "OPENROUTER_IMAGE_MODEL"
+        "MINIMAX_TEXT_MODEL",
+        "MINIMAX_IMAGE_MODEL",
+        "GEMINI_TEXT_MODEL",
+        "GEMINI_IMAGE_MODEL",
+        "OPENROUTER_TEXT_MODEL",
+        "OPENROUTER_VISION_MODEL",
+        "OPENROUTER_IMAGE_MODEL",
     )
     @classmethod
     def validate_cbt_ai_model_name(cls, value: str) -> str:
