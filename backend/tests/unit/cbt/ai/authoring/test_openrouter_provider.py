@@ -110,3 +110,44 @@ async def test_image_evaluation_validates_index(monkeypatch):
         await OpenRouterImageEvaluationProvider(api_key="test").evaluate_images(
             requirement="Heart", images=[image]
         )
+
+
+@pytest.mark.asyncio
+async def test_reference_image_regeneration_uses_vision_before_text(monkeypatch):
+    calls = []
+
+    async def post(self, url, *, headers, json):
+        calls.append(json)
+        if json["model"] == "qwen/qwen3-vl-8b-instruct":
+            assert any(part.get("type") == "image_url" for part in json["messages"][0]["content"])
+            return fake_response(
+                {
+                    "choices": [{"message": {"content": "A labelled blue triangle."}}],
+                    "usage": {"prompt_tokens": 25, "completion_tokens": 8, "cost": 0.002},
+                }
+            )
+        assert json["model"] == "openai/gpt-oss-120b"
+        assert isinstance(json["messages"][-1]["content"], str)
+        assert "A labelled blue triangle." in json["messages"][-1]["content"]
+        return fake_response(
+            {
+                "choices": [{"message": {"content": '{"question":{"stem":"Which triangle?"}}'}}],
+                "usage": {"prompt_tokens": 60, "completion_tokens": 20, "cost": 0.003},
+            }
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", post)
+    from app.modules.cbt.ai.authoring.providers.base import ProviderImageInput
+
+    image = ProviderImageInput(
+        data=b"test-image", content_type="image/png",
+        sha256="0" * 64, width=80, height=80,
+    )
+    result = await OpenRouterQuestionGenerationProvider(api_key="test").regenerate_question(
+        request={"existing_question": {"stem": "Old"}}, reference_images=[image],
+    )
+    assert len(calls) == 2
+    assert result.question["stem"] == "Which triangle?"
+    assert result.usage.input_tokens == 85
+    assert result.usage.output_tokens == 28
+    assert result.usage.provider_cost == pytest.approx(0.005)
