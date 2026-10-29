@@ -212,9 +212,7 @@ async def test_daily_quota_429_fails_without_retrying(monkeypatch):
     from app.modules.cbt.ai.authoring.providers import openrouter
     from unittest.mock import AsyncMock
 
-    monkeypatch.setattr(
-        openrouter.vision_request_pacer, "wait_for_slot", AsyncMock()
-    )
+    monkeypatch.setattr(openrouter.vision_request_pacer, "wait_for_slot", AsyncMock())
     attempts = []
 
     async def post(self, url, *, headers, json):
