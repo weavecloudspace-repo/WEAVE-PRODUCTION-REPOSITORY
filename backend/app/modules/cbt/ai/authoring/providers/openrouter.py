@@ -3,6 +3,7 @@
 All inference uses OpenRouter's official Chat Completions or Images API;
 requests are never executed at import time.
 """
+
 from __future__ import annotations
 
 import base64
@@ -115,9 +116,11 @@ class _OpenRouterHTTP:
         usage = result.get("usage")
         if not isinstance(usage, dict):
             return ProviderUsage()
+
         def count(key: str) -> int:
             v = usage.get(key)
             return v if type(v) is int and v >= 0 else 0
+
         details = usage.get("prompt_tokens_details")
         cached = details.get("cached_tokens", 0) if isinstance(details, dict) else 0
         cost = usage.get("cost")
