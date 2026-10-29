@@ -15,7 +15,9 @@ from app.modules.cbt.ai.authoring.providers.openrouter import (
 
 
 def fake_response(payload: dict, status: int = 200) -> httpx.Response:
-    return httpx.Response(status, json=payload, request=httpx.Request("POST", "https://openrouter.ai/api/v1/images"))
+    return httpx.Response(
+        status, json=payload, request=httpx.Request("POST", "https://openrouter.ai/api/v1/images")
+    )
 
 
 @pytest.mark.asyncio
@@ -30,8 +32,12 @@ async def test_question_generation_normalizes_response(monkeypatch):
     async def post(self, url, *, headers, json):
         assert url.endswith("/chat/completions")
         assert json["model"] == "openai/gpt-oss-120b"
-        return fake_response({"choices": [{"message": {"content": '{"questions":[{"stem":"Which?"}]}'}}],
-                              "usage": {"prompt_tokens": 50, "completion_tokens": 10, "cost": 0.001}})
+        return fake_response(
+            {
+                "choices": [{"message": {"content": '{"questions":[{"stem":"Which?"}]}'}}],
+                "usage": {"prompt_tokens": 50, "completion_tokens": 10, "cost": 0.001},
+            }
+        )
     monkeypatch.setattr(httpx.AsyncClient, "post", post)
     provider = OpenRouterQuestionGenerationProvider(api_key="test", timeout=10)
     result = await provider.generate_questions(request={"topic": "Biology"})
@@ -66,9 +72,13 @@ async def test_image_generation_accepts_valid_png(monkeypatch):
     async def post(self, url, *, headers, json):
         assert url.endswith("/images")
         assert json["model"] == "qwen/qwen-image-2.1-turbo"
-        return fake_response({"data": [{"b64_json": png, "media_type": "image/png"}], "usage": {"cost": 0.0184}})
+        return fake_response(
+            {"data": [{"b64_json": png, "media_type": "image/png"}], "usage": {"cost": 0.0184}}
+        )
     monkeypatch.setattr(httpx.AsyncClient, "post", post)
-    generated = await OpenRouterImageGenerationProvider(api_key="test").generate_image(prompt="Human heart")
+    generated = await OpenRouterImageGenerationProvider(api_key="test").generate_image(
+        prompt="Human heart"
+    )
     assert generated.image.content_type == "image/png"
     assert generated.image.data_base64 == png
 
@@ -76,9 +86,19 @@ async def test_image_generation_accepts_valid_png(monkeypatch):
 @pytest.mark.asyncio
 async def test_image_evaluation_validates_index(monkeypatch):
     async def post(self, url, *, headers, json):
-        return fake_response({"choices": [{"message": {"content": '{"decision":"use_candidate","selected_index":99}'}}]})
+        return fake_response(
+            {
+                "choices": [
+                    {"message": {"content": '{"decision":"use_candidate","selected_index":99}'}}
+                ]
+            }
+        )
     monkeypatch.setattr(httpx.AsyncClient, "post", post)
     from app.modules.cbt.ai.authoring.providers.base import ProviderImageInput
-    image = ProviderImageInput(data=b"image", content_type="image/png", sha256="0" * 64, width=10, height=10)
+    image = ProviderImageInput(
+        data=b"image", content_type="image/png", sha256="0" * 64, width=10, height=10
+    )
     with pytest.raises(OpenRouterProviderError, match="index"):
-        await OpenRouterImageEvaluationProvider(api_key="test").evaluate_images(requirement="Heart", images=[image])
+        await OpenRouterImageEvaluationProvider(api_key="test").evaluate_images(
+            requirement="Heart", images=[image]
+        )
