@@ -16,9 +16,7 @@ async def test_local_pacer_queues_burst_instead_of_sending_together(monkeypatch)
     pacer = request_pacing.VisionRequestPacer()
 
     async def send():
-        await pacer.wait_for_slot(
-            api_key="test", model="qwen/vision", interval=0.035, max_wait=0.5
-        )
+        await pacer.wait_for_slot(api_key="test", model="qwen/vision", interval=0.035, max_wait=0.5)
         return time.monotonic()
 
     times = await asyncio.gather(send(), send(), send())
@@ -32,9 +30,7 @@ async def test_local_pacer_enforces_queue_maximum(monkeypatch):
     pacer = request_pacing.VisionRequestPacer()
     await pacer.wait_for_slot(api_key="test", model="vision", interval=30, max_wait=0.01)
     with pytest.raises(request_pacing.OpenRouterPacingError, match="capacity"):
-        await pacer.wait_for_slot(
-            api_key="test", model="vision", interval=30, max_wait=0.01
-        )
+        await pacer.wait_for_slot(api_key="test", model="vision", interval=30, max_wait=0.01)
 
 
 @pytest.mark.asyncio
@@ -51,12 +47,8 @@ async def test_distributed_pacing_uses_atomic_redis_eval_and_shared_model_key(mo
     monkeypatch.setattr(request_pacing, "get_runtime_redis", lambda: redis)
     first = request_pacing.VisionRequestPacer()
     second = request_pacing.VisionRequestPacer()
-    await first.wait_for_slot(
-        api_key="same-secret", model="qwen/vision", interval=4, max_wait=90
-    )
-    await second.wait_for_slot(
-        api_key="same-secret", model="qwen/vision", interval=4, max_wait=90
-    )
+    await first.wait_for_slot(api_key="same-secret", model="qwen/vision", interval=4, max_wait=90)
+    await second.wait_for_slot(api_key="same-secret", model="qwen/vision", interval=4, max_wait=90)
     assert redis.calls[0][2][0] == redis.calls[1][2][0]
     assert "same-secret" not in redis.calls[0][2][0]
     assert redis.calls[0][2][1:] == (4000, 90000)
@@ -71,9 +63,7 @@ async def test_distributed_redis_pacing_fail_closed(monkeypatch):
     monkeypatch.setattr(request_pacing, "get_runtime_redis", lambda: BrokenRedis())
     pacer = request_pacing.VisionRequestPacer()
     with pytest.raises(request_pacing.OpenRouterPacingError, match="unavailable"):
-        await pacer.wait_for_slot(
-            api_key="test", model="qwen/vision", interval=4, max_wait=90
-        )
+        await pacer.wait_for_slot(api_key="test", model="qwen/vision", interval=4, max_wait=90)
 
 
 @pytest.mark.asyncio
