@@ -11,6 +11,7 @@ import asyncio
 import hashlib
 import time
 
+from app.config.settings import settings
 from app.core.cache.redis import get_runtime_redis
 
 # Redis TIME is authoritative; no clocks from distinct application workers
@@ -47,6 +48,7 @@ class OpenRouterPacingError(RuntimeError):
 class VisionRequestPacer:
     def __init__(self) -> None:
         self._gate = asyncio.Lock()
+        self.local_vision_gate = asyncio.Semaphore(1)
         self._next_local: dict[str, float] = {}
 
     @staticmethod
@@ -83,6 +85,9 @@ class VisionRequestPacer:
             if wait_ms:
                 await asyncio.sleep(wait_ms / 1000)
             return
+
+        if settings.is_production_like:
+            raise OpenRouterPacingError("Runtime Redis is required for shared vision pacing.")
 
         # Single-process local fallback, used when runtime Redis is not
         # connected (typical local development).
