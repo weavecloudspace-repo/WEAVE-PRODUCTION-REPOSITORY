@@ -149,10 +149,7 @@ class _OpenRouterHTTP:
         if not self.api_key:
             raise OpenRouterProviderError("OpenRouter CBT AI provider is not configured.")
         model = str(payload.get("model") or "unspecified")
-        is_vision = (
-            endpoint == "chat/completions"
-            and model == settings.OPENROUTER_VISION_MODEL
-        )
+        is_vision = endpoint == "chat/completions" and model == settings.OPENROUTER_VISION_MODEL
         retries = settings.OPENROUTER_429_MAX_RETRIES
         backoff_cap = settings.OPENROUTER_429_MAX_BACKOFF_SECONDS
 
@@ -206,11 +203,7 @@ class _OpenRouterHTTP:
                             "ai_quota_exhausted": error.quota_exhausted,
                         },
                     )
-                    if (
-                        error.quota_exhausted
-                        or attempt >= retries
-                        or proposed_delay > backoff_cap
-                    ):
+                    if error.quota_exhausted or attempt >= retries or proposed_delay > backoff_cap:
                         raise error
                     if is_vision:
                         await vision_request_pacer.cooldown(
