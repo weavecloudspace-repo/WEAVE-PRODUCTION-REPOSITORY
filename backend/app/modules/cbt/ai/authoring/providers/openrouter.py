@@ -6,8 +6,12 @@ requests are never executed at import time.
 
 from __future__ import annotations
 
+import asyncio
 import base64
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 import json
+import logging
 from typing import Any, Mapping, Sequence
 
 import httpx
@@ -21,6 +25,9 @@ from app.modules.cbt.ai.authoring.contracts import (
     build_question_repair_prompt,
 )
 from app.modules.cbt.ai.authoring.image_contact_sheet import contact_sheet_candidate_count
+from app.modules.cbt.ai.authoring.providers.request_pacing import (
+    vision_request_pacer,
+)
 from app.modules.cbt.ai.authoring.providers.base import (
     BaseImageEvaluationProvider,
     BaseImageGenerationProvider,
@@ -35,10 +42,92 @@ from app.modules.cbt.ai.authoring.providers.base import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 class OpenRouterProviderError(RuntimeError):
-    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+    """Structured, secret-safe OpenRouter failure. No raw prompts/API keys."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        model: str | None = None,
+        error_code: str | None = None,
+        retry_after_seconds: float | None = None,
+        quota_exhausted: bool = False,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.model = model
+        self.error_code = error_code
+        self.retry_after_seconds = retry_after_seconds
+        self.quota_exhausted = quota_exhausted
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        numeric = float(value)
+        if 0 <= numeric <= 86400:
+            return numeric
+    except (ValueError, OverflowError):
+        pass
+    try:
+        stamp = parsedate_to_datetime(value)
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        return max(0.0, (stamp - datetime.now(timezone.utc)).total_seconds())
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _provider_error(response: httpx.Response, model: str) -> OpenRouterProviderError:
+    # Parse only a small, known subset of upstream metadata. Never place a
+    # provider's free-form error message or request text into application logs.
+    code: str | None = None
+    hint = ""
+    try:
+        data = response.json()
+        error = data.get("error") if isinstance(data, dict) else None
+        if isinstance(error, dict):
+            raw_code = error.get("code")
+            if type(raw_code) in (str, int):
+                code = str(raw_code)[:80]
+            raw_message = error.get("message")
+            if isinstance(raw_message, str):
+                hint = raw_message[:600].lower()
+    except (ValueError, TypeError):
+        pass
+    signals = (code or "").lower() + " " + hint
+    quota_exhausted = any(
+        token in signals
+        for token in (
+            "daily limit",
+            "daily quota",
+            "quota exhausted",
+            "insufficient_quota",
+            "insufficient credits",
+            "insufficient balance",
+            "credit limit",
+            "out of credits",
+            "free tier limit reached",
+        )
+    )
+    retry_after = _parse_retry_after(response.headers.get("Retry-After"))
+    classification = "quota_exhausted" if quota_exhausted else "upstream_failure"
+    if response.status_code == 429 and not quota_exhausted:
+        classification = "rate_limited"
+    return OpenRouterProviderError(
+        f"OpenRouter {classification} (HTTP {response.status_code}, model={model}).",
+        status_code=response.status_code,
+        model=model,
+        error_code=code,
+        retry_after_seconds=retry_after,
+        quota_exhausted=quota_exhausted,
+    )
 
 
 class _OpenRouterHTTP:
@@ -59,34 +148,100 @@ class _OpenRouterHTTP:
     async def _post(self, endpoint: str, payload: dict[str, Any], timeout: float) -> dict[str, Any]:
         if not self.api_key:
             raise OpenRouterProviderError("OpenRouter CBT AI provider is not configured.")
-        try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/{endpoint}",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://weavecloudspace.com",
-                        "X-Title": "WEAVE",
-                    },
-                    json=payload,
-                )
-        except httpx.TimeoutException as exc:
-            raise OpenRouterProviderError("OpenRouter request timed out.") from exc
-        except httpx.RequestError as exc:
-            raise OpenRouterProviderError("Unable to contact OpenRouter.") from exc
-        if response.is_error:
-            raise OpenRouterProviderError(
-                f"OpenRouter request failed with HTTP {response.status_code}.",
-                status_code=response.status_code,
-            )
-        try:
-            result = response.json()
-        except ValueError as exc:
-            raise OpenRouterProviderError("OpenRouter returned invalid JSON.") from exc
-        if not isinstance(result, dict):
-            raise OpenRouterProviderError("OpenRouter response was not a JSON object.")
-        return result
+        model = str(payload.get("model") or "unspecified")
+        is_vision = (
+            endpoint == "chat/completions"
+            and model == settings.OPENROUTER_VISION_MODEL
+        )
+        retries = settings.OPENROUTER_429_MAX_RETRIES
+        backoff_cap = settings.OPENROUTER_429_MAX_BACKOFF_SECONDS
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            for attempt in range(retries + 1):
+                try:
+                    if is_vision:
+                        # Serialize the local worker and pace all workers using
+                        # the same API-key/model through atomic Redis slots.
+                        async with vision_request_pacer.local_vision_gate:
+                            await vision_request_pacer.wait_for_slot(
+                                api_key=self.api_key,
+                                model=model,
+                                interval=settings.OPENROUTER_VISION_MIN_INTERVAL_SECONDS,
+                                max_wait=settings.OPENROUTER_VISION_MAX_QUEUE_WAIT_SECONDS,
+                            )
+                            response = await client.post(
+                                f"{self.base_url}/{endpoint}",
+                                headers=self._headers(),
+                                json=payload,
+                            )
+                    else:
+                        response = await client.post(
+                            f"{self.base_url}/{endpoint}",
+                            headers=self._headers(),
+                            json=payload,
+                        )
+                except httpx.TimeoutException as exc:
+                    raise OpenRouterProviderError(
+                        "OpenRouter request timed out.", model=model
+                    ) from exc
+                except httpx.RequestError as exc:
+                    raise OpenRouterProviderError(
+                        "Unable to contact OpenRouter.", model=model
+                    ) from exc
+
+                if response.status_code == 429:
+                    error = _provider_error(response, model)
+                    proposed_delay = (
+                        error.retry_after_seconds
+                        if error.retry_after_seconds is not None
+                        else min(backoff_cap, 2.0 * (2**attempt))
+                    )
+                    logger.warning(
+                        "cbt.ai.openrouter.rate_limited",
+                        extra={
+                            "ai_model": model,
+                            "ai_error_code": error.error_code,
+                            "ai_retry_after_seconds": error.retry_after_seconds,
+                            "ai_rate_limit_attempt": attempt + 1,
+                            "ai_quota_exhausted": error.quota_exhausted,
+                        },
+                    )
+                    if (
+                        error.quota_exhausted
+                        or attempt >= retries
+                        or proposed_delay > backoff_cap
+                    ):
+                        raise error
+                    if is_vision:
+                        await vision_request_pacer.cooldown(
+                            api_key=self.api_key, model=model, delay=proposed_delay
+                        )
+                    else:
+                        await asyncio.sleep(proposed_delay)
+                    continue
+
+                if response.is_error:
+                    raise _provider_error(response, model)
+                try:
+                    result = response.json()
+                except ValueError as exc:
+                    raise OpenRouterProviderError(
+                        "OpenRouter returned invalid JSON.", model=model
+                    ) from exc
+                if not isinstance(result, dict):
+                    raise OpenRouterProviderError(
+                        "OpenRouter response was not a JSON object.", model=model
+                    )
+                return result
+        raise OpenRouterProviderError("OpenRouter retry budget exhausted.", model=model)
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://weavecloudspace.com",
+            "X-Title": "WEAVE",
+        }
 
     @staticmethod
     def _text(result: dict[str, Any]) -> str:
