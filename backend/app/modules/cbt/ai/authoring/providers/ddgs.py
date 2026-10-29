@@ -17,8 +17,9 @@ class DDGSImageSearchProvider(BaseImageSearchProvider):
     def is_configured(self) -> bool:
         return True
 
-    async def search(self, *, query: str, limit: int = 10,
-                     metadata: Mapping[str, Any] | None = None) -> list[ImageCandidate]:
+    async def search(
+        self, *, query: str, limit: int = 10, metadata: Mapping[str, Any] | None = None
+    ) -> list[ImageCandidate]:
         if not query.strip():
             raise ValueError("Image search query cannot be blank.")
         if type(limit) is not int or not 1 <= limit <= 30:
@@ -26,12 +27,14 @@ class DDGSImageSearchProvider(BaseImageSearchProvider):
         # Restrict discovery to commercial-modification candidates. This is a
         # search filter, NOT proof of a license; independent verification is required.
         def _search() -> list[dict[str, Any]]:
-            return list(DDGS(timeout=settings.DDGS_REQUEST_TIMEOUT_SECONDS).images(
-                query=query.strip(),
-                safesearch="on",
-                license_image="ModifyCommercially",
-                max_results=limit,
-            ))
+            return list(
+                DDGS(timeout=settings.DDGS_REQUEST_TIMEOUT_SECONDS).images(
+                    query=query.strip(),
+                    safesearch="on",
+                    license_image="ModifyCommercially",
+                    max_results=limit,
+                )
+            )
         rows = await asyncio.wait_for(
             asyncio.to_thread(_search),
             timeout=settings.DDGS_REQUEST_TIMEOUT_SECONDS + 3,
@@ -47,15 +50,19 @@ class DDGSImageSearchProvider(BaseImageSearchProvider):
             if not isinstance(source, str) or urlparse(source).scheme not in ("http", "https"):
                 continue
             thumb = row.get("thumbnail")
-            candidates.append(ImageCandidate(
-                source="ddgs",
-                source_url=source,
-                image_url=direct,
-                thumbnail_url=thumb if isinstance(thumb, str) and urlparse(thumb).scheme == "https" else None,
-                title=str(row.get("title") or "")[:500],
-                width=row.get("width") if type(row.get("width")) is int else None,
-                height=row.get("height") if type(row.get("height")) is int else None,
-                # Never assert a verified license on the basis of DDGS results.
-                license_name=None,
-            ))
+            candidates.append(
+                ImageCandidate(
+                    source="ddgs",
+                    source_url=source,
+                    image_url=direct,
+                    thumbnail_url=thumb
+                    if isinstance(thumb, str) and urlparse(thumb).scheme == "https"
+                    else None,
+                    title=str(row.get("title") or "")[:500],
+                    width=row.get("width") if type(row.get("width")) is int else None,
+                    height=row.get("height") if type(row.get("height")) is int else None,
+                    # Never assert a verified license on the basis of DDGS results.
+                    license_name=None,
+                )
+            )
         return candidates
