@@ -420,6 +420,11 @@ class Settings(BaseSettings):
     OPENROUTER_REQUEST_TIMEOUT_SECONDS: float = Field(default=90.0, ge=1.0, le=300.0)
     OPENROUTER_VISION_TIMEOUT_SECONDS: float = Field(default=60.0, ge=1.0, le=300.0)
     OPENROUTER_IMAGE_TIMEOUT_SECONDS: float = Field(default=180.0, ge=1.0, le=300.0)
+    # Requests from every tenant share the same OpenRouter key/model budget.
+    OPENROUTER_VISION_MIN_INTERVAL_SECONDS: float = Field(default=4.0, ge=0.0, le=60.0)
+    OPENROUTER_VISION_MAX_QUEUE_WAIT_SECONDS: float = Field(default=90.0, ge=1.0, le=600.0)
+    OPENROUTER_429_MAX_RETRIES: int = Field(default=2, ge=0, le=4)
+    OPENROUTER_429_MAX_BACKOFF_SECONDS: float = Field(default=15.0, ge=1.0, le=60.0)
     DDGS_REQUEST_TIMEOUT_SECONDS: int = Field(default=10, ge=1, le=60)
     AI_QUOTA_READ_CACHE_ENABLED: bool = True
     AI_QUOTA_READ_CACHE_TTL_SECONDS: int = Field(default=15, ge=1, le=60)
