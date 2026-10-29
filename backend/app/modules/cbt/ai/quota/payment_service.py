@@ -180,6 +180,6 @@ class AIQuotaPaymentService:
             commit=False,
         )
         return PaymentWebhookSettlementResult(
-            message="AI credit purchase webhook processed successfully."
+            message="AI credit purchase webhook processed successfully.",
             post_commit=lambda: invalidate_quota_cache(purchase.tenant_id),
         )
