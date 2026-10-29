@@ -1,4 +1,5 @@
 """DDGS image discovery contract; never calls external search engines."""
+
 from __future__ import annotations
 
 import pytest
