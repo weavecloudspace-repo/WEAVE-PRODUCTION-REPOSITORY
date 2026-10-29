@@ -50,7 +50,7 @@ class DDGSImageSearchProvider(BaseImageSearchProvider):
             source = row.get("url")
             if not isinstance(direct, str) or urlparse(direct).scheme != "https":
                 continue
-            if not isinstance(source, str) or urlparse(source).scheme not in ("http", "https"):
+            if not isinstance(source, str) or urlparse(source).scheme != "https":
                 continue
             thumb = row.get("thumbnail")
             candidates.append(
