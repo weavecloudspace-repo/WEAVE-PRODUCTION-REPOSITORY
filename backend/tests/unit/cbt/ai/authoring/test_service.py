@@ -331,3 +331,46 @@ async def test_regeneration_repair_cannot_change_expected_question_type() -> Non
         )
     assert provider.repair_calls == 1
     assert resolver.calls == []
+
+
+@pytest.mark.asyncio
+async def test_allow_images_target_is_passed_to_model_and_repair() -> None:
+    generated = [
+        _single(f"Question {index}", visual=index == 0)
+        for index in range(15)
+    ]
+    corrected = [
+        _single(f"Question {index}", visual=index < 6)
+        for index in range(15)
+    ]
+    provider = FakeQuestionProvider(generated=generated, repaired=corrected)
+    service, resolver = _service(provider)
+
+    result = await service.generate_questions(
+        request={"visual_mode": "auto", "question_count": 15},
+        expected_count=15,
+    )
+
+    assert result.repaired is True
+    assert provider.generate_request["visual_question_target"] == 6
+    assert provider.repair_request["original_request"]["visual_question_target"] == 6
+    assert provider.repair_request["validation_feedback"]["issues"][0]["code"] == (
+        "visual_distribution_mismatch"
+    )
+    assert len(result.questions) == 15
+    assert len(resolver.calls) == 6
+    assert provider.repair_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_text_only_batch_does_not_add_visual_target_or_resolve_images() -> None:
+    generated = [_single(f"Question {index}") for index in range(15)]
+    provider = FakeQuestionProvider(generated=generated)
+    service, resolver = _service(provider)
+    result = await service.generate_questions(
+        request={"visual_mode": "text_only", "question_count": 15},
+        expected_count=15,
+    )
+    assert result.repaired is False
+    assert "visual_question_target" not in provider.generate_request
+    assert resolver.calls == []
