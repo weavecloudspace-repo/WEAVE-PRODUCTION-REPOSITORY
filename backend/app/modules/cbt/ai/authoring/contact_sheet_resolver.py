@@ -5,6 +5,10 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Mapping, Sequence
 
+from app.modules.cbt.ai.authoring.assessment_integrity import (
+    assessment_review_requirement,
+    assessment_safe_generation_prompt,
+)
 from app.modules.cbt.ai.authoring.flow_logging import get_question_generation_logger
 from app.modules.cbt.ai.authoring.image_contact_sheet import build_candidate_contact_sheet
 from app.modules.cbt.ai.authoring.image_materializer import (
@@ -28,6 +32,7 @@ from app.modules.cbt.ai.authoring.providers.base import (
     ImageResolutionResult,
     ProviderImageEvaluationResult,
     ProviderImageInput,
+    ProviderUsage,
 )
 
 logger = get_question_generation_logger("contact_sheet_resolver")
@@ -69,6 +74,7 @@ class ContactSheetImageResolver(ImageResolver):
         search_metadata: Mapping[str, Any] | None = None,
         generation_metadata: Mapping[str, Any] | None = None,
         reference_images: Sequence[ProviderImageInput] | None = None,
+        assessment_context: str | None = None,
     ) -> ImageResolutionResult:
         normalized_requirement = requirement.strip()
         normalized_search_query = search_query.strip()
@@ -77,10 +83,13 @@ class ContactSheetImageResolver(ImageResolver):
         if not normalized_search_query:
             raise ValueError("Image search query cannot be empty.")
 
-        normalized_generation_prompt = (
-            generation_prompt.strip()
-            if isinstance(generation_prompt, str) and generation_prompt.strip()
-            else normalized_requirement
+        normalized_generation_prompt = assessment_safe_generation_prompt(
+            (
+                generation_prompt.strip()
+                if isinstance(generation_prompt, str) and generation_prompt.strip()
+                else normalized_requirement
+            ),
+            assessment_context,
         )
         search_queries = _build_parallel_search_queries(
             normalized_requirement,
@@ -137,6 +146,7 @@ class ContactSheetImageResolver(ImageResolver):
                 metadata=generation_metadata,
                 reference_images=reference_images,
                 evaluation=None,
+                assessment_context=assessment_context,
             )
 
         candidates = _dedupe_candidates(candidate_groups)
@@ -202,6 +212,7 @@ class ContactSheetImageResolver(ImageResolver):
                 metadata=generation_metadata,
                 reference_images=reference_images,
                 evaluation=None,
+                assessment_context=assessment_context,
             )
 
         preview_images = [image for _, image in materialized_candidates]
@@ -246,7 +257,9 @@ class ContactSheetImageResolver(ImageResolver):
             )
             try:
                 evaluation = await self.evaluation_provider.evaluate_images(
-                    requirement=normalized_requirement,
+                    requirement=assessment_review_requirement(
+                        normalized_requirement, assessment_context
+                    ),
                     images=evaluation_images,
                 )
                 break
@@ -318,6 +331,7 @@ class ContactSheetImageResolver(ImageResolver):
                 metadata=generation_metadata,
                 reference_images=reference_images,
                 evaluation=evaluation,
+                assessment_context=assessment_context,
             )
 
         if evaluation.decision != "use_candidate":
@@ -359,6 +373,39 @@ class ContactSheetImageResolver(ImageResolver):
                 },
             )
 
+        integrity_review_usages: list[ProviderUsage] = []
+        if assessment_context:
+            # Contact-sheet thumbnails can hide tiny titles, and full-size
+            # materialization may produce different bytes. Reinspect exactly
+            # what will be returned to the candidate.
+            integrity_review = await self.evaluation_provider.evaluate_images(
+                requirement=assessment_review_requirement(
+                    normalized_requirement, assessment_context
+                ),
+                images=[selected_image],
+            )
+            integrity_review_usages.append(integrity_review.usage)
+            if (
+                integrity_review.decision != "use_candidate"
+                or integrity_review.selected_index != 0
+            ):
+                logger.warning(
+                    "cbt.ai.image_resolution.search_candidate.answer_leakage_rejected",
+                    extra={
+                        "image_selected_index": selected_index,
+                        "image_integrity_reason": integrity_review.reason,
+                    },
+                )
+                fallback = await self._generate(
+                    prompt=normalized_generation_prompt,
+                    metadata=generation_metadata,
+                    reference_images=reference_images,
+                    evaluation=evaluation,
+                    assessment_context=assessment_context,
+                )
+                fallback.integrity_review_usages.extend(integrity_review_usages)
+                return fallback
+
         logger.info(
             "cbt.ai.image_resolution.search_candidate.selected",
             extra={
@@ -381,6 +428,7 @@ class ContactSheetImageResolver(ImageResolver):
             image=selected_image,
             candidate=selected_candidate,
             evaluation=evaluation,
+            integrity_review_usages=integrity_review_usages,
         )
 
     async def _materialize_one_candidate(
