@@ -67,7 +67,9 @@ class VisionRequestPacer:
             try:
                 wait_ms = int(
                     await redis.eval(
-                        _RESERVE_SLOT, 1, key,
+                        _RESERVE_SLOT,
+                        1,
+                        key,
                         max(1, round(interval * 1000)),
                         max(0, round(max_wait * 1000)),
                     )
@@ -79,9 +81,7 @@ class VisionRequestPacer:
                     "Shared OpenRouter request pacing is unavailable."
                 ) from exc
             if wait_ms < 0:
-                raise OpenRouterPacingError(
-                    "OpenRouter vision queue is at capacity; retry later."
-                )
+                raise OpenRouterPacingError("OpenRouter vision queue is at capacity; retry later.")
             if wait_ms:
                 await asyncio.sleep(wait_ms / 1000)
             return
@@ -101,9 +101,7 @@ class VisionRequestPacer:
         if delay:
             await asyncio.sleep(delay)
 
-    async def cooldown(
-        self, *, api_key: str, model: str, delay: float
-    ) -> None:
+    async def cooldown(self, *, api_key: str, model: str, delay: float) -> None:
         """Publish a short upstream 429 cooldown to all workers."""
         if delay <= 0:
             return
@@ -118,9 +116,7 @@ class VisionRequestPacer:
                 ) from exc
             return
         async with self._gate:
-            self._next_local[key] = max(
-                self._next_local.get(key, 0.0), time.monotonic() + delay
-            )
+            self._next_local[key] = max(self._next_local.get(key, 0.0), time.monotonic() + delay)
 
 
 vision_request_pacer = VisionRequestPacer()
