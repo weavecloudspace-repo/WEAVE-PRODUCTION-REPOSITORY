@@ -126,6 +126,7 @@ class ImageResolutionResult:
     generation: ProviderImageGenerationResult | None = None
     generation_attempts: list[ProviderImageGenerationResult] = field(default_factory=list)
     evaluation: ProviderImageEvaluationResult | None = None
+    integrity_review_usages: list[ProviderUsage] = field(default_factory=list)
 
 
 class BaseProvider(ABC):
