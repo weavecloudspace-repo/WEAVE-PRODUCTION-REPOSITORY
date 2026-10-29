@@ -10,15 +10,15 @@ def optional_credentials(monkeypatch):
     for name in (
         "GEMINI_API_KEY",
         "MINIMAX_API_KEY",
-        "OPENVERSE_CLIENT_ID",
-        "OPENVERSE_CLIENT_SECRET",
+        "OPENROUTER_API_KEY",
     ):
         monkeypatch.setattr(factory.settings, name, None)
 
 
-@pytest.mark.parametrize("name", ["gemini", "minimax"])
+@pytest.mark.parametrize("name", ["gemini", "minimax", "openrouter"])
 def test_question_and_evaluation_selection(monkeypatch, name):
     monkeypatch.setattr(factory.settings, "CBT_AI_QUESTION_PROVIDER", name)
+    monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_EVALUATION_PROVIDER", name)
     monkeypatch.setattr(
         factory.settings, "CBT_AI_IMAGE_PROVIDER", "minimax" if name == "gemini" else "gemini"
     )
@@ -39,7 +39,7 @@ def test_image_generation_selection(monkeypatch, name):
 
 
 def test_search_selection(monkeypatch):
-    monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_SEARCH_PROVIDER", "openverse")
+    monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_SEARCH_PROVIDER", "ddgs")
     result = factory.CBTProviderFactory.get_image_search_provider()
     assert isinstance(result, factory.BaseImageSearchProvider)
     assert result.is_configured()
@@ -49,7 +49,7 @@ def test_search_selection(monkeypatch):
     "setting,method",
     [
         ("CBT_AI_QUESTION_PROVIDER", "get_question_provider"),
-        ("CBT_AI_QUESTION_PROVIDER", "get_image_evaluation_provider"),
+        ("CBT_AI_IMAGE_EVALUATION_PROVIDER", "get_image_evaluation_provider"),
         ("CBT_AI_IMAGE_PROVIDER", "get_image_generation_provider"),
         ("CBT_AI_IMAGE_SEARCH_PROVIDER", "get_image_search_provider"),
     ],
@@ -62,16 +62,12 @@ def test_unsupported_provider(monkeypatch, setting, method):
 
 def test_resolver_wiring(monkeypatch):
     monkeypatch.setattr(factory.settings, "CBT_AI_QUESTION_PROVIDER", "gemini")
+    monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_EVALUATION_PROVIDER", "gemini")
     monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_PROVIDER", "minimax")
     monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_SEARCH_PROVIDER", "openverse")
     result = factory.CBTProviderFactory.get_image_resolver()
     assert isinstance(result, factory.ImageResolver)
-    assert isinstance(result.search_provider, factory.CombinedImageSearchProvider)
-    assert isinstance(
-        result.search_provider.providers[0],
-        factory.WikimediaCommonsImageSearchProvider,
-    )
-    assert isinstance(result.search_provider.providers[1], factory.OpenverseImageSearchProvider)
+    assert isinstance(result.search_provider, factory.DDGSImageSearchProvider)
     assert isinstance(result.evaluation_provider, factory.GeminiContactSheetImageEvaluationProvider)
     assert isinstance(result.generation_provider, factory.MiniMaxImageGenerationProvider)
     assert isinstance(result.materializer, factory.PreviewImageMaterializer)
