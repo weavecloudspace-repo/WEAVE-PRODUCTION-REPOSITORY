@@ -30,7 +30,7 @@ def test_question_and_evaluation_selection(monkeypatch, name):
     assert not question.is_configured()
 
 
-@pytest.mark.parametrize("name", ["gemini", "minimax"])
+@pytest.mark.parametrize("name", ["gemini", "minimax", "openrouter"])
 def test_image_generation_selection(monkeypatch, name):
     monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_PROVIDER", name)
     result = factory.CBTProviderFactory.get_image_generation_provider()
@@ -64,7 +64,7 @@ def test_resolver_wiring(monkeypatch):
     monkeypatch.setattr(factory.settings, "CBT_AI_QUESTION_PROVIDER", "gemini")
     monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_EVALUATION_PROVIDER", "gemini")
     monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_PROVIDER", "minimax")
-    monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_SEARCH_PROVIDER", "openverse")
+    monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_SEARCH_PROVIDER", "ddgs")
     result = factory.CBTProviderFactory.get_image_resolver()
     assert isinstance(result, factory.ImageResolver)
     assert isinstance(result.search_provider, factory.DDGSImageSearchProvider)
