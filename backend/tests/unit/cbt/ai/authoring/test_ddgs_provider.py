@@ -15,13 +15,25 @@ class FakeDDGS:
     def images(self, **kwargs):
         self.calls.append(kwargs)
         return [
-            {"title": "Heart", "image": "https://cdn.example.org/heart.png",
-             "thumbnail": "https://cdn.example.org/thumb.png",
-             "url": "https://example.org/heart", "width": 1000, "height": 800},
-            {"title": "Login", "image": "https://example.org/signin",
-             "url": "http://invalid", "width": 600},
-            {"title": "Bad scheme", "image": "file:///etc/passwd",
-             "url": "https://example.org/bad"},
+            {
+                "title": "Heart",
+                "image": "https://cdn.example.org/heart.png",
+                "thumbnail": "https://cdn.example.org/thumb.png",
+                "url": "https://example.org/heart",
+                "width": 1000,
+                "height": 800,
+            },
+            {
+                "title": "Login",
+                "image": "https://example.org/signin",
+                "url": "http://invalid",
+                "width": 600,
+            },
+            {
+                "title": "Bad scheme",
+                "image": "file:///etc/passwd",
+                "url": "https://example.org/bad",
+            },
         ]
 
 
