@@ -155,3 +155,72 @@ async def test_resolver_sends_one_contact_sheet_and_full_downloads_only_selectio
     assert result.image.width == 640
     assert result.image.height == 480
     assert generator.calls == 0
+
+
+class AnswerLeakageEvaluator:
+    """Fake Qwen: select thumbnail, reject answer-bearing full size, inspect replacement."""
+
+    provider_name = "openrouter"
+    supports_contact_sheet_selection = True
+
+    def __init__(self):
+        self.requirements = []
+        self.calls = 0
+
+    def is_configured(self):
+        return True
+
+    async def evaluate_images(self, *, requirement, images):
+        self.requirements.append(requirement)
+        self.calls += 1
+        if self.calls == 1:
+            assert contact_sheet_candidate_count(images) == 2
+            return ProviderImageEvaluationResult(
+                decision="use_candidate", selected_index=0,
+            )
+        if self.calls == 2:
+            assert len(images) == 1
+            assert images[0].width == 640
+            return ProviderImageEvaluationResult(
+                decision="generate_image",
+                reason="Visible title 'Flat Felled Seams' gives away option A.",
+            )
+        assert len(images) == 1
+        assert images[0].label == "generated"
+        return ProviderImageEvaluationResult(decision="use_candidate", selected_index=0)
+
+
+@pytest.mark.asyncio
+async def test_answer_revealing_full_size_image_falls_back_to_audited_generation():
+    candidates = [
+        ImageCandidate(
+            source=f"candidate-{index}",
+            source_url=f"https://example.com/{index}",
+            image_url=f"https://example.com/{index}.jpg",
+        )
+        for index in range(2)
+    ]
+    evaluator = AnswerLeakageEvaluator()
+    generator = Generator()
+    resolver = ContactSheetImageResolver(
+        search_provider=FakeSearchProvider(candidates),
+        evaluation_provider=evaluator,
+        generation_provider=generator,
+        materializer=RecordingMaterializer(),
+    )
+
+    result = await resolver.resolve(
+        requirement="A seam with enclosed raw edges",
+        search_query="flat felled seam",
+        assessment_context=(
+            '{"question":"Which kind of seam is this?",'
+            '"correct_answer_text":["Flat-felled seam"],'
+            '"answer_options":["Flat-felled seam","French seam"]}'
+        ),
+    )
+
+    assert result.source == "generated"
+    assert generator.calls == 1
+    assert evaluator.calls == 3
+    assert all("Flat-felled seam" in requirement for requirement in evaluator.requirements)
+    assert len(result.integrity_review_usages) == 2
