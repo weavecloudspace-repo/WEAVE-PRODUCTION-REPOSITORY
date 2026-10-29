@@ -388,9 +388,10 @@ class Settings(BaseSettings):
     # Credits, feature flags, tenant balances, and generation limits
     # belong to the CBT AI domain/configuration layer.
     # ==========================================================
-    CBT_AI_QUESTION_PROVIDER: Literal["gemini", "minimax"] = "gemini"
-    CBT_AI_IMAGE_PROVIDER: Literal["gemini", "minimax"] = "gemini"
-    CBT_AI_IMAGE_SEARCH_PROVIDER: Literal["openverse"] = "openverse"
+    CBT_AI_QUESTION_PROVIDER: Literal["gemini", "minimax", "openrouter"] = "gemini"
+    CBT_AI_IMAGE_PROVIDER: Literal["gemini", "minimax", "openrouter"] = "gemini"
+    CBT_AI_IMAGE_EVALUATION_PROVIDER: Literal["gemini", "minimax", "openrouter"] = "gemini"
+    CBT_AI_IMAGE_SEARCH_PROVIDER: Literal["ddgs"] = "ddgs"
     CBT_AI_CREDIT_UNIT_PRICE_KOBO: int = Field(default=2000, ge=0)
     CBT_AI_MINIMUM_PURCHASE_CREDITS: int = Field(default=1, gt=0)
 
@@ -410,10 +411,19 @@ class Settings(BaseSettings):
     GEMINI_IMAGE_TIMEOUT_SECONDS: float = Field(default=120.0, ge=1.0, le=300.0)
     GEMINI_REQUEST_TIMEOUT_SECONDS: float = Field(default=60.0, ge=1.0, le=300.0)
 
-    OPENVERSE_BASE_URL: str = "https://api.openverse.org/v1"
-    OPENVERSE_CLIENT_ID: str | None = None
-    OPENVERSE_CLIENT_SECRET: SecretStr | None = None
-    OPENVERSE_REQUEST_TIMEOUT_SECONDS: float = Field(default=15.0, ge=1.0, le=60.0)
+    OPENROUTER_API_KEY: SecretStr | None = None
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_TEXT_MODEL: str = "openai/gpt-oss-120b"
+    OPENROUTER_VISION_MODEL: str = "qwen/qwen3-vl-8b-instruct"
+    OPENROUTER_IMAGE_MODEL: str = "qwen/qwen-image-2.1-turbo"
+    OPENROUTER_MAX_OUTPUT_TOKENS: int = Field(default=8192, ge=256, le=131072)
+    OPENROUTER_REQUEST_TIMEOUT_SECONDS: float = Field(default=90.0, ge=1.0, le=300.0)
+    OPENROUTER_VISION_TIMEOUT_SECONDS: float = Field(default=60.0, ge=1.0, le=300.0)
+    OPENROUTER_IMAGE_TIMEOUT_SECONDS: float = Field(default=180.0, ge=1.0, le=300.0)
+    DDGS_REQUEST_TIMEOUT_SECONDS: int = Field(default=10, ge=1, le=60)
+    WEB_RESEARCH_ENABLED: bool = False
+    WEB_RESEARCH_MAX_SEARCHES: int = Field(default=2, ge=1, le=4)
+    WEB_RESEARCH_MAX_READS: int = Field(default=3, ge=1, le=6)
 
     @field_validator(
         "CACHE_DEFAULT_TTL_SECONDS",
@@ -436,7 +446,7 @@ class Settings(BaseSettings):
             return int(float(raw_value))
         raise ValueError("Cache TTL values must be seconds.")
 
-    @field_validator("MINIMAX_BASE_URL", "GEMINI_BASE_URL", "OPENVERSE_BASE_URL")
+    @field_validator("MINIMAX_BASE_URL", "GEMINI_BASE_URL", "OPENROUTER_BASE_URL")
     @classmethod
     def validate_cbt_api_service_url(cls, value: str) -> str:
         normalized = value.strip().rstrip("/")
@@ -464,7 +474,7 @@ class Settings(BaseSettings):
         return normalized
 
     @field_validator(
-        "MINIMAX_TEXT_MODEL", "MINIMAX_IMAGE_MODEL", "GEMINI_TEXT_MODEL", "GEMINI_IMAGE_MODEL"
+        "MINIMAX_TEXT_MODEL", "MINIMAX_IMAGE_MODEL", "GEMINI_TEXT_MODEL", "GEMINI_IMAGE_MODEL", "OPENROUTER_TEXT_MODEL", "OPENROUTER_VISION_MODEL", "OPENROUTER_IMAGE_MODEL"
     )
     @classmethod
     def validate_cbt_ai_model_name(cls, value: str) -> str:
@@ -473,7 +483,7 @@ class Settings(BaseSettings):
             raise ValueError("CBT AI model names cannot be blank.")
         return normalized
 
-    @field_validator("MINIMAX_API_KEY", "GEMINI_API_KEY", "OPENVERSE_CLIENT_SECRET")
+    @field_validator("MINIMAX_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY")
     @classmethod
     def normalize_optional_cbt_ai_secret(cls, value: SecretStr | None) -> SecretStr | None:
         if value is None:
@@ -482,14 +492,6 @@ class Settings(BaseSettings):
         if not normalized:
             return None
         return SecretStr(normalized)
-
-    @field_validator("OPENVERSE_CLIENT_ID")
-    @classmethod
-    def normalize_optional_openverse_client_id(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized or None
 
     @model_validator(mode="after")
     def validate_settings(self) -> "Settings":
