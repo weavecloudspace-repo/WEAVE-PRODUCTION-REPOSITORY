@@ -95,7 +95,7 @@ async def test_candidate_falls_back_to_thumbnail_when_original_url_is_unusable()
         ]
     )
     candidate = ImageCandidate(
-        source="openverse",
+        source="ddgs",
         source_url="https://example.com/source",
         image_url="https://cdn.example.com/original.png",
         thumbnail_url="https://cdn.example.com/thumbnail.png",
