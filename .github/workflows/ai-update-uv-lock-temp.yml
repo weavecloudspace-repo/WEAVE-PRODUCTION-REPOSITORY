@@ -1,0 +1,28 @@
+name: Temporary AI dependency lock refresh
+on:
+  push:
+    branches:
+      - feature/openrouter-ddgs-ai-optimization
+    paths:
+      - .github/workflows/ai-update-uv-lock-temp.yml
+permissions:
+  contents: write
+jobs:
+  update-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: astral-sh/setup-uv@v5
+      - name: Resolve dependency graph
+        run: cd backend && uv lock
+      - name: Commit lockfile update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/uv.lock
+          if ! git diff --cached --quiet; then
+            git commit -m "build(ai): synchronize uv.lock after DDGS dependency"
+            git push origin HEAD:feature/openrouter-ddgs-ai-optimization
+          fi
