@@ -364,6 +364,7 @@ class QuestionAuthoringService:
         usages: list[ProviderUsage] = []
         if resolution.evaluation is not None:
             usages.append(resolution.evaluation.usage)
+        usages.extend(resolution.integrity_review_usages)
         if resolution.generation_attempts:
             usages.extend(attempt.usage for attempt in resolution.generation_attempts)
         elif resolution.generation is not None:
