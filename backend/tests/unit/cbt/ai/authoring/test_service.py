@@ -335,14 +335,8 @@ async def test_regeneration_repair_cannot_change_expected_question_type() -> Non
 
 @pytest.mark.asyncio
 async def test_allow_images_target_is_passed_to_model_and_repair() -> None:
-    generated = [
-        _single(f"Question {index}", visual=index == 0)
-        for index in range(15)
-    ]
-    corrected = [
-        _single(f"Question {index}", visual=index < 6)
-        for index in range(15)
-    ]
+    generated = [_single(f"Question {index}", visual=index == 0) for index in range(15)]
+    corrected = [_single(f"Question {index}", visual=index < 6) for index in range(15)]
     provider = FakeQuestionProvider(generated=generated, repaired=corrected)
     service, resolver = _service(provider)
 
