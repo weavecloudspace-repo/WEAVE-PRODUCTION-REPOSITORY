@@ -42,7 +42,13 @@ def test_defaults_and_validator_chain():
 
 
 @pytest.mark.parametrize(
-    "field", ["CBT_AI_QUESTION_PROVIDER", "CBT_AI_IMAGE_PROVIDER", "CBT_AI_IMAGE_SEARCH_PROVIDER", "CBT_AI_IMAGE_EVALUATION_PROVIDER"]
+    "field",
+    [
+        "CBT_AI_QUESTION_PROVIDER",
+        "CBT_AI_IMAGE_PROVIDER",
+        "CBT_AI_IMAGE_SEARCH_PROVIDER",
+        "CBT_AI_IMAGE_EVALUATION_PROVIDER",
+    ],
 )
 def test_unknown_provider_rejected(field):
     with pytest.raises(ValidationError):
