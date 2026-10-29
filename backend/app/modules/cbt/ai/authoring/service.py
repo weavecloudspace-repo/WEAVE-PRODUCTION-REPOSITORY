@@ -20,6 +20,7 @@ from app.modules.cbt.ai.authoring.schemas import (
     AIQuestionDraft,
     AIVisualMode,
 )
+from app.modules.cbt.ai.authoring.visual_policy import target_visual_question_count
 from app.modules.cbt.ai.authoring.validation import (
     AIResponseValidationError,
     SUPPORTED_VISUAL_MODES,
@@ -93,6 +94,12 @@ class QuestionAuthoringService:
         expected_type_counts: Mapping[str, int] | None = None,
     ) -> QuestionGenerationResult:
         request_payload, visual_mode = self._prepare_authoring_request(request)
+        # This internal hint is never part of the public CBT request schema.
+        # It ensures both initial generation and one-shot repair use the
+        # same count, while Text-only mode remains unaffected.
+        count = expected_count if expected_count is not None else request_payload.get("question_count")
+        if visual_mode == "auto" and type(count) is int and count > 0:
+            request_payload["visual_question_target"] = target_visual_question_count(count)
         repaired = False
 
         try:
