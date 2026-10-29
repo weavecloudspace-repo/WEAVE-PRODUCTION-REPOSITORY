@@ -421,6 +421,8 @@ class Settings(BaseSettings):
     OPENROUTER_VISION_TIMEOUT_SECONDS: float = Field(default=60.0, ge=1.0, le=300.0)
     OPENROUTER_IMAGE_TIMEOUT_SECONDS: float = Field(default=180.0, ge=1.0, le=300.0)
     DDGS_REQUEST_TIMEOUT_SECONDS: int = Field(default=10, ge=1, le=60)
+    AI_QUOTA_READ_CACHE_ENABLED: bool = True
+    AI_QUOTA_READ_CACHE_TTL_SECONDS: int = Field(default=15, ge=1, le=60)
     WEB_RESEARCH_ENABLED: bool = False
     WEB_RESEARCH_MAX_SEARCHES: int = Field(default=2, ge=1, le=4)
     WEB_RESEARCH_MAX_READS: int = Field(default=3, ge=1, le=6)
