@@ -1,4 +1,5 @@
 """Redis cache generations avoid cross-tenant leakage and stale post-mutation reads."""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -75,9 +76,11 @@ async def test_quota_cache_reuses_reads_then_invalidates_after_commit(monkeypatc
 async def test_redis_unavailable_falls_back_to_database(monkeypatch):
     monkeypatch.setattr(cache, "get_redis", lambda: None)
     calls = []
+
     async def fetch():
         calls.append(True)
         return Balance(remaining=10)
+
     tenant = UUID("00000000-0000-0000-0000-000000000001")
     await cache.get_cached_quota(
         tenant_id=tenant, identity="quota", response_type=Balance, fetcher=fetch
