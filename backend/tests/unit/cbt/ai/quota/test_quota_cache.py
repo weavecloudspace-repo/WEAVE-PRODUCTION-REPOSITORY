@@ -54,8 +54,10 @@ async def test_quota_cache_reuses_reads_then_invalidates_after_commit(monkeypatc
 
     async def read(tid):
         return await cache.get_cached_quota(
-            tenant_id=tid, identity="actor:teacher:123",
-            response_type=Balance, fetcher=fetch,
+            tenant_id=tid,
+            identity="actor:teacher:123",
+            response_type=Balance,
+            fetcher=fetch,
         )
 
     assert (await read(tenant)).remaining == 100
@@ -77,6 +79,10 @@ async def test_redis_unavailable_falls_back_to_database(monkeypatch):
         calls.append(True)
         return Balance(remaining=10)
     tenant = UUID("00000000-0000-0000-0000-000000000001")
-    await cache.get_cached_quota(tenant_id=tenant, identity="quota", response_type=Balance, fetcher=fetch)
-    await cache.get_cached_quota(tenant_id=tenant, identity="quota", response_type=Balance, fetcher=fetch)
+    await cache.get_cached_quota(
+        tenant_id=tenant, identity="quota", response_type=Balance, fetcher=fetch
+    )
+    await cache.get_cached_quota(
+        tenant_id=tenant, identity="quota", response_type=Balance, fetcher=fetch
+    )
     assert len(calls) == 2
