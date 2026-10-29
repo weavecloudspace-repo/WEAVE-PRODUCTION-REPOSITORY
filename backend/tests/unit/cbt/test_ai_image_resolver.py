@@ -220,3 +220,32 @@ async def test_resolver_rejects_invalid_selected_candidate_index() -> None:
             requirement="A hibiscus flower",
             search_query="hibiscus flower",
         )
+
+
+@pytest.mark.asyncio
+async def test_generated_images_that_leak_answer_are_not_returned_after_retries() -> None:
+    search = FakeSearchProvider([])
+    evaluator = FakeEvaluationProvider(
+        ProviderImageEvaluationResult(
+            decision="generate_image",
+            reason="Text caption directly reveals 'Flat-felled seam'.",
+        )
+    )
+    generator = FakeGenerationProvider()
+    resolver = ImageResolver(
+        search_provider=search,
+        evaluation_provider=evaluator,
+        generation_provider=generator,
+        materializer=FakeMaterializer(),
+    )
+
+    with pytest.raises(ImageResolverError, match="assessment-unsafe"):
+        await resolver.resolve(
+            requirement="Close-up of a sewn seam",
+            search_query="sewn seam",
+            assessment_context='{"correct_answer_text":["Flat-felled seam"]}',
+        )
+
+    assert generator.calls == resolver.MAX_GENERATION_MATERIALIZATION_ATTEMPTS
+    assert evaluator.calls == generator.calls
+    assert "Do NOT write the correct" in (generator.last_prompt or "")
