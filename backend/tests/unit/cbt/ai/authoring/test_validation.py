@@ -8,6 +8,7 @@ from app.modules.cbt.ai.authoring.schemas import (
     AIQuestionOptionDraft,
     AISingleChoiceQuestionDraft,
 )
+from app.modules.cbt.ai.authoring.visual_policy import target_visual_question_count
 from app.modules.cbt.ai.authoring.validation import (
     AIResponseValidationError,
     validate_generated_question_batch,
@@ -247,3 +248,81 @@ def test_validation_feedback_is_structured_and_bounded() -> None:
     assert feedback["error"] == "invalid_generated_questions"
     assert feedback["issues"]
     assert all({"path", "code", "message"} <= set(item) for item in feedback["issues"])
+
+
+@pytest.mark.parametrize(
+    ("question_count", "visual_target"),
+    [
+        (1, 1),
+        (2, 1),
+        (3, 1),
+        (4, 1),
+        (5, 2),
+        (10, 4),
+        (12, 5),
+        (15, 6),
+        (20, 8),
+    ],
+)
+def test_allow_images_uses_deterministic_40_percent_visual_target(
+    question_count: int, visual_target: int
+) -> None:
+    assert target_visual_question_count(question_count) == visual_target
+
+
+@pytest.mark.parametrize("count", [0, -1, 1.5, True])
+def test_visual_target_rejects_invalid_question_counts(count: object) -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        target_visual_question_count(count)  # type: ignore[arg-type]
+
+
+def test_fifteen_question_auto_batch_requires_six_visual_questions() -> None:
+    questions = [
+        _single(f"Question {index}", visual=index < 6)
+        for index in range(15)
+    ]
+    result = validate_generated_question_batch(
+        questions, expected_count=15, visual_mode="auto"
+    )
+    assert len(result) == 15
+
+
+def test_one_visual_in_fifteen_triggers_structured_repair_feedback() -> None:
+    questions = [
+        _single(f"Question {index}", visual=index == 0)
+        for index in range(15)
+    ]
+    with pytest.raises(AIResponseValidationError) as error:
+        validate_generated_question_batch(
+            questions, expected_count=15, visual_mode="auto"
+        )
+    assert "visual_distribution_mismatch" in _issue_codes(error.value)
+    feedback = error.value.to_repair_feedback()
+    assert "exactly 6 visual-bearing" in feedback["issues"][0]["message"]
+
+
+def test_more_than_six_visual_questions_also_misses_distribution() -> None:
+    questions = [
+        _single(f"Question {index}", visual=index < 7)
+        for index in range(15)
+    ]
+    with pytest.raises(AIResponseValidationError) as error:
+        validate_generated_question_batch(questions, visual_mode="auto")
+    assert "visual_distribution_mismatch" in _issue_codes(error.value)
+
+
+def test_visual_question_with_option_images_counts_only_once() -> None:
+    questions = [
+        _single(f"Question {index}", visual=index < 5,
+                option_visual=index == 5)
+        for index in range(15)
+    ]
+    result = validate_generated_question_batch(questions, visual_mode="auto")
+    assert len(result) == 15
+
+
+def test_text_only_still_allows_fifteen_text_questions_without_images() -> None:
+    questions = [_single(f"Question {index}") for index in range(15)]
+    assert len(validate_generated_question_batch(
+        questions, expected_count=15, visual_mode="text_only"
+    )) == 15
