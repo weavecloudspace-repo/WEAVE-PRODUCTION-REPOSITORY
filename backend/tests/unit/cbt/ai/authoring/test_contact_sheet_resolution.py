@@ -187,7 +187,7 @@ class AnswerLeakageEvaluator:
                 reason="Visible title 'Flat Felled Seams' gives away option A.",
             )
         assert len(images) == 1
-        assert images[0].label == "generated"
+        assert images[0].label == "generated_image"
         return ProviderImageEvaluationResult(decision="use_candidate", selected_index=0)
 
 
