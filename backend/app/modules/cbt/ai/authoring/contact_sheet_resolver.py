@@ -385,10 +385,7 @@ class ContactSheetImageResolver(ImageResolver):
                 images=[selected_image],
             )
             integrity_review_usages.append(integrity_review.usage)
-            if (
-                integrity_review.decision != "use_candidate"
-                or integrity_review.selected_index != 0
-            ):
+            if integrity_review.decision != "use_candidate" or integrity_review.selected_index != 0:
                 logger.warning(
                     "cbt.ai.image_resolution.search_candidate.answer_leakage_rejected",
                     extra={
