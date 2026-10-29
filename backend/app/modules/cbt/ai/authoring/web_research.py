@@ -4,6 +4,7 @@ The LLM may only read URLs returned by its own previous search. External
 content is untrusted and never becomes an instruction. Disable WEB_RESEARCH
 until network egress controls are configured for the deployment.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -67,6 +68,7 @@ class DDGSWebResearch:
                     query, safesearch="on", max_results=5
                 )
             )
+
         rows = await asyncio.wait_for(
             asyncio.to_thread(run), timeout=settings.DDGS_REQUEST_TIMEOUT_SECONDS + 3
         )
@@ -97,10 +99,12 @@ class DDGSWebResearch:
         if not safe_public_https(url):
             raise WebResearchError("Unsafe destination.")
         self.read_calls += 1
+
         def run():
             return DDGS(timeout=settings.DDGS_REQUEST_TIMEOUT_SECONDS).extract(
                 url, fmt="text_markdown"
             )
+
         result = await asyncio.wait_for(
             asyncio.to_thread(run), timeout=settings.DDGS_REQUEST_TIMEOUT_SECONDS + 3
         )
