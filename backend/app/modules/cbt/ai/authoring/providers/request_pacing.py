@@ -8,8 +8,11 @@ development fallback; production should keep runtime Redis connected.
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 import hashlib
 import time
+import uuid
+from collections.abc import AsyncIterator
 
 from app.config.settings import settings
 from app.core.cache.redis import get_runtime_redis
@@ -41,6 +44,19 @@ return target - now
 """
 
 
+_IMAGE_PERMIT_ACQUIRE = """
+local parts = redis.call('TIME')
+local now = tonumber(parts[1]) * 1000 + math.floor(tonumber(parts[2]) / 1000)
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now)
+if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[1]) then
+    return 0
+end
+redis.call('ZADD', KEYS[1], now + tonumber(ARGV[2]), ARGV[3])
+redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[2]) + 60000)
+return 1
+"""
+
+
 class OpenRouterPacingError(RuntimeError):
     """The provider is busy or the distributed pace is unavailable."""
 
@@ -49,7 +65,71 @@ class VisionRequestPacer:
     def __init__(self) -> None:
         self._gate = asyncio.Lock()
         self.local_vision_gate = asyncio.Semaphore(1)
+        self.local_image_gate = asyncio.Semaphore(2)
         self._next_local: dict[str, float] = {}
+
+    @asynccontextmanager
+    async def image_global_permit(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        max_concurrent: int,
+        max_wait: float,
+        lease_seconds: float,
+    ) -> AsyncIterator[None]:
+        """Limit in-flight image calls globally, not only their start rate.
+
+        Redis ZSET reservations are atomic. A bounded lease protects against
+        leaked permits on worker crashes; a long provider timeout must fit
+        within that lease. The local semaphore is acquired by the caller.
+        """
+        redis = get_runtime_redis()
+        if redis is None:
+            if settings.is_production_like:
+                raise OpenRouterPacingError(
+                    "Redis is required for distributed image concurrency."
+                )
+            yield
+            return
+
+        key = self._key(api_key, model) + ":active"
+        token = uuid.uuid4().hex
+        deadline = time.monotonic() + max_wait
+        acquired = False
+        try:
+            while True:
+                try:
+                    acquired = bool(
+                        await redis.eval(
+                            _IMAGE_PERMIT_ACQUIRE,
+                            1,
+                            key,
+                            max_concurrent,
+                            max(1000, round(lease_seconds * 1000)),
+                            token,
+                        )
+                    )
+                except Exception as exc:
+                    raise OpenRouterPacingError(
+                        "Distributed image concurrency limiter unavailable."
+                    ) from exc
+                if acquired:
+                    break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise OpenRouterPacingError(
+                        "Qwen image queue is full; retry later."
+                    )
+                await asyncio.sleep(min(1.0, remaining))
+            yield
+        finally:
+            if acquired:
+                try:
+                    await redis.zrem(key, token)
+                except Exception:
+                    # The Redis lease self-expires after worker/Redis failure.
+                    pass
 
     @staticmethod
     def _key(api_key: str, model: str) -> str:
