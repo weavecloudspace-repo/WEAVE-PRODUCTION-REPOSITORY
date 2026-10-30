@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, cast
 
@@ -95,10 +95,7 @@ class QuestionAuthoringService:
         request: Mapping[str, Any],
         expected_count: int | None = None,
         expected_type_counts: Mapping[str, int] | None = None,
-        progress_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> QuestionGenerationResult:
-        if progress_callback is not None:
-            await progress_callback("generating_questions")
         request_payload, visual_mode = self._prepare_authoring_request(request)
         # This internal hint is never part of the public CBT request schema.
         # It ensures both initial generation and one-shot repair use the
@@ -158,9 +155,6 @@ class QuestionAuthoringService:
                 )
                 repaired = True
 
-        if progress_callback is not None:
-            await progress_callback("generating_images")
-
         # Image operations are independent after the question batch has passed
         # validation. Bound concurrency, retain question order, and never return
         # a partial batch if any required image fails.
@@ -189,9 +183,6 @@ class QuestionAuthoringService:
             self._enforce_image_budget(materialized_image_bytes)
             authored_questions.append(authored_question)
             image_usages.extend(usages)
-
-        if progress_callback is not None:
-            await progress_callback("finalizing")
 
         return QuestionGenerationResult(
             questions=authored_questions,
