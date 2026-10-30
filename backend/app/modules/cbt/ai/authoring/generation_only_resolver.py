@@ -56,7 +56,7 @@ class GenerationOnlyImageResolver:
         )
         if not visual_specification:
             raise ValueError("A substantive visual specification is required.")
-        prompt = assessment_safe_generation_prompt(visual_specification, assessment_context)
+        prompt = assessment_safe_generation_prompt(visual_specification, assessment_context or "{}")
         generated = await self.generation_provider.generate_image(
             prompt=prompt,
             metadata=metadata,
