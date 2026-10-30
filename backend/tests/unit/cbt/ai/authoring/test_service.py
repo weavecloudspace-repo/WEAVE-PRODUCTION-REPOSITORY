@@ -422,7 +422,9 @@ async def test_invalid_openrouter_question_contract_gets_one_repair() -> None:
 
     provider.generate_questions = invalid_questions
     service = QuestionAuthoringService(question_provider=provider, image_resolver=resolver)
-    result = await service.generate_questions(request={"visual_mode": "text_only"}, expected_count=1)
+    result = await service.generate_questions(
+        request={"visual_mode": "text_only"}, expected_count=1
+    )
 
     assert result.repaired is True
     assert len(result.questions) == 1
