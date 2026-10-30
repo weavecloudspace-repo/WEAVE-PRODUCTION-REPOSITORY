@@ -215,6 +215,8 @@ class AIGenerationJobStatusResponse(CBTAISchemaBase):
     """A job reveals stage/status but no partial question content."""
 
     job_id: UUID
-    status: Literal["queued", "generating_questions", "generating_images", "finalizing", "completed", "failed"]
+    status: Literal[
+        "queued", "generating_questions", "generating_images", "finalizing", "completed", "failed"
+    ]
     failure_code: str | None = None
     result_available: bool = False
