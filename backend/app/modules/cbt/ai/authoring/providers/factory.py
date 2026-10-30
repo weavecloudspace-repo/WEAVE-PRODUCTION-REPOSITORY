@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from app.config.settings import settings
-from app.modules.cbt.ai.authoring.contact_sheet_resolver import ContactSheetImageResolver
-from app.modules.cbt.ai.authoring.image_resolver import ImageResolver
-from app.modules.cbt.ai.authoring.preview_materializer import PreviewImageMaterializer
+from app.modules.cbt.ai.authoring.generation_only_resolver import GenerationOnlyImageResolver
 from app.modules.cbt.ai.authoring.providers.base import (
     BaseImageEvaluationProvider,
     BaseImageGenerationProvider,
@@ -82,10 +80,7 @@ class CBTProviderFactory:
         raise CBTProviderFactoryError(f"Unsupported CBT AI image search provider: {provider!r}")
 
     @classmethod
-    def get_image_resolver(cls) -> ImageResolver:
-        return ContactSheetImageResolver(
-            search_provider=cls.get_image_search_provider(),
-            evaluation_provider=cls.get_image_evaluation_provider(),
+    def get_image_resolver(cls) -> GenerationOnlyImageResolver:
+        return GenerationOnlyImageResolver(
             generation_provider=cls.get_image_generation_provider(),
-            materializer=PreviewImageMaterializer(),
         )
