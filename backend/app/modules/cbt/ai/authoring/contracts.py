@@ -149,22 +149,26 @@ or file paths.
 
 For every image directive:
 
-- `requirement` is the detailed semantic description of the visual the
-  question actually needs. Be precise here.
-- `search_query` is NOT an image-generation prompt. It is a strict keyword
-  retrieval query for web-image search. Use only 2 to 4 concrete, noun-heavy
-  content keywords that are likely to exist in image titles, descriptions,
-  or tags. Keep it broad enough to retrieve candidates for later visual
-  evaluation.
-- Do not pad `search_query` with generic words such as "clear", "educational",
-  "study", "biology", "science", "image", "picture", "illustration", or
-  "diagram" unless that word is essential to the subject itself.
-- Prefer `search_query` values like "tree rings", "animal cell", or
-  "human skeleton" over descriptive phrases like "clear educational biology
-  diagram showing a tree trunk cross section with annual rings".
-- `generation_prompt` inside an image directive may be detailed and descriptive
-  because it is used only when web retrieval cannot supply a suitable image.
-  This image-directive field is distinct from the request-level `generation_prompt`.
+- `requirement` describes the exact object, anatomical structure, experiment,
+  mathematical figure, process, or evidence that candidates must interpret.
+  Use the syllabus and examination level to ensure factual correctness.
+- `generation_prompt` is MANDATORY for new visual questions. Write a precise,
+  self-contained visual specification for a direct image generator, including
+  correct shape, proportions, spatial arrangement, essential components,
+  viewpoint, visual style, and acceptable neutral reference markers.
+- The image generator cannot infer the intended visual from vague terms like
+  "biology diagram", "clear educational picture", or "draw an organ". Be specific.
+- Generate scientifically and technically accurate images: no invented organs,
+  incorrect equipment, impossible procedures, inconsistent proportions,
+  spurious arrows, or confusing duplicated structures.
+- NEVER ask for the correct answer, organ name, solution, question text,
+  explanatory captions, titles, headings, answer labels, or watermarks to be
+  written inside the image. Usually request NO text at all.
+- When identification questions require labels, permit ONLY neutral marker
+  letters/numbers at the correct positions, without accompanying names.
+- `search_query` is deprecated and must be omitted. Image search is disabled;
+  images are generated directly through Qwen Image and never retrieved.
+- Every generated visual must genuinely be needed to answer its question.
 """.strip()
 
 
