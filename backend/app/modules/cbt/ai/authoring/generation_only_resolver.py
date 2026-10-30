@@ -56,7 +56,11 @@ class GenerationOnlyImageResolver:
         )
         if not visual_specification:
             raise ValueError("A substantive visual specification is required.")
-        prompt = assessment_safe_generation_prompt(visual_specification, assessment_context or "{}")
+        # The visual specification must be self-contained. Never forward the
+        # hidden answer key or option correctness metadata to the image model.
+        # Passing an empty context still prepends the mandatory exam policy.
+        del assessment_context
+        prompt = assessment_safe_generation_prompt(visual_specification, "")
         generated = await self.generation_provider.generate_image(
             prompt=prompt,
             metadata=metadata,
