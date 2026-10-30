@@ -108,7 +108,7 @@ async def test_pending_job_result_does_not_settle_credits(monkeypatch):
         reservation_id=uuid4(),
         id=uuid4(),
     )
-    monkeypatch.setattr(CBTAIJobService, "_owned_record", AsyncMock(return_value=record)
+    monkeypatch.setattr(CBTAIJobService, "_owned_record", AsyncMock(return_value=record))
     monkeypatch.setattr(
         job_service.AICreditReservationRepository,
         "get_by_tenant_and_id",
