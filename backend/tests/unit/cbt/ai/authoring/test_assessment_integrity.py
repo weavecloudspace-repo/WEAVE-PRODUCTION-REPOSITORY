@@ -39,11 +39,22 @@ def test_review_receives_correct_answer_and_blocks_answer_text() -> None:
 def test_generation_fallback_prohibits_answer_bearing_titles() -> None:
     context = assessment_context(_seam_question())
     prompt = assessment_safe_generation_prompt("Show the fabric seam", context)
-    assert "Do NOT write the correct" in prompt
-    assert "avoid" in prompt.lower()
+    assert "Render NO written answers" in prompt
+    assert "accurate" in prompt.lower()
     assert "Flat-felled seam" in prompt
 
 
 def test_without_assessment_context_other_image_calls_unchanged() -> None:
     assert assessment_review_requirement("An orange", None) == "An orange"
-    assert assessment_safe_generation_prompt("An orange", None) == "An orange"
+    assert "VISUAL SPECIFICATION:\\nAn orange" in assessment_safe_generation_prompt("An orange", None)
+
+
+def test_examination_generation_policy_uses_neutral_markers_only() -> None:
+    prompt = assessment_safe_generation_prompt(
+        "Precise stomach illustration; mark the four regions A, B, C, D.",
+        assessment_context(_seam_question()),
+    )
+    assert "neutral reference markers" in prompt
+    assert "A, B, C, D" in prompt
+    assert "Never" in prompt or "NEVER" in prompt
+    assert "PRIVATE EXAMINER CONTEXT" in prompt
