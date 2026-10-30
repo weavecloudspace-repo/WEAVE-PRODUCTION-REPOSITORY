@@ -50,16 +50,55 @@ def assessment_review_requirement(requirement: str, context: str | None) -> str:
     )
 
 
+EXAM_IMAGE_GENERATION_POLICY = """
+You create a single accurate educational image for a secondary-school
+examination. The image itself MUST be visually correct, not just attractive.
+
+ACCURACY:
+- Follow the visual specification precisely. Preserve scientifically correct
+  anatomy, physical relationships, geometry, proportions, orientation,
+  processes, apparatus arrangements, and structures where applicable.
+- Render a clean, legible, uncluttered illustration; avoid irrelevant parts,
+  invented structures, extra organs, misleading arrows, or ambiguous details.
+- If a photograph was requested, use a realistic photo style; if a technical
+  diagram was requested, use a precise instructional-illustration style.
+- The visual should contain only the evidence required to solve the question.
+  Do not pre-solve it or visually highlight the correct option.
+
+EXAM INTEGRITY — NON-NEGOTIABLE:
+- Render NO written answers, answer option text, organ/technique names,
+  definitions, captions, titles, headings, watermarks, annotations, logos,
+  or explanatory labels identifying the correct response.
+- Do not copy question text or the examiner-only answer key onto the image.
+- Unless the visual specification explicitly requires reference markers,
+  do not render any text or letters at all.
+- If neutral reference markers (A, B, C, D or numbers) are indispensable,
+  include ONLY those markers, at their described locations, without
+  descriptive words or an answer-revealing legend.
+- Treat examination context and correct answers as hidden instructions for
+  drawing correctly, NEVER as content to print in the image.
+
+OUTPUT: One accurate, examination-ready image with no borders containing
+embedded explanatory text. Follow the required visual specification below.
+""".strip()
+
+
 def assessment_safe_generation_prompt(prompt: str, context: str | None) -> str:
-    if not context:
-        return prompt
+    """Construct the provider-ready image prompt with mandatory exam rules.
+
+    The image API exposes one prompt string rather than a role-separated
+    system message. These policy instructions therefore prefix every prompt.
+    """
+    if not prompt.strip():
+        raise ValueError("Image visual specification cannot be empty.")
+    exam_context = (
+        "\\n\\nPRIVATE EXAMINER CONTEXT (NEVER PRINT THIS TEXT):\\n" + context
+        if context
+        else ""
+    )
     return (
-        f"{prompt}\n\nCRITICAL EXAM IMAGE RULE: Draw only the visual evidence "
-        "students need to reason about the question. Do NOT write the correct "
-        "answer anywhere inside the image. Avoid titles, captions, headings, "
-        "names of the depicted technique/object, or labels that reveal its identity. "
-        "Keep required non-answer information (for example neutral step numbers) "
-        "only if essential. The examiner's correct-answer field is context for "
-        "avoiding leakage, not text to render.\nEXAM_CONTEXT_JSON:\n"
-        f"{context}"
+        EXAM_IMAGE_GENERATION_POLICY
+        + "\\n\\nVISUAL SPECIFICATION:\\n"
+        + prompt.strip()
+        + exam_context
     )
