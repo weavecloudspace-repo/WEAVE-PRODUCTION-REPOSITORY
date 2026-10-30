@@ -136,9 +136,7 @@ class CBTAIJobService:
         return record
 
     @classmethod
-    async def _status_for_record(
-        cls, record: AIIdempotencyRecord
-    ) -> AIGenerationJobStatusResponse:
+    async def _status_for_record(cls, record: AIIdempotencyRecord) -> AIGenerationJobStatusResponse:
         if record.status == AI_IDEMPOTENCY_SUCCEEDED:
             return AIGenerationJobStatusResponse(
                 job_id=record.id, status="completed", result_available=True
