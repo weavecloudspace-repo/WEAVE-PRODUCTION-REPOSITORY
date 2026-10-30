@@ -5,6 +5,10 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping, Sequence
 
 
+class ProviderStructuredOutputError(RuntimeError):
+    """A provider returned an invalid question JSON contract, eligible for one repair."""
+
+
 @dataclass(slots=True)
 class ProviderUsage:
     """Normalized usage/cost metadata returned by a provider call."""
