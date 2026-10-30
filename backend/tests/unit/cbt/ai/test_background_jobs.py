@@ -30,9 +30,7 @@ def _request():
 async def test_submitted_ai_job_reserves_once_and_enqueues_once(monkeypatch):
     from app.modules.cbt.ai import job_service
 
-    tenant_id, actor_id, record_id, reservation_id = (
-        uuid4(), uuid4(), uuid4(), uuid4()
-    )
+    tenant_id, actor_id, record_id, reservation_id = (uuid4(), uuid4(), uuid4(), uuid4())
     actor = SimpleNamespace(tenant_id=tenant_id)
     record = SimpleNamespace(
         id=record_id,
@@ -40,15 +38,15 @@ async def test_submitted_ai_job_reserves_once_and_enqueues_once(monkeypatch):
         request_hash=CBTAIIdempotentAuthoringService._request_hash(_request()),
     )
     monkeypatch.setattr(
-        CBTAIService, "_resolve_quota_actor",
+        CBTAIService,
+        "_resolve_quota_actor",
         lambda actor: (SimpleNamespace(value="teacher"), actor_id),
     )
     claim = AsyncMock(return_value=(record, True))
     monkeypatch.setattr(CBTAIIdempotentAuthoringService, "_claim", claim)
-    monkeypatch.setattr(
-        CBTAIIdempotentAuthoringService, "_attach_reservation", AsyncMock()
-    )
+    monkeypatch.setattr(CBTAIIdempotentAuthoringService, "_attach_reservation", AsyncMock())
     from app.modules.cbt.ai.quota.service import AIQuotaService
+
     reserve = AsyncMock(return_value=SimpleNamespace(id=reservation_id))
     monkeypatch.setattr(AIQuotaService, "reserve_credits", reserve)
     queue = AsyncMock(return_value=True)
@@ -79,18 +77,21 @@ async def test_job_lookup_rejects_other_actor(monkeypatch):
 
     tenant_id, actor_id = uuid4(), uuid4()
     monkeypatch.setattr(
-        CBTAIService, "_resolve_quota_actor",
+        CBTAIService,
+        "_resolve_quota_actor",
         lambda actor: (SimpleNamespace(value="teacher"), actor_id),
     )
     monkeypatch.setattr(
         AIIdempotencyRepository,
         "get_by_id",
-        AsyncMock(return_value=SimpleNamespace(
-            tenant_id=tenant_id,
-            actor_type="teacher",
-            actor_id=uuid4(),
-            operation="generate_job",
-        )),
+        AsyncMock(
+            return_value=SimpleNamespace(
+                tenant_id=tenant_id,
+                actor_type="teacher",
+                actor_id=uuid4(),
+                operation="generate_job",
+            )
+        ),
     )
     with pytest.raises(NotFoundException):
         await CBTAIJobService.status(
@@ -107,9 +108,7 @@ async def test_pending_job_result_does_not_settle_credits(monkeypatch):
         reservation_id=uuid4(),
         id=uuid4(),
     )
-    monkeypatch.setattr(
-        CBTAIJobService, "_owned_record", AsyncMock(return_value=record)
-    )
+    monkeypatch.setattr(CBTAIJobService, "_owned_record", AsyncMock(return_value=record)
     monkeypatch.setattr(
         job_service.AICreditReservationRepository,
         "get_by_tenant_and_id",
