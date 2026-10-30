@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Header, Query, status
+from fastapi import APIRouter, Header, Query
 
 from app.core.dependencies.db import DbSession
 from app.modules.cbt.ai.idempotency.service import CBTAIIdempotentAuthoringService
-from app.modules.cbt.ai.job_service import CBTAIJobService
 from app.modules.cbt.ai.quota.models import AIQuotaPurchaseStatus, AIQuotaRequestStatus
 from app.modules.cbt.ai.quota.payment_schemas import (
     AIQuotaPurchaseCheckoutResponse,
@@ -33,7 +32,6 @@ from app.modules.cbt.ai.quota.schemas import (
 from app.modules.cbt.ai.schemas import (
     AIGenerateQuestionsRequest,
     AIGenerateQuestionsResponse,
-    AIGenerationJobStatusResponse,
     AIRegenerateQuestionRequest,
     AIRegenerateQuestionResponse,
 )
@@ -47,45 +45,6 @@ router = APIRouter(
     tags=["CBT AI"],
     route_class=CBTGZipRoute,
 )
-
-
-@router.post(
-    "/questions/generate/jobs",
-    response_model=AIGenerationJobStatusResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def submit_generation_job(
-    payload: AIGenerateQuestionsRequest,
-    db: DbSession,
-    current_actor: CurrentCBTActor,
-    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=1, max_length=128),
-) -> AIGenerationJobStatusResponse:
-    """Queue AI authoring and return a job ID without partial questions."""
-    return await CBTAIJobService.submit(
-        db,
-        actor=current_actor,
-        request=payload,
-        idempotency_key=idempotency_key,
-    )
-
-
-@router.get("/questions/jobs/{job_id}", response_model=AIGenerationJobStatusResponse)
-async def get_generation_job_status(
-    job_id: UUID,
-    db: DbSession,
-    current_actor: CurrentCBTActor,
-) -> AIGenerationJobStatusResponse:
-    return await CBTAIJobService.status(db, actor=current_actor, job_id=job_id)
-
-
-@router.get("/questions/jobs/{job_id}/result", response_model=AIGenerateQuestionsResponse)
-async def get_generation_job_result(
-    job_id: UUID,
-    db: DbSession,
-    current_actor: CurrentCBTActor,
-) -> AIGenerateQuestionsResponse:
-    """Return the complete question batch only after all Qwen images succeed."""
-    return await CBTAIJobService.result(db, actor=current_actor, job_id=job_id)
 
 
 @router.post("/questions/generate", response_model=AIGenerateQuestionsResponse)
