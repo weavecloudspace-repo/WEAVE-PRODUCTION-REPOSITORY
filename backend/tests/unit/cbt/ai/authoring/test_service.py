@@ -11,6 +11,7 @@ from app.modules.cbt.ai.authoring.providers.base import (
     ProviderImageInput,
     ProviderQuestionGenerationResult,
     ProviderQuestionRegenerationResult,
+    ProviderStructuredOutputError,
     ProviderUsage,
 )
 from app.modules.cbt.ai.authoring.service import QuestionAuthoringService
@@ -408,3 +409,42 @@ def test_integrity_review_costs_are_included_in_question_usage() -> None:
     assert sum(usage.input_tokens for usage in usages) == 25
     assert sum(usage.output_tokens for usage in usages) == 8
     assert sum(usage.provider_cost or 0 for usage in usages) == pytest.approx(0.002)
+
+
+@pytest.mark.asyncio
+async def test_invalid_openrouter_question_contract_gets_one_repair() -> None:
+    """The real failure used to raise HTTP 500 before trying repair."""
+    provider = FakeQuestionProvider(repaired=[_single()])
+    resolver = FakeImageResolver()
+
+    async def invalid_questions(*, request):
+        raise ProviderStructuredOutputError("OpenRouter returned an invalid questions array.")
+
+    provider.generate_questions = invalid_questions
+    service = QuestionAuthoringService(question_provider=provider, image_resolver=resolver)
+    result = await service.generate_questions(request={"visual_mode": "text_only"}, expected_count=1)
+
+    assert result.repaired is True
+    assert len(result.questions) == 1
+    assert provider.repair_calls == 1
+    assert provider.repair_request["operation"] == "generation"
+    assert resolver.calls == []
+
+
+@pytest.mark.asyncio
+async def test_network_provider_error_never_triggers_question_repair() -> None:
+    from app.modules.cbt.ai.authoring.providers.openrouter import OpenRouterProviderError
+
+    provider = FakeQuestionProvider(repaired=[_single()])
+    resolver = FakeImageResolver()
+
+    async def throttled(*, request):
+        raise OpenRouterProviderError("OpenRouter rate_limited", status_code=429)
+
+    provider.generate_questions = throttled
+    service = QuestionAuthoringService(question_provider=provider, image_resolver=resolver)
+    with pytest.raises(OpenRouterProviderError, match="rate_limited"):
+        await service.generate_questions(request={"visual_mode": "text_only"}, expected_count=1)
+
+    assert provider.repair_calls == 0
+    assert resolver.calls == []
