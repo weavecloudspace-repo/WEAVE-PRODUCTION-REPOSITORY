@@ -66,8 +66,8 @@ ACCURACY:
   Do not pre-solve it or visually highlight the correct option.
 
 EXAM INTEGRITY — NON-NEGOTIABLE:
-- Do NOT write the correct answer or render any written answers, answer option
-  text, organ/technique names,
+- Do NOT write the correct answer anywhere in the image.
+- Render NO written answers, answer option text, organ/technique names,
   definitions, captions, titles, headings, watermarks, annotations, logos,
   or explanatory labels identifying the correct response.
 - Do not copy question text or the examiner-only answer key onto the image.
