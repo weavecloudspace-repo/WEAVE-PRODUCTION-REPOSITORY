@@ -60,36 +60,35 @@ def test_unsupported_provider(monkeypatch, setting, method):
         getattr(factory.CBTProviderFactory, method)()
 
 
-def test_resolver_wiring(monkeypatch):
-    monkeypatch.setattr(factory.settings, "CBT_AI_QUESTION_PROVIDER", "gemini")
-    monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_EVALUATION_PROVIDER", "gemini")
+def test_resolver_wiring_forces_qwen_and_skips_search_and_vision(monkeypatch):
+    # Legacy provider configuration must not cause a fallback to Gemini.
     monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_PROVIDER", "minimax")
+    monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_EVALUATION_PROVIDER", "gemini")
     monkeypatch.setattr(factory.settings, "CBT_AI_IMAGE_SEARCH_PROVIDER", "ddgs")
+
     result = factory.CBTProviderFactory.get_image_resolver()
-    assert isinstance(result, factory.ImageResolver)
-    assert isinstance(result.search_provider, factory.DDGSImageSearchProvider)
-    assert isinstance(result.evaluation_provider, factory.GeminiContactSheetImageEvaluationProvider)
-    assert isinstance(result.generation_provider, factory.MiniMaxImageGenerationProvider)
-    assert isinstance(result.materializer, factory.PreviewImageMaterializer)
+
+    assert isinstance(result, factory.GenerationOnlyImageResolver)
+    assert isinstance(result.generation_provider, factory.OpenRouterImageGenerationProvider)
+    assert not hasattr(result, "search_provider")
+    assert not hasattr(result, "evaluation_provider")
 
 
-def test_resolver_honors_subclass_overrides():
-    search, evaluation, generation = object(), object(), object()
-
-    class CustomFactory(factory.CBTProviderFactory):
+def test_resolver_never_invokes_old_provider_selectors():
+    class SearchDisabledFactory(factory.CBTProviderFactory):
         @staticmethod
         def get_image_search_provider():
-            return search
+            raise AssertionError("DDGS image search must not be invoked")
 
         @staticmethod
         def get_image_evaluation_provider():
-            return evaluation
+            raise AssertionError("Qwen Vision image evaluation must not be invoked")
 
         @staticmethod
         def get_image_generation_provider():
-            return generation
+            raise AssertionError("No fallback image provider selection permitted")
 
-    result = CustomFactory.get_image_resolver()
-    assert result.search_provider is search
-    assert result.evaluation_provider is evaluation
-    assert result.generation_provider is generation
+    assert isinstance(
+        SearchDisabledFactory.get_image_resolver(),
+        factory.GenerationOnlyImageResolver,
+    )
