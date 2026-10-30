@@ -6,6 +6,7 @@ compressed result replay. A job has no candidate-facing partial results.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -75,6 +76,7 @@ class CBTAIJobService:
                     actor_type=actor_type,
                     actor_id=actor_id,
                     credits=request.question_count * CBTAIService.CREDITS_PER_GENERATED_QUESTION,
+                    ttl=timedelta(hours=2),
                 )
             )
             await service._attach_reservation(
