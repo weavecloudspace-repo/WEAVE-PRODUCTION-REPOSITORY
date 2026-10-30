@@ -16,7 +16,6 @@ from app.config.settings import settings
 
 GENERAL_QUEUE_NAME = "weave:queue:general"
 HEAVY_QUEUE_NAME = "weave:queue:heavy"
-AI_QUEUE_NAME = "weave:queue:cbt-ai"
 DEFAULT_EMAIL_OUTBOX_BATCH_SIZE = 20
 
 
@@ -134,27 +133,3 @@ async def enqueue_attendance_retention_job(*, tenant_id: str | None = None) -> b
         await redis.close()
     return job is not None
 
-
-async def enqueue_cbt_ai_generation_job(
-    *,
-    job_id: str,
-    tenant_id: str,
-    request_payload: dict,
-) -> bool:
-    """Enqueue a durable, idempotent AI generation request."""
-    redis = await create_pool(
-        get_arq_redis_settings(),
-        default_queue_name=AI_QUEUE_NAME,
-    )
-    try:
-        job = await redis.enqueue_job(
-            "process_cbt_ai_generation_job",
-            job_id,
-            tenant_id,
-            request_payload,
-            _queue_name=AI_QUEUE_NAME,
-            _job_id=f"cbt-ai-generation:{job_id}",
-        )
-    finally:
-        await redis.close()
-    return job is not None
