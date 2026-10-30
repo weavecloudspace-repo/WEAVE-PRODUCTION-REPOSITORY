@@ -280,9 +280,7 @@ def test_retry_after_parses_seconds_and_invalid_dates():
         {"questions": ["not a question object"]},
     ],
 )
-async def test_malformed_questions_array_is_typed_repairable_contract_error(
-    monkeypatch, payload
-):
+async def test_malformed_questions_array_is_typed_repairable_contract_error(monkeypatch, payload):
     import json as json_module
 
     async def post(self, url, *, headers, json):
@@ -315,6 +313,4 @@ async def test_truncated_json_is_repairable_but_429_is_not(monkeypatch):
 
     monkeypatch.setattr(httpx.AsyncClient, "post", truncated_post)
     with pytest.raises(ProviderStructuredOutputError):
-        await OpenRouterQuestionGenerationProvider(api_key="test").generate_questions(
-            request={}
-        )
+        await OpenRouterQuestionGenerationProvider(api_key="test").generate_questions(request={})
