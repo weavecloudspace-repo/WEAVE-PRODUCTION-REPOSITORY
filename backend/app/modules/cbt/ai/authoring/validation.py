@@ -128,7 +128,7 @@ def _question_fingerprint(question: AIQuestionDraft) -> tuple[Any, ...]:
         if option.image is not None:
             image_fingerprint = (
                 _normalized_text(option.image.requirement),
-                _normalized_text(option.image.search_query),
+                _normalized_text(option.image.generation_prompt or option.image.requirement),
             )
         option_fingerprints.append(
             (
@@ -141,7 +141,7 @@ def _question_fingerprint(question: AIQuestionDraft) -> tuple[Any, ...]:
     if question.image is not None:
         question_image = (
             _normalized_text(question.image.requirement),
-            _normalized_text(question.image.search_query),
+            _normalized_text(question.image.generation_prompt or question.image.requirement),
         )
     return (
         question.question_type,
