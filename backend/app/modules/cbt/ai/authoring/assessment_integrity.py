@@ -97,11 +97,11 @@ def assessment_safe_generation_prompt(prompt: str, context: str | None) -> str:
     if context is None:
         return prompt.strip()
     exam_context = (
-        "\\n\\nPRIVATE EXAMINER CONTEXT (NEVER PRINT THIS TEXT):\\n" + context if context else ""
+        "\n\nPRIVATE EXAMINER CONTEXT (NEVER PRINT THIS TEXT):\n" + context if context else ""
     )
     return (
         EXAM_IMAGE_GENERATION_POLICY
-        + "\\n\\nVISUAL SPECIFICATION:\\n"
+        + "\n\nVISUAL SPECIFICATION:\n"
         + prompt.strip()
         + exam_context
     )
