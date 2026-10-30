@@ -283,7 +283,9 @@ class _OpenRouterHTTP:
         try:
             parsed = json.loads(content)
         except (TypeError, ValueError) as exc:
-            raise OpenRouterStructuredOutputError("OpenRouter returned malformed structured JSON.") from exc
+            raise OpenRouterStructuredOutputError(
+                "OpenRouter returned malformed structured JSON."
+            ) from exc
         if not isinstance(parsed, dict):
             raise OpenRouterStructuredOutputError("OpenRouter structured output must be an object.")
         return parsed
@@ -481,9 +483,7 @@ class OpenRouterQuestionGenerationProvider(_OpenRouterHTTP, BaseQuestionGenerati
                     ),
                 },
             )
-            raise OpenRouterStructuredOutputError(
-                "OpenRouter returned an invalid questions array."
-            )
+            raise OpenRouterStructuredOutputError("OpenRouter returned an invalid questions array.")
         return ProviderQuestionGenerationResult(
             questions=questions, usage=self._usage(response), raw_response=response
         )
@@ -517,7 +517,9 @@ class OpenRouterQuestionGenerationProvider(_OpenRouterHTTP, BaseQuestionGenerati
         )
         question = result.get("question")
         if not isinstance(question, dict):
-            raise OpenRouterStructuredOutputError("OpenRouter returned an invalid regenerated question.")
+            raise OpenRouterStructuredOutputError(
+                "OpenRouter returned an invalid regenerated question."
+            )
         return ProviderQuestionRegenerationResult(
             question=question, usage=self._usage(response), raw_response=response
         )
