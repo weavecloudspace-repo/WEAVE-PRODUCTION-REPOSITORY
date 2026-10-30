@@ -11,6 +11,7 @@ from app.modules.cbt.ai.authoring.providers.openrouter import (
     OpenRouterImageEvaluationProvider,
     OpenRouterImageGenerationProvider,
     OpenRouterProviderError,
+    OpenRouterStructuredOutputError,
     OpenRouterQuestionGenerationProvider,
 )
 
@@ -55,7 +56,7 @@ async def test_malformed_question_response_rejected(monkeypatch):
         return fake_response({"choices": [{"message": {"content": '{"wrong": []}'}}]})
 
     monkeypatch.setattr(httpx.AsyncClient, "post", post)
-    with pytest.raises(OpenRouterProviderError, match="questions array"):
+    with pytest.raises(OpenRouterStructuredOutputError, match="questions array"):
         await OpenRouterQuestionGenerationProvider(api_key="test").generate_questions(request={})
 
 
@@ -267,3 +268,53 @@ def test_retry_after_parses_seconds_and_invalid_dates():
     assert _parse_retry_after("2.5") == 2.5
     assert _parse_retry_after("-1") is None
     assert _parse_retry_after("nonsense") is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"wrong": []},
+        {"questions": None},
+        {"questions": {}},
+        {"questions": ["not a question object"]},
+    ],
+)
+async def test_malformed_questions_array_is_typed_repairable_contract_error(
+    monkeypatch, payload
+):
+    import json as json_module
+
+    async def post(self, url, *, headers, json):
+        return fake_response(
+            {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": json_module.dumps(payload)},
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", post)
+    with pytest.raises(OpenRouterStructuredOutputError):
+        await OpenRouterQuestionGenerationProvider(api_key="test").generate_questions(
+            request={"visual_mode": "text_only"}
+        )
+
+
+@pytest.mark.asyncio
+async def test_truncated_json_is_repairable_but_429_is_not(monkeypatch):
+    from app.modules.cbt.ai.authoring.providers.base import ProviderStructuredOutputError
+
+    async def truncated_post(self, url, *, headers, json):
+        return fake_response(
+            {"choices": [{"finish_reason": "length", "message": {"content": '{"questions": ['}}]}
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", truncated_post)
+    with pytest.raises(ProviderStructuredOutputError):
+        await OpenRouterQuestionGenerationProvider(api_key="test").generate_questions(
+            request={}
+        )
