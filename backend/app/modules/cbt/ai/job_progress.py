@@ -24,9 +24,7 @@ class AIJobProgressCache:
         redis = get_runtime_redis()
         if redis is None:
             raise RuntimeError("Redis unavailable for CBT AI generation progress.")
-        await redis.set(
-            cls._key(job_id), stage, ex=AI_JOB_PROGRESS_TTL_SECONDS
-        )
+        await redis.set(cls._key(job_id), stage, ex=AI_JOB_PROGRESS_TTL_SECONDS)
 
     @classmethod
     async def get(cls, job_id: UUID) -> str | None:
