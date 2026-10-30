@@ -421,6 +421,10 @@ class Settings(BaseSettings):
     OPENROUTER_VISION_TIMEOUT_SECONDS: float = Field(default=60.0, ge=1.0, le=300.0)
     OPENROUTER_IMAGE_TIMEOUT_SECONDS: float = Field(default=180.0, ge=1.0, le=300.0)
     # Requests from every tenant share the same OpenRouter key/model budget.
+    # Shared Redis queue for image generation: pace starts and bound active requests.
+    OPENROUTER_IMAGE_MIN_INTERVAL_SECONDS: float = Field(default=5.0, ge=1.0, le=60.0)
+    OPENROUTER_IMAGE_MAX_QUEUE_WAIT_SECONDS: float = Field(default=180.0, ge=1.0, le=600.0)
+    OPENROUTER_IMAGE_MAX_CONCURRENT: int = Field(default=2, ge=1, le=4)
     OPENROUTER_VISION_MIN_INTERVAL_SECONDS: float = Field(default=4.0, ge=0.0, le=60.0)
     OPENROUTER_VISION_MAX_QUEUE_WAIT_SECONDS: float = Field(default=90.0, ge=1.0, le=600.0)
     OPENROUTER_429_MAX_RETRIES: int = Field(default=2, ge=0, le=4)
