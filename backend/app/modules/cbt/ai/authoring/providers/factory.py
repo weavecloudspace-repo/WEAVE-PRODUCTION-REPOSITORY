@@ -82,5 +82,5 @@ class CBTProviderFactory:
     @classmethod
     def get_image_resolver(cls) -> GenerationOnlyImageResolver:
         return GenerationOnlyImageResolver(
-            generation_provider=cls.get_image_generation_provider(),
+            generation_provider=OpenRouterImageGenerationProvider(),
         )
