@@ -15,6 +15,7 @@ from app.modules.cbt.ai.authoring.schemas import (
     AIRegeneratedQuestionDraft,
     AIVisualMode,
 )
+from app.modules.cbt.ai.authoring.visual_policy import target_visual_question_count
 
 
 SUPPORTED_QUESTION_TYPES = frozenset(
@@ -127,7 +128,7 @@ def _question_fingerprint(question: AIQuestionDraft) -> tuple[Any, ...]:
         if option.image is not None:
             image_fingerprint = (
                 _normalized_text(option.image.requirement),
-                _normalized_text(option.image.search_query),
+                _normalized_text(option.image.generation_prompt or option.image.requirement),
             )
         option_fingerprints.append(
             (
@@ -140,7 +141,7 @@ def _question_fingerprint(question: AIQuestionDraft) -> tuple[Any, ...]:
     if question.image is not None:
         question_image = (
             _normalized_text(question.image.requirement),
-            _normalized_text(question.image.search_query),
+            _normalized_text(question.image.generation_prompt or question.image.requirement),
         )
     return (
         question.question_type,
@@ -326,6 +327,20 @@ def _validate_batch_visual_policy(
                     ),
                 )
             )
+    target = target_visual_question_count(len(questions))
+    if visual_count != target:
+        issues.append(
+            AIValidationIssue(
+                path="questions",
+                code="visual_distribution_mismatch",
+                message=(
+                    f"Allow-images mode requires exactly {target} visual-bearing "
+                    f"question(s) and {len(questions) - target} text-only question(s) "
+                    f"in a {len(questions)}-question batch; received "
+                    f"{visual_count} visual-bearing question(s)."
+                ),
+            )
+        )
     return issues
 
 

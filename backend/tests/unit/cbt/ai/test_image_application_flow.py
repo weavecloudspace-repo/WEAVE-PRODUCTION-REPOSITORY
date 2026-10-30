@@ -90,7 +90,7 @@ def test_resolved_image_response_contains_bytes_not_operational_url() -> None:
         source="search",
         image=canonical,
         candidate=ImageCandidate(
-            source="openverse",
+            source="ddgs",
             source_url="https://example.com/source-page",
             image_url="https://example.com/transient-image.png",
             creator="Example creator",

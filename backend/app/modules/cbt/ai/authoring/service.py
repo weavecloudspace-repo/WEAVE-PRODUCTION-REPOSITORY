@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, cast
 
+from app.modules.cbt.ai.authoring.assessment_integrity import assessment_context
 from app.modules.cbt.ai.authoring.flow_logging import get_question_generation_logger
+from app.modules.cbt.ai.authoring.generation_only_resolver import GenerationOnlyImageResolver
 from app.modules.cbt.ai.authoring.image_resolver import ImageResolver
 from app.modules.cbt.ai.authoring.providers.base import (
     BaseQuestionGenerationProvider,
     ImageResolutionResult,
     ProviderImageInput,
     ProviderQuestionGenerationResult,
+    ProviderStructuredOutputError,
     ProviderUsage,
 )
 from app.modules.cbt.ai.authoring.schemas import (
@@ -20,6 +24,7 @@ from app.modules.cbt.ai.authoring.schemas import (
     AIQuestionDraft,
     AIVisualMode,
 )
+from app.modules.cbt.ai.authoring.visual_policy import target_visual_question_count
 from app.modules.cbt.ai.authoring.validation import (
     AIResponseValidationError,
     SUPPORTED_VISUAL_MODES,
@@ -80,7 +85,7 @@ class QuestionAuthoringService:
         self,
         *,
         question_provider: BaseQuestionGenerationProvider,
-        image_resolver: ImageResolver,
+        image_resolver: ImageResolver | GenerationOnlyImageResolver,
     ) -> None:
         self.question_provider = question_provider
         self.image_resolver = image_resolver
@@ -93,6 +98,14 @@ class QuestionAuthoringService:
         expected_type_counts: Mapping[str, int] | None = None,
     ) -> QuestionGenerationResult:
         request_payload, visual_mode = self._prepare_authoring_request(request)
+        # This internal hint is never part of the public CBT request schema.
+        # It ensures both initial generation and one-shot repair use the
+        # same count, while Text-only mode remains unaffected.
+        count = (
+            expected_count if expected_count is not None else request_payload.get("question_count")
+        )
+        if visual_mode == "auto" and type(count) is int and count > 0:
+            request_payload["visual_question_target"] = target_visual_question_count(count)
         repaired = False
 
         try:
@@ -143,11 +156,30 @@ class QuestionAuthoringService:
                 )
                 repaired = True
 
+        # Image operations are independent after the question batch has passed
+        # validation. Bound concurrency, retain question order, and never return
+        # a partial batch if any required image fails.
+        semaphore = asyncio.Semaphore(2)
+
+        async def resolve_one(
+            question: AIQuestionDraft,
+        ) -> tuple[AuthoredQuestion, list[ProviderUsage]]:
+            async with semaphore:
+                return await self._resolve_question_images(question)
+
+        tasks = [asyncio.create_task(resolve_one(question)) for question in questions]
+        try:
+            resolved = await asyncio.gather(*tasks)
+        except BaseException:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+
         authored_questions: list[AuthoredQuestion] = []
         image_usages: list[ProviderUsage] = []
         materialized_image_bytes = 0
-        for question in questions:
-            authored_question, usages = await self._resolve_question_images(question)
+        for authored_question, usages in resolved:
             materialized_image_bytes += self._authored_question_image_bytes(authored_question)
             self._enforce_image_budget(materialized_image_bytes)
             authored_questions.append(authored_question)
@@ -304,12 +336,14 @@ class QuestionAuthoringService:
         question_image: ImageResolutionResult | None = None
         option_images: dict[int, ImageResolutionResult] = {}
         usages: list[ProviderUsage] = []
+        review_context = assessment_context(question)
 
         if question.image is not None:
             question_image = await self.image_resolver.resolve(
                 requirement=question.image.requirement,
                 search_query=question.image.search_query,
                 generation_prompt=question.image.generation_prompt,
+                assessment_context=review_context,
             )
             usages.extend(self._image_resolution_usages(question_image))
 
@@ -320,6 +354,7 @@ class QuestionAuthoringService:
                 requirement=option.image.requirement,
                 search_query=option.image.search_query,
                 generation_prompt=option.image.generation_prompt,
+                assessment_context=review_context,
             )
             option_images[index] = resolution
             usages.extend(self._image_resolution_usages(resolution))
@@ -351,6 +386,7 @@ class QuestionAuthoringService:
         usages: list[ProviderUsage] = []
         if resolution.evaluation is not None:
             usages.append(resolution.evaluation.usage)
+        usages.extend(resolution.integrity_review_usages)
         if resolution.generation_attempts:
             usages.extend(attempt.usage for attempt in resolution.generation_attempts)
         elif resolution.generation is not None:
@@ -422,6 +458,11 @@ class QuestionAuthoringService:
 
     @staticmethod
     def _is_repairable_structured_output_error(error: RuntimeError) -> bool:
+        # Provider adapters signal schema/JSON failures explicitly. HTTP 429,
+        # quota exhaustion, timeouts and auth failures must never trigger
+        # another billable question-generation call disguised as "repair".
+        if isinstance(error, ProviderStructuredOutputError):
+            return True
         message = str(error).casefold()
         return any(marker in message for marker in REPAIRABLE_STRUCTURED_OUTPUT_ERROR_MARKERS)
 

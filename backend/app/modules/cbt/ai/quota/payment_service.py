@@ -13,6 +13,7 @@ from app.modules.cbt.ai.quota.payment_schemas import (
 from app.modules.cbt.ai.quota.pricing import ai_quota_pricing
 from app.modules.cbt.ai.quota.repository import AIQuotaPurchaseRepository
 from app.modules.cbt.ai.quota.schemas import AIQuotaPurchaseResponse
+from app.modules.cbt.ai.quota.cache import invalidate_quota_cache
 from app.modules.cbt.ai.quota.service import (
     AIQuotaConflictError,
     AIQuotaNotFoundError,
@@ -179,5 +180,6 @@ class AIQuotaPaymentService:
             commit=False,
         )
         return PaymentWebhookSettlementResult(
-            message="AI credit purchase webhook processed successfully."
+            message="AI credit purchase webhook processed successfully.",
+            post_commit=lambda: invalidate_quota_cache(purchase.tenant_id),
         )

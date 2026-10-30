@@ -50,3 +50,13 @@ def test_repair_contract_preserves_natural_language_authoring_brief() -> None:
     assert (
         "Keep candidate-facing `instruction` separate from the actual question `prompt`" in prompt
     )
+
+
+def test_allow_images_prompt_uses_40_percent_visual_target_and_repair_contract() -> None:
+    generation = build_question_generation_prompt()
+    repair = build_question_repair_prompt()
+    assert "roughly 60% text-only and 40%" in generation
+    assert "visual_question_target" in generation
+    assert "EXACTLY" in generation
+    assert "original_request.visual_question_target" in repair
+    assert 'When visual_mode is "text_only"' in generation

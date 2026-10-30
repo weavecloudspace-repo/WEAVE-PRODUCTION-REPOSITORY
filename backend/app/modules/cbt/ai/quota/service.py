@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.cbt.ai.quota.cache import invalidate_quota_cache
 from app.modules.cbt.ai.quota.models import (
     AICreditAllocation,
     AICreditLedger,
@@ -181,6 +182,7 @@ class AIQuotaService:
         try:
             await AIQuotaRequestRepository.create(db, request)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -248,6 +250,7 @@ class AIQuotaService:
             request.cancelled_at = cls._now()
             await AIQuotaRequestRepository.save(db, request)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -473,6 +476,7 @@ class AIQuotaService:
             request.admin_note = cls._clean_note(note)
             await AIQuotaRequestRepository.save(db, request)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -512,6 +516,7 @@ class AIQuotaService:
             request.admin_note = cls._clean_note(note)
             await AIQuotaRequestRepository.save(db, request)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -572,6 +577,7 @@ class AIQuotaService:
                 extra_balance=extra,
             )
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -662,6 +668,7 @@ class AIQuotaService:
             ):
                 response = cls._purchase_response(existing)
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
                 return response
             raise AIQuotaConflictError("A different quota purchase already uses this reference.")
         purchase = AIQuotaPurchase(
@@ -675,6 +682,7 @@ class AIQuotaService:
         try:
             await AIQuotaPurchaseRepository.create(db, purchase)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -711,6 +719,7 @@ class AIQuotaService:
                 response = cls._purchase_response(purchase)
                 if commit:
                     await db.commit()
+                    await invalidate_quota_cache(tenant_id)
                 return response
             if purchase.status != AIQuotaPurchaseStatus.PENDING:
                 raise AIQuotaConflictError("Only pending quota purchases can be credited.")
@@ -740,6 +749,7 @@ class AIQuotaService:
             )
             if commit:
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -766,12 +776,14 @@ class AIQuotaService:
             if purchase.status == AIQuotaPurchaseStatus.FAILED:
                 response = cls._purchase_response(purchase)
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
                 return response
             if purchase.status != AIQuotaPurchaseStatus.PENDING:
                 raise AIQuotaConflictError("Only pending quota purchases can be marked failed.")
             purchase.status = AIQuotaPurchaseStatus.FAILED
             await AIQuotaPurchaseRepository.save(db, purchase)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -799,12 +811,14 @@ class AIQuotaService:
             if purchase.status == AIQuotaPurchaseStatus.CANCELLED:
                 response = cls._purchase_response(purchase)
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
                 return response
             if purchase.status != AIQuotaPurchaseStatus.PENDING:
                 raise AIQuotaConflictError("Only pending quota purchases can be cancelled.")
             purchase.status = AIQuotaPurchaseStatus.CANCELLED
             await AIQuotaPurchaseRepository.save(db, purchase)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -959,6 +973,7 @@ class AIQuotaService:
             )
             await AICreditReservationRepository.create(db, reservation)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -989,6 +1004,7 @@ class AIQuotaService:
             if reservation.status == AICreditReservationStatus.SETTLED:
                 response = cls._settlement_response(reservation)
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
                 return response
             if reservation.status in {
                 AICreditReservationStatus.RELEASED,
@@ -1004,6 +1020,7 @@ class AIQuotaService:
                     released_at=now,
                 )
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
                 raise AIQuotaReservationExpiredError(
                     "Credit reservation expired before settlement."
                 )
@@ -1075,6 +1092,7 @@ class AIQuotaService:
                 )
             await AICreditLedgerRepository.create_many(db, ledger_entries)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except AIQuotaReservationExpiredError:
             raise
         except Exception:
@@ -1107,6 +1125,7 @@ class AIQuotaService:
             }:
                 response = cls._reservation_response(reservation)
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
                 return response
             if reservation.status == AICreditReservationStatus.SETTLED:
                 raise AIQuotaConflictError("A settled credit reservation cannot be released.")
@@ -1117,6 +1136,7 @@ class AIQuotaService:
                 released_at=cls._now(),
             )
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -1149,6 +1169,8 @@ class AIQuotaService:
                     released_at=now,
                 )
             await db.commit()
+            for affected_tenant in {reservation.tenant_id for reservation in reservations}:
+                await invalidate_quota_cache(affected_tenant)
         except Exception:
             await db.rollback()
             raise
@@ -1334,6 +1356,7 @@ class AIQuotaService:
         try:
             await AIQuotaAccountRepository.create(db, account)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
             return account
         except IntegrityError:
             await db.rollback()
@@ -1396,6 +1419,7 @@ class AIQuotaService:
         try:
             await AIWeeklyQuotaRepository.create(db, quota)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
             return quota
         except IntegrityError:
             await db.rollback()
@@ -1433,6 +1457,7 @@ class AIQuotaService:
         try:
             await AIExtraCreditBalanceRepository.create(db, balance)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
             return balance
         except IntegrityError:
             await db.rollback()
@@ -1465,6 +1490,7 @@ class AIQuotaService:
         try:
             await AITenantCreditBalanceRepository.create(db, balance)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
             return balance
         except IntegrityError:
             await db.rollback()

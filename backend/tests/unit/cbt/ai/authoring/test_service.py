@@ -11,6 +11,7 @@ from app.modules.cbt.ai.authoring.providers.base import (
     ProviderImageInput,
     ProviderQuestionGenerationResult,
     ProviderQuestionRegenerationResult,
+    ProviderStructuredOutputError,
     ProviderUsage,
 )
 from app.modules.cbt.ai.authoring.service import QuestionAuthoringService
@@ -330,4 +331,122 @@ async def test_regeneration_repair_cannot_change_expected_question_type() -> Non
             expected_question_type="single_choice",
         )
     assert provider.repair_calls == 1
+    assert resolver.calls == []
+
+
+@pytest.mark.asyncio
+async def test_allow_images_target_is_passed_to_model_and_repair() -> None:
+    generated = [_single(f"Question {index}", visual=index == 0) for index in range(15)]
+    corrected = [_single(f"Question {index}", visual=index < 6) for index in range(15)]
+    provider = FakeQuestionProvider(generated=generated, repaired=corrected)
+    service, resolver = _service(provider)
+
+    result = await service.generate_questions(
+        request={"visual_mode": "auto", "question_count": 15},
+        expected_count=15,
+    )
+
+    assert result.repaired is True
+    assert provider.generate_request["visual_question_target"] == 6
+    assert provider.repair_request["original_request"]["visual_question_target"] == 6
+    assert provider.repair_request["validation_feedback"]["issues"][0]["code"] == (
+        "visual_distribution_mismatch"
+    )
+    assert len(result.questions) == 15
+    assert len(resolver.calls) == 6
+    assert provider.repair_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_text_only_batch_does_not_add_visual_target_or_resolve_images() -> None:
+    generated = [_single(f"Question {index}") for index in range(15)]
+    provider = FakeQuestionProvider(generated=generated)
+    service, resolver = _service(provider)
+    result = await service.generate_questions(
+        request={"visual_mode": "text_only", "question_count": 15},
+        expected_count=15,
+    )
+    assert result.repaired is False
+    assert "visual_question_target" not in provider.generate_request
+    assert resolver.calls == []
+
+
+@pytest.mark.asyncio
+async def test_image_resolver_receives_correct_choice_for_assessment_integrity() -> None:
+    question = _single("What seam is shown?", visual=True, option_visual=True)
+    question["options"][0]["text"] = "Flat-felled seam"
+    question["options"][1]["text"] = "French seam"
+    provider = FakeQuestionProvider(generated=[question])
+    service, resolver = _service(provider)
+
+    await service.generate_questions(
+        request={"visual_mode": "auto"},
+        expected_count=1,
+    )
+
+    assert len(resolver.calls) == 2
+    assert all(
+        '"correct_answer_text": ["Flat-felled seam"]' in call["assessment_context"]
+        for call in resolver.calls
+    )
+    assert all("What seam is shown?" in call["assessment_context"] for call in resolver.calls)
+
+
+def test_integrity_review_costs_are_included_in_question_usage() -> None:
+    result = ImageResolutionResult(
+        source="search",
+        image=_materialized(),
+        integrity_review_usages=[
+            ProviderUsage(
+                input_tokens=25,
+                output_tokens=8,
+                provider_cost=0.002,
+                currency="USD",
+            )
+        ],
+    )
+    usages = QuestionAuthoringService._image_resolution_usages(result)
+    assert sum(usage.input_tokens for usage in usages) == 25
+    assert sum(usage.output_tokens for usage in usages) == 8
+    assert sum(usage.provider_cost or 0 for usage in usages) == pytest.approx(0.002)
+
+
+@pytest.mark.asyncio
+async def test_invalid_openrouter_question_contract_gets_one_repair() -> None:
+    """The real failure used to raise HTTP 500 before trying repair."""
+    provider = FakeQuestionProvider(repaired=[_single()])
+    resolver = FakeImageResolver()
+
+    async def invalid_questions(*, request):
+        raise ProviderStructuredOutputError("OpenRouter returned an invalid questions array.")
+
+    provider.generate_questions = invalid_questions
+    service = QuestionAuthoringService(question_provider=provider, image_resolver=resolver)
+    result = await service.generate_questions(
+        request={"visual_mode": "text_only"}, expected_count=1
+    )
+
+    assert result.repaired is True
+    assert len(result.questions) == 1
+    assert provider.repair_calls == 1
+    assert provider.repair_request["operation"] == "generation"
+    assert resolver.calls == []
+
+
+@pytest.mark.asyncio
+async def test_network_provider_error_never_triggers_question_repair() -> None:
+    from app.modules.cbt.ai.authoring.providers.openrouter import OpenRouterProviderError
+
+    provider = FakeQuestionProvider(repaired=[_single()])
+    resolver = FakeImageResolver()
+
+    async def throttled(*, request):
+        raise OpenRouterProviderError("OpenRouter rate_limited", status_code=429)
+
+    provider.generate_questions = throttled
+    service = QuestionAuthoringService(question_provider=provider, image_resolver=resolver)
+    with pytest.raises(OpenRouterProviderError, match="rate_limited"):
+        await service.generate_questions(request={"visual_mode": "text_only"}, expected_count=1)
+
+    assert provider.repair_calls == 0
     assert resolver.calls == []
