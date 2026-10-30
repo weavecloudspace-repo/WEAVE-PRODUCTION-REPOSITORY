@@ -68,12 +68,14 @@ class CBTAIJobService:
 
         reservation = None
         try:
-            reservation = await AIQuotaService.reserve_credits(
-                db,
-                tenant_id=actor.tenant_id,
-                actor_type=actor_type,
-                actor_id=actor_id,
-                credits=request.question_count * CBTAIService.CREDITS_PER_GENERATED_QUESTION,
+            reservation = await CBTAIService._run_quota(
+                AIQuotaService.reserve_credits(
+                    db,
+                    tenant_id=actor.tenant_id,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    credits=request.question_count * CBTAIService.CREDITS_PER_GENERATED_QUESTION,
+                )
             )
             await service._attach_reservation(
                 db,
