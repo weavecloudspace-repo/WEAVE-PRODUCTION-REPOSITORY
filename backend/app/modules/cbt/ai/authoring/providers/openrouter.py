@@ -150,6 +150,7 @@ class _OpenRouterHTTP:
             raise OpenRouterProviderError("OpenRouter CBT AI provider is not configured.")
         model = str(payload.get("model") or "unspecified")
         is_vision = endpoint == "chat/completions" and model == settings.OPENROUTER_VISION_MODEL
+        is_image = endpoint == "images" and model == settings.OPENROUTER_IMAGE_MODEL
         retries = settings.OPENROUTER_429_MAX_RETRIES
         backoff_cap = settings.OPENROUTER_429_MAX_BACKOFF_SECONDS
 
@@ -171,6 +172,29 @@ class _OpenRouterHTTP:
                                 headers=self._headers(),
                                 json=payload,
                             )
+                    elif is_image:
+                        # One local process can keep at most two images running.
+                        # Redis additionally controls concurrent images and
+                        # start pace across ALL teachers and backend workers.
+                        async with vision_request_pacer.local_image_gate:
+                            async with vision_request_pacer.image_global_permit(
+                                api_key=self.api_key,
+                                model=model,
+                                max_concurrent=settings.OPENROUTER_IMAGE_MAX_CONCURRENT,
+                                max_wait=settings.OPENROUTER_IMAGE_MAX_QUEUE_WAIT_SECONDS,
+                                lease_seconds=timeout + 60.0,
+                            ):
+                                await vision_request_pacer.wait_for_slot(
+                                    api_key=self.api_key,
+                                    model=model,
+                                    interval=settings.OPENROUTER_IMAGE_MIN_INTERVAL_SECONDS,
+                                    max_wait=settings.OPENROUTER_IMAGE_MAX_QUEUE_WAIT_SECONDS,
+                                )
+                                response = await client.post(
+                                    f"{self.base_url}/{endpoint}",
+                                    headers=self._headers(),
+                                    json=payload,
+                                )
                     else:
                         response = await client.post(
                             f"{self.base_url}/{endpoint}",
@@ -205,7 +229,7 @@ class _OpenRouterHTTP:
                     )
                     if error.quota_exhausted or attempt >= retries or proposed_delay > backoff_cap:
                         raise error
-                    if is_vision:
+                    if is_vision or is_image:
                         await vision_request_pacer.cooldown(
                             api_key=self.api_key, model=model, delay=proposed_delay
                         )
@@ -576,7 +600,14 @@ class OpenRouterImageGenerationProvider(_OpenRouterHTTP, BaseImageGenerationProv
     ) -> ProviderImageGenerationResult:
         if not prompt.strip():
             raise ValueError("Image prompt cannot be empty.")
-        payload: dict[str, Any] = {"model": self.model, "prompt": prompt.strip(), "n": 1}
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "prompt": prompt.strip(),
+            "n": 1,
+            # OpenRouter otherwise fails over to a different provider.
+            # The CBT contract requires Qwen-only image generation.
+            "provider": {"allow_fallbacks": False},
+        }
         if metadata and isinstance(metadata.get("aspect_ratio"), str):
             payload["aspect_ratio"] = metadata["aspect_ratio"]
         if reference_images:
