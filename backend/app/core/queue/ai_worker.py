@@ -13,6 +13,7 @@ from uuid import UUID
 import app.models  # noqa: F401
 
 from app.config.database import AsyncSessionLocal, engine  # noqa: E402
+from app.core.cache.redis import close_redis, connect_redis  # noqa: E402
 from app.config.logging import get_logger  # noqa: E402
 from app.config.sentry import flush_sentry, initialize_sentry  # noqa: E402
 from app.core.queue.arq import AI_QUEUE_NAME, get_arq_redis_settings  # noqa: E402
@@ -153,11 +154,15 @@ async def process_cbt_ai_generation_job(
 async def startup(ctx: dict[str, Any]) -> None:
     del ctx
     initialize_sentry(service="worker-cbt-ai")
+    # The worker is a separate OS process: FastAPI's Redis startup is NOT
+    # inherited. The global Qwen limiter and result replay both require it.
+    await connect_redis()
 
 
 async def shutdown(ctx: dict[str, Any]) -> None:
     del ctx
     try:
+        await close_redis()
         await engine.dispose()
     finally:
         await flush_sentry()
