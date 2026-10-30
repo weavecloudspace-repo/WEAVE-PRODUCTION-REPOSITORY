@@ -46,9 +46,7 @@ def test_generation_fallback_prohibits_answer_bearing_titles() -> None:
 
 def test_without_assessment_context_other_image_calls_unchanged() -> None:
     assert assessment_review_requirement("An orange", None) == "An orange"
-    assert "VISUAL SPECIFICATION:\\nAn orange" in assessment_safe_generation_prompt(
-        "An orange", None
-    )
+    assert assessment_safe_generation_prompt("An orange", None) == "An orange"
 
 
 def test_examination_generation_policy_uses_neutral_markers_only() -> None:
