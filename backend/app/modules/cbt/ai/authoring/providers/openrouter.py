@@ -38,6 +38,7 @@ from app.modules.cbt.ai.authoring.providers.base import (
     ProviderImageInput,
     ProviderQuestionGenerationResult,
     ProviderQuestionRegenerationResult,
+    ProviderStructuredOutputError,
     ProviderUsage,
 )
 
@@ -64,6 +65,10 @@ class OpenRouterProviderError(RuntimeError):
         self.error_code = error_code
         self.retry_after_seconds = retry_after_seconds
         self.quota_exhausted = quota_exhausted
+
+
+class OpenRouterStructuredOutputError(OpenRouterProviderError, ProviderStructuredOutputError):
+    """Invalid structured output; repairable once without retrying HTTP failures."""
 
 
 def _parse_retry_after(value: str | None) -> float | None:
@@ -270,7 +275,7 @@ class _OpenRouterHTTP:
         )
         content = message.get("content") if isinstance(message, dict) else None
         if not isinstance(content, str) or not content.strip():
-            raise OpenRouterProviderError("OpenRouter returned no completion text.")
+            raise OpenRouterStructuredOutputError("OpenRouter returned no completion text.")
         return content.strip()
 
     @staticmethod
@@ -278,9 +283,9 @@ class _OpenRouterHTTP:
         try:
             parsed = json.loads(content)
         except (TypeError, ValueError) as exc:
-            raise OpenRouterProviderError("OpenRouter returned malformed structured JSON.") from exc
+            raise OpenRouterStructuredOutputError("OpenRouter returned malformed structured JSON.") from exc
         if not isinstance(parsed, dict):
-            raise OpenRouterProviderError("OpenRouter structured output must be an object.")
+            raise OpenRouterStructuredOutputError("OpenRouter structured output must be an object.")
         return parsed
 
     @staticmethod
@@ -456,7 +461,29 @@ class OpenRouterQuestionGenerationProvider(_OpenRouterHTTP, BaseQuestionGenerati
         result, response = await self._structured(build_question_generation_prompt(), request)
         questions = result.get("questions")
         if not isinstance(questions, list) or any(not isinstance(q, dict) for q in questions):
-            raise OpenRouterProviderError("OpenRouter returned an invalid questions array.")
+            choices = response.get("choices")
+            finish_reason = (
+                choices[0].get("finish_reason")
+                if isinstance(choices, list) and choices and isinstance(choices[0], dict)
+                else None
+            )
+            logger.warning(
+                "cbt.ai.openrouter.question_contract_invalid",
+                extra={
+                    "ai_model": self.model,
+                    "ai_finish_reason": finish_reason,
+                    "ai_questions_field_type": type(questions).__name__,
+                    "ai_questions_count": len(questions) if isinstance(questions, list) else None,
+                    "ai_has_invalid_question_item": (
+                        any(not isinstance(q, dict) for q in questions)
+                        if isinstance(questions, list)
+                        else None
+                    ),
+                },
+            )
+            raise OpenRouterStructuredOutputError(
+                "OpenRouter returned an invalid questions array."
+            )
         return ProviderQuestionGenerationResult(
             questions=questions, usage=self._usage(response), raw_response=response
         )
@@ -472,7 +499,7 @@ class OpenRouterQuestionGenerationProvider(_OpenRouterHTTP, BaseQuestionGenerati
         )
         questions = result.get("questions")
         if not isinstance(questions, list) or any(not isinstance(q, dict) for q in questions):
-            raise OpenRouterProviderError(
+            raise OpenRouterStructuredOutputError(
                 "OpenRouter returned an invalid repaired questions array."
             )
         return ProviderQuestionGenerationResult(
@@ -490,7 +517,7 @@ class OpenRouterQuestionGenerationProvider(_OpenRouterHTTP, BaseQuestionGenerati
         )
         question = result.get("question")
         if not isinstance(question, dict):
-            raise OpenRouterProviderError("OpenRouter returned an invalid regenerated question.")
+            raise OpenRouterStructuredOutputError("OpenRouter returned an invalid regenerated question.")
         return ProviderQuestionRegenerationResult(
             question=question, usage=self._usage(response), raw_response=response
         )
