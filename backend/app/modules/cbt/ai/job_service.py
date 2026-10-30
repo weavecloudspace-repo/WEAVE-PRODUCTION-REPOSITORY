@@ -22,6 +22,8 @@ from app.modules.cbt.ai.idempotency.models import (
 from app.modules.cbt.ai.idempotency.repository import AIIdempotencyRepository
 from app.modules.cbt.ai.idempotency.service import CBTAIIdempotentAuthoringService
 from app.modules.cbt.ai.job_progress import AIJobProgressCache
+from app.modules.cbt.ai.quota.models import AICreditReservationStatus
+from app.modules.cbt.ai.quota.repository import AICreditReservationRepository
 from app.modules.cbt.ai.quota.service import AIQuotaService
 from app.modules.cbt.ai.schemas import (
     AIGenerateQuestionsRequest,
@@ -173,13 +175,28 @@ class CBTAIJobService:
     ) -> AIGenerateQuestionsResponse:
         record = await cls._owned_record(db, actor=actor, job_id=job_id)
         if record.status == AI_IDEMPOTENCY_IN_PROGRESS:
-            # Existing recovery handles the narrow post-settlement crash
-            # window without creating another billable generation.
-            return await CBTAIIdempotentAuthoringService._resolve_existing(
-                db,
-                record=record,
-                request_hash=record.request_hash,
-                response_model=AIGenerateQuestionsResponse,
+            # Do not settle a pending reservation just because the worker
+            # pre-saved the replay body: the worker might still be finalizing.
+            # Repair only the narrower crash window AFTER settlement.
+            reservation = (
+                await AICreditReservationRepository.get_by_tenant_and_id(
+                    db,
+                    tenant_id=actor.tenant_id,
+                    reservation_id=record.reservation_id,
+                )
+                if record.reservation_id is not None
+                else None
+            )
+            if reservation is not None and reservation.status == AICreditReservationStatus.SETTLED:
+                return await CBTAIIdempotentAuthoringService._resolve_existing(
+                    db,
+                    record=record,
+                    request_hash=record.request_hash,
+                    response_model=AIGenerateQuestionsResponse,
+                )
+            raise ConflictException(
+                "Generation is still in progress; poll the job status.",
+                payload={"code": "AI_JOB_IN_PROGRESS", "retryable": True},
             )
         if record.status == AI_IDEMPOTENCY_FAILED:
             raise ConflictException(
