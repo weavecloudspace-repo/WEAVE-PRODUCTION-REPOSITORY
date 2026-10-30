@@ -87,9 +87,7 @@ class VisionRequestPacer:
         redis = get_runtime_redis()
         if redis is None:
             if settings.is_production_like:
-                raise OpenRouterPacingError(
-                    "Redis is required for distributed image concurrency."
-                )
+                raise OpenRouterPacingError("Redis is required for distributed image concurrency.")
             yield
             return
 
@@ -118,9 +116,7 @@ class VisionRequestPacer:
                     break
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    raise OpenRouterPacingError(
-                        "Qwen image queue is full; retry later."
-                    )
+                    raise OpenRouterPacingError("Qwen image queue is full; retry later.")
                 await asyncio.sleep(min(1.0, remaining))
             yield
         finally:
