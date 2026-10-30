@@ -83,8 +83,7 @@ async def process_cbt_ai_generation_job(
             charged = len(output.questions) * CBTAIService.CREDITS_PER_GENERATED_QUESTION
             provisional = AIGenerateQuestionsResponse(
                 questions=[
-                    CBTAIService._build_question_response(question)
-                    for question in output.questions
+                    CBTAIService._build_question_response(question) for question in output.questions
                 ],
                 repaired=output.repaired,
                 charge=AICreditChargeResponse(
@@ -95,9 +94,7 @@ async def process_cbt_ai_generation_job(
             )
             # Replay must be stored BEFORE settlement. All images are present
             # or the entire generation fails without settling any credits.
-            await AIReplayCache.store(
-                record_id, provisional.model_dump(mode="json")
-            )
+            await AIReplayCache.store(record_id, provisional.model_dump(mode="json"))
             settlement = await AIQuotaService.settle_reservation(
                 db,
                 tenant_id=tenant,
