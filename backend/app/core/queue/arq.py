@@ -132,4 +132,3 @@ async def enqueue_attendance_retention_job(*, tenant_id: str | None = None) -> b
     finally:
         await redis.close()
     return job is not None
-
