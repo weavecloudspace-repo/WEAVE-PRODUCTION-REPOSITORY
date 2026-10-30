@@ -57,6 +57,7 @@ async def test_direct_resolver_never_searches_or_validates_via_vision() -> None:
     assert result.image.width == 64
     assert "anatomically accurate" in provider.prompts[0]
     assert "NO written answers" in provider.prompts[0]
+    assert "correct_answer_text" not in provider.prompts[0]
     assert result.evaluation is None
     assert result.candidate is None
     assert len(result.generation_attempts) == 1
