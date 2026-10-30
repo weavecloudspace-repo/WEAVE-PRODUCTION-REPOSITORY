@@ -221,6 +221,12 @@ Rules:
 
 {VISUAL_POLICY_RULES}
 
+The top-level JSON object MUST contain a `questions` property whose value is
+an array of question objects. Never put the array under `data`, `response`,
+`items`, or any other wrapper key. For each question obey the exact fields
+specified in RESPONSE JSON SCHEMA. Do not return an individual `question`
+object for a batch request.
+
 Return only JSON matching the supplied response schema.
 Do not return markdown, code fences, commentary, or additional text.
 """.strip()
