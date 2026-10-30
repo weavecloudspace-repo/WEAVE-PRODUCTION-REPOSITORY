@@ -16,6 +16,7 @@ from app.modules.cbt.ai.authoring.providers.base import (
     ImageResolutionResult,
     ProviderImageInput,
     ProviderQuestionGenerationResult,
+    ProviderStructuredOutputError,
     ProviderUsage,
 )
 from app.modules.cbt.ai.authoring.schemas import (
@@ -457,6 +458,11 @@ class QuestionAuthoringService:
 
     @staticmethod
     def _is_repairable_structured_output_error(error: RuntimeError) -> bool:
+        # Provider adapters signal schema/JSON failures explicitly. HTTP 429,
+        # quota exhaustion, timeouts and auth failures must never trigger
+        # another billable question-generation call disguised as "repair".
+        if isinstance(error, ProviderStructuredOutputError):
+            return True
         message = str(error).casefold()
         return any(marker in message for marker in REPAIRABLE_STRUCTURED_OUTPUT_ERROR_MARKERS)
 
