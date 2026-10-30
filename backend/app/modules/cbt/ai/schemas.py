@@ -209,4 +209,3 @@ class AIRegenerateQuestionResponse(CBTAISchemaBase):
     question: AIQuestionResponse
     repaired: bool
     charge: AICreditChargeResponse
-
