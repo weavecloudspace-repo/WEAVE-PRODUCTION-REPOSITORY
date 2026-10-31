@@ -84,11 +84,13 @@ class FakeQuestionProvider:
     def __init__(self, questions) -> None:
         self.questions = questions
         self.generate_calls = 0
+        self.offset = 0
 
     async def generate_questions(self, *, request):
         self.generate_calls += 1
         count = request["question_count"]
-        offset = (request.get("batch_index", 1) - 1) * 10
+        offset = self.offset
+        self.offset += count
         visual_target = request.get("visual_question_target", 0)
         questions = copy.deepcopy(self.questions[offset : offset + count])
         for index, question in enumerate(questions):
@@ -138,7 +140,7 @@ async def test_multiple_failed_images_retry_independently_without_regenerating_g
     qwen = FakeQwen(
         failures={
             "diagram 2": [_transient()],
-            "diagram 11": [_transient(), _transient()],
+            "diagram 9": [_transient(), _transient()],
         }
     )
     question_provider = FakeQuestionProvider(_questions())
@@ -160,13 +162,13 @@ async def test_multiple_failed_images_retry_independently_without_regenerating_g
         "diagram 0": 1,
         "diagram 1": 1,
         "diagram 2": 2,
-        "diagram 3": 1,
+        "diagram 8": 1,
+        "diagram 9": 3,
         "diagram 10": 1,
-        "diagram 11": 3,
     }
     assert qwen.max_active == 2
-    assert all(result.questions[i].question_image is not None for i in [0, 1, 2, 3, 10, 11])
-    assert all(result.questions[i].question_image is None for i in [4, 5, 6, 7, 8, 9, 12, 13, 14])
+    assert all(result.questions[i].question_image is not None for i in [0, 1, 2, 8, 9, 10])
+    assert all(result.questions[i].question_image is None for i in [3, 4, 5, 6, 7, 11, 12, 13, 14])
     assert result.usage.input_tokens == 6
     assert result.usage.provider_cost == pytest.approx(0.06)
 
