@@ -415,14 +415,14 @@ def openrouter_question_response_format(*, single_question: bool = False) -> dic
     }
     field = "question" if single_question else "questions"
     value_schema = (
-        question_schema
-        if single_question
-        else {"type": "array", "items": question_schema}
+        question_schema if single_question else {"type": "array", "items": question_schema}
     )
     return {
         "type": "json_schema",
         "json_schema": {
-            "name": "weave_cbt_regenerated_question" if single_question else "weave_cbt_question_batch",
+            "name": "weave_cbt_regenerated_question"
+            if single_question
+            else "weave_cbt_question_batch",
             "strict": True,
             "schema": {
                 "type": "object",
