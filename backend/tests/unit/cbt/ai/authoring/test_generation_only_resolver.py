@@ -119,12 +119,7 @@ def _questions() -> list[dict]:
 async def test_multiple_failed_images_retry_independently_without_regenerating_good_ones(
     monkeypatch,
 ) -> None:
-    async def no_wait(_seconds: float) -> None:
-        return None
-
-    monkeypatch.setattr(
-        "app.modules.cbt.ai.authoring.generation_only_resolver.asyncio.sleep", no_wait
-    )
+    monkeypatch.setattr(GenerationOnlyImageResolver, "RETRY_DELAYS_SECONDS", (0.0, 0.0))
     qwen = FakeQwen(
         failures={
             "diagram 2": [_transient()],
@@ -154,21 +149,16 @@ async def test_multiple_failed_images_retry_independently_without_regenerating_g
         "diagram 4": 3,
         "diagram 5": 1,
     }
-    assert 1 <= qwen.max_active <= 2
+    assert qwen.max_active == 2
     assert all(question.question_image is not None for question in result.questions[:6])
     assert all(question.question_image is None for question in result.questions[6:])
-    assert result.usage.input_tokens == 8
-    assert result.usage.provider_cost == pytest.approx(0.08)
+    assert result.usage.input_tokens == 6
+    assert result.usage.provider_cost == pytest.approx(0.06)
 
 
 @pytest.mark.asyncio
 async def test_materialization_failure_retries_only_that_image(monkeypatch) -> None:
-    async def no_wait(_seconds: float) -> None:
-        return None
-
-    monkeypatch.setattr(
-        "app.modules.cbt.ai.authoring.generation_only_resolver.asyncio.sleep", no_wait
-    )
+    monkeypatch.setattr(GenerationOnlyImageResolver, "RETRY_DELAYS_SECONDS", (0.0, 0.0))
     qwen = FakeQwen()
     resolver = GenerationOnlyImageResolver(
         generation_provider=qwen, materializer=FakeMaterializer(fail_once=True)
@@ -203,12 +193,7 @@ async def test_permanent_or_transport_exhausted_errors_are_not_retried(status) -
 async def test_all_three_temporary_image_failures_propagate_and_do_not_return_batch(
     monkeypatch,
 ) -> None:
-    async def no_wait(_seconds: float) -> None:
-        return None
-
-    monkeypatch.setattr(
-        "app.modules.cbt.ai.authoring.generation_only_resolver.asyncio.sleep", no_wait
-    )
+    monkeypatch.setattr(GenerationOnlyImageResolver, "RETRY_DELAYS_SECONDS", (0.0, 0.0))
     qwen = FakeQwen(failures={"diagram 2": [_transient(), _transient(), _transient()]})
     question_provider = FakeQuestionProvider(_questions())
     service = QuestionAuthoringService(
