@@ -140,6 +140,10 @@ When visual_mode is "auto" ("Allow images" in CBT):
 - A question counts as visual-bearing when the question itself or at least
   one answer option contains an image directive. Multiple option images
   in the SAME question count as only ONE visual-bearing question.
+- Prefer a SINGLE question-level image directive per visual question, with
+  ordinary text answer options. Add option-level image directives ONLY when
+  comparing several different pictures is essential to assess the concept.
+  Do not duplicate the same picture in the question and its options.
 - Every question or answer option that depends on a visual must contain
   the corresponding complete image directive.
 - Never refer to a missing visual.
