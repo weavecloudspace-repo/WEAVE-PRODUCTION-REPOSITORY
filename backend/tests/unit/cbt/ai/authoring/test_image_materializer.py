@@ -215,7 +215,6 @@ async def test_external_image_url_rejects_non_public_targets(url: str) -> None:
         await ImageMaterializer._validate_public_url(url)
 
 
-
 @pytest.mark.asyncio
 async def test_large_generated_image_is_resized_and_encoded_efficiently() -> None:
     # Noise prevents PNG from unrealistically compressing to a few bytes.
