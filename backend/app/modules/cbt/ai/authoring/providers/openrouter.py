@@ -23,6 +23,7 @@ from app.modules.cbt.ai.authoring.contracts import (
     build_question_generation_prompt,
     build_question_regeneration_prompt,
     build_question_repair_prompt,
+    openrouter_question_response_format,
 )
 from app.modules.cbt.ai.authoring.image_contact_sheet import contact_sheet_candidate_count
 from app.modules.cbt.ai.authoring.providers.request_pacing import (
@@ -377,6 +378,8 @@ class OpenRouterQuestionGenerationProvider(_OpenRouterHTTP, BaseQuestionGenerati
         system_prompt: str,
         request: Mapping[str, Any],
         reference_images: Sequence[ProviderImageInput] | None = None,
+        *,
+        single_question: bool = False,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         vision_usage: ProviderUsage | None = None
         if reference_images:
@@ -407,7 +410,11 @@ class OpenRouterQuestionGenerationProvider(_OpenRouterHTTP, BaseQuestionGenerati
                 "model": self.model,
                 "messages": messages,
                 "max_tokens": self.max_output_tokens,
-                "response_format": {"type": "json_object"},
+                "response_format": openrouter_question_response_format(
+                    single_question=single_question
+                ),
+                # Do not silently route to providers that ignore json_schema.
+                "provider": {"require_parameters": True},
                 "stream": False,
             }
             if agent and round_number < 6:
@@ -513,7 +520,10 @@ class OpenRouterQuestionGenerationProvider(_OpenRouterHTTP, BaseQuestionGenerati
         reference_images: Sequence[ProviderImageInput] | None = None,
     ) -> ProviderQuestionRegenerationResult:
         result, response = await self._structured(
-            build_question_regeneration_prompt(), request, reference_images
+            build_question_regeneration_prompt(),
+            request,
+            reference_images,
+            single_question=True,
         )
         question = result.get("question")
         if not isinstance(question, dict):
