@@ -30,29 +30,77 @@ _LOGGER_NAME = "weave.cbt.ai.hybrid_trace"
 # here to prevent accidentally logging prompt text, answers, keys or image data.
 SAFE_FIELDS = frozenset(
     {
-        "question_count", "visual_mode", "visual_target", "visual_count", "text_count",
-        "batch_count", "batch_index", "batch_size", "question_index",
-        "option_index", "image_count", "image_bytes", "image_width",
-        "image_height", "attempt", "max_attempts", "retryable",
-        "retry_delay_seconds", "duration_ms", "queue_ms", "http_status",
-        "question_type_single", "question_type_multiple", "repaired",
-        "input_tokens", "output_tokens", "provider_cost", "credits",
-        "credits_charged", "credits_released", "expected_count",
-        "actual_count", "error_type", "status", "model", "endpoint",
-        "stage", "reason", "finish_reason", "validation_issue_count",
-        "issue_codes", "idempotency_status", "created", "response_bytes",
-        "timeout_seconds", "source", "request_stage", "quota_status",
+        "question_count",
+        "visual_mode",
+        "visual_target",
+        "visual_count",
+        "text_count",
+        "batch_count",
+        "batch_index",
+        "batch_size",
+        "question_index",
+        "option_index",
+        "image_count",
+        "image_bytes",
+        "image_width",
+        "image_height",
+        "attempt",
+        "max_attempts",
+        "retryable",
+        "retry_delay_seconds",
+        "duration_ms",
+        "queue_ms",
+        "http_status",
+        "question_type_single",
+        "question_type_multiple",
+        "repaired",
+        "input_tokens",
+        "output_tokens",
+        "provider_cost",
+        "credits",
+        "credits_charged",
+        "credits_released",
+        "expected_count",
+        "actual_count",
+        "error_type",
+        "status",
+        "model",
+        "endpoint",
+        "stage",
+        "reason",
+        "finish_reason",
+        "validation_issue_count",
+        "issue_codes",
+        "idempotency_status",
+        "created",
+        "response_bytes",
+        "timeout_seconds",
+        "source",
+        "request_stage",
+        "quota_status",
     }
 )
 _STRING_FIELDS = frozenset(
     {
-        "error_type", "status", "model", "endpoint", "stage", "reason", "visual_mode",
-        "finish_reason", "idempotency_status", "source", "request_stage",
+        "error_type",
+        "status",
+        "model",
+        "endpoint",
+        "stage",
+        "reason",
+        "visual_mode",
+        "finish_reason",
+        "idempotency_status",
+        "source",
+        "request_stage",
         "quota_status",
     }
 )
 _ENABLED = os.getenv("WEAVE_CBT_AI_TRACE_ENABLED", "true").strip().lower() not in {
-    "0", "false", "off", "no"
+    "0",
+    "false",
+    "off",
+    "no",
 }
 
 
@@ -64,9 +112,7 @@ def _trace_logger() -> logging.Logger:
     logger.propagate = False
     try:
         TRACE_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        handler: logging.Handler = logging.FileHandler(
-            TRACE_LOG_FILE, mode="a", encoding="utf-8"
-        )
+        handler: logging.Handler = logging.FileHandler(TRACE_LOG_FILE, mode="a", encoding="utf-8")
     except OSError:
         # Diagnostics must never break live authoring if the filesystem is read-only.
         handler = logging.StreamHandler(sys.stderr)
@@ -127,9 +173,7 @@ def trace_event(event: str, **fields: Any) -> None:
             # Only static internal descriptors should be passed by callers.
             clean[key] = value[:100]
         elif key == "issue_codes" and isinstance(value, (list, tuple)):
-            clean[key] = [
-                str(code)[:48] for code in value[:12] if isinstance(code, str)
-            ]
+            clean[key] = [str(code)[:48] for code in value[:12] if isinstance(code, str)]
     payload = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "event": event[:90],
