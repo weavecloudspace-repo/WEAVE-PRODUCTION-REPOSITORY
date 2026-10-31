@@ -67,8 +67,8 @@ async def generate_questions(
             "request.accepted",
             question_count=payload.question_count,
             visual_mode=payload.visual_mode,
-            question_type_single=payload.question_type_counts.get("single_choice", 0),
-            question_type_multiple=payload.question_type_counts.get("multiple_choice", 0),
+            question_type_single=(payload.question_type_counts or {}).get("single_choice", 0),
+            question_type_multiple=(payload.question_type_counts or {}).get("multiple_choice", 0),
         )
         try:
             result = await CBTAIIdempotentAuthoringService.generate_questions(
