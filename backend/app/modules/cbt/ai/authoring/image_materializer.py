@@ -521,7 +521,7 @@ class ImageMaterializer:
                         ),
                     )
                     encoded, content_type = cls._encode_normalized(image, image_format)
-                    if optimize_generated and content_type != "image/webp":
+                    if optimize_generated and len(encoded) >= 256 * 1024 and content_type != "image/webp":
                         # Prefer high-quality WebP when it provides meaningful
                         # transfer savings. Keep PNG/JPEG when smaller or similar.
                         alternative, _ = cls._encode_webp(
