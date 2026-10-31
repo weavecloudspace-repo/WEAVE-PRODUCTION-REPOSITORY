@@ -315,3 +315,34 @@ def test_text_only_still_allows_fifteen_text_questions_without_images() -> None:
         )
         == 15
     )
+
+
+def test_false_binary_review_artifact_is_removed_without_mutating_original() -> None:
+    raw = _single()
+    raw["options"][1]["binary_review_enabled"] = False
+    validated = validate_generated_question_batch([raw], visual_mode="text_only")
+    assert len(validated) == 1
+    assert validated[0].options[1].is_correct is False
+    assert "binary_review_enabled" not in validated[0].options[1].model_dump()
+    assert raw["options"][1]["binary_review_enabled"] is False
+
+
+def test_true_binary_review_artifact_and_unknown_fields_still_fail() -> None:
+    raw = _single()
+    raw["options"][1]["binary_review_enabled"] = True
+    with pytest.raises(AIResponseValidationError) as err:
+        validate_generated_question_batch([raw], visual_mode="text_only")
+    assert "extra_forbidden" in _issue_codes(err.value)
+
+    raw = _single()
+    raw["options"][1]["unexpected_key"] = False
+    with pytest.raises(AIResponseValidationError) as err:
+        validate_generated_question_batch([raw], visual_mode="text_only")
+    assert "extra_forbidden" in _issue_codes(err.value)
+
+
+def test_regenerated_question_normalizes_known_false_review_artifact() -> None:
+    raw = _single()
+    raw["options"][1]["binary_review_enabled"] = False
+    validated = validate_regenerated_question(raw, visual_mode="text_only")
+    assert validated.options[1].is_correct is False
