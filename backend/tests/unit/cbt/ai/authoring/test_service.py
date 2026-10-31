@@ -55,6 +55,8 @@ def _single(
                 "is_correct": True,
             },
             {"text": "B", "image": None, "is_correct": False},
+            {"text": "C", "image": None, "is_correct": False},
+            {"text": "D", "image": None, "is_correct": False},
         ],
     }
 
@@ -318,6 +320,7 @@ async def test_regeneration_repair_cannot_change_expected_question_type() -> Non
             {"text": "A", "image": None, "is_correct": True},
             {"text": "B", "image": None, "is_correct": True},
             {"text": "C", "image": None, "is_correct": False},
+            {"text": "D", "image": None, "is_correct": False},
         ],
     }
     provider = FakeQuestionProvider(
