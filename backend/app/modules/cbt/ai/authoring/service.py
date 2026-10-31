@@ -5,6 +5,7 @@ from __future__ import annotations
 from time import perf_counter
 
 import asyncio
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, cast
