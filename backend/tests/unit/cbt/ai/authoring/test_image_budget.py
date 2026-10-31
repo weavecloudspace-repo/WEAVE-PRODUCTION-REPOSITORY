@@ -34,6 +34,8 @@ class FakeQuestionProvider:
                     "options": [
                         {"text": "A", "image": None, "is_correct": True},
                         {"text": "B", "image": None, "is_correct": False},
+                        {"text": "C", "image": None, "is_correct": False},
+                        {"text": "D", "image": None, "is_correct": False},
                     ],
                 }
             ]
