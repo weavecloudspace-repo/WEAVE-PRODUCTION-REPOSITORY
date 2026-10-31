@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import AppException, ConflictException
 from app.modules.cbt.auth.schemas import AuthenticatedCBTActor
 from app.modules.cbt.ai.authoring.providers.base import ProviderStructuredOutputError
+from app.modules.cbt.ai.authoring.validation import AIResponseValidationError
 from app.modules.cbt.ai.idempotency.cache import (
     AI_REPLAY_TTL_SECONDS,
     AIReplayCache,
@@ -281,10 +282,10 @@ class CBTAIIdempotentAuthoringService:
                 code="AI_AUTHORING_FAILED",
                 detail=str(exc),
             )
-            if isinstance(exc, ProviderStructuredOutputError):
+            if isinstance(exc, (ProviderStructuredOutputError, AIResponseValidationError)):
                 raise AppException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="AI returned an invalid question structure after repair. No credits were charged.",
+                    detail="AI returned invalid questions after validation and repair. No credits were charged.",
                     payload={"code": "AI_INVALID_QUESTION_OUTPUT", "retryable": False},
                 ) from exc
             raise
