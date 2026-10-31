@@ -450,3 +450,22 @@ async def test_network_provider_error_never_triggers_question_repair() -> None:
 
     assert provider.repair_calls == 0
     assert resolver.calls == []
+
+
+@pytest.mark.asyncio
+async def test_known_false_binary_review_artifact_does_not_repair() -> None:
+    """A harmless provider-only flag must not waste another model call."""
+    generated = _single()
+    generated["options"][1]["binary_review_enabled"] = False
+    provider = FakeQuestionProvider(generated=[generated])
+    service, resolver = _service(provider)
+
+    result = await service.generate_questions(
+        request={"visual_mode": "text_only"}, expected_count=1
+    )
+
+    assert result.repaired is False
+    assert len(result.questions) == 1
+    assert provider.repair_calls == 0
+    assert resolver.calls == []
+    assert "binary_review_enabled" not in result.questions[0].question.options[1].model_dump()
