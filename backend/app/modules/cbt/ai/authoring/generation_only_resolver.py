@@ -7,27 +7,66 @@ decoded, normalized and checked for safe binary transport.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from app.modules.cbt.ai.authoring.assessment_integrity import (
     assessment_safe_generation_prompt,
 )
-from app.modules.cbt.ai.authoring.image_materializer import ImageMaterializer
+from app.modules.cbt.ai.authoring.flow_logging import get_question_generation_logger
+from app.modules.cbt.ai.authoring.image_materializer import (
+    ImageMaterializationError,
+    ImageMaterializer,
+)
 from app.modules.cbt.ai.authoring.providers.base import (
     BaseImageGenerationProvider,
     ImageResolutionResult,
     ProviderImageInput,
+    ProviderImageGenerationResult,
 )
+from app.modules.cbt.ai.authoring.providers.openrouter import OpenRouterProviderError
+
+
+logger = get_question_generation_logger("image_generation")
 
 
 class GenerationOnlyImageResolver:
     """Generate exactly one image through the configured provider.
 
     Transient HTTP 429 retries are owned by the OpenRouter transport.
-    A failed provider request or invalid image causes the whole batch to
-    fail, rather than searching the web or switching image models.
+    Other temporary provider/image-materialization failures get up to
+    three attempts per image. Successful images remain untouched. Exhausted
+    retries fail the complete batch without fallback or partial delivery.
     """
+
+    MAX_GENERATION_ATTEMPTS = 3
+    RETRY_DELAYS_SECONDS = (0.5, 1.0)
+    _TRANSIENT_UPSTREAM_ERRORS = frozenset(
+        {
+            "OpenRouter request timed out.",
+            "Unable to contact OpenRouter.",
+            "OpenRouter returned invalid JSON.",
+            "OpenRouter response was not a JSON object.",
+            "OpenRouter returned no generated image bytes.",
+            "OpenRouter returned invalid base64 image data.",
+            "Unsupported generated image encoding.",
+        }
+    )
+
+    @classmethod
+    def _is_retryable_image_error(cls, exc: Exception) -> bool:
+        if isinstance(exc, ImageMaterializationError):
+            return True
+        if not isinstance(exc, OpenRouterProviderError) or exc.quota_exhausted:
+            return False
+        if exc.status_code == 429:
+            # The transport already retries this response with Retry-After.
+            # A second retry layer would multiply Qwen requests and 429s.
+            return False
+        if exc.status_code is not None:
+            return exc.status_code == 408 or 500 <= exc.status_code <= 599
+        return str(exc) in cls._TRANSIENT_UPSTREAM_ERRORS
 
     def __init__(
         self,
@@ -61,19 +100,46 @@ class GenerationOnlyImageResolver:
         # Passing an empty context still prepends the mandatory exam policy.
         del assessment_context
         prompt = assessment_safe_generation_prompt(visual_specification, "")
-        generated = await self.generation_provider.generate_image(
-            prompt=prompt,
-            metadata=metadata,
-            reference_images=reference_images,
-        )
-        # Even without a second AI evaluator, malformed or unsafe binary
-        # assets must never be admitted to the final question response.
-        materialized = await self.materializer.materialize_generated(
-            generated.image, label="generated_image"
-        )
-        return ImageResolutionResult(
-            source="generated",
-            image=materialized,
-            generation=generated,
-            generation_attempts=[generated],
-        )
+        generated_attempts: list[ProviderImageGenerationResult] = []
+        for attempt in range(1, self.MAX_GENERATION_ATTEMPTS + 1):
+            try:
+                generated = await self.generation_provider.generate_image(
+                    prompt=prompt,
+                    metadata=metadata,
+                    reference_images=reference_images,
+                )
+                generated_attempts.append(generated)
+                # Reject malformed assets; retry only temporary failures.
+                materialized = await self.materializer.materialize_generated(
+                    generated.image, label="generated_image"
+                )
+            except (OpenRouterProviderError, ImageMaterializationError) as exc:
+                retryable = self._is_retryable_image_error(exc)
+                logger.warning(
+                    "cbt.ai.image_generation.attempt_failed",
+                    extra={
+                        "ai_image_attempt": attempt,
+                        "ai_image_max_attempts": self.MAX_GENERATION_ATTEMPTS,
+                        "ai_image_retryable": retryable,
+                        "ai_image_error_type": type(exc).__name__,
+                        "ai_image_http_status": getattr(exc, "status_code", None),
+                        "ai_image_model": getattr(self.generation_provider, "model", None),
+                    },
+                )
+                if not retryable or attempt == self.MAX_GENERATION_ATTEMPTS:
+                    raise
+                await asyncio.sleep(self.RETRY_DELAYS_SECONDS[attempt - 1])
+                continue
+
+            if attempt > 1:
+                logger.info(
+                    "cbt.ai.image_generation.recovered",
+                    extra={"ai_image_attempt": attempt},
+                )
+            return ImageResolutionResult(
+                source="generated",
+                image=materialized,
+                generation=generated,
+                generation_attempts=generated_attempts,
+            )
+        raise AssertionError("Image retry loop exhausted without a result.")
