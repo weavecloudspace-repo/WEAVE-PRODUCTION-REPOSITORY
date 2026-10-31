@@ -7,6 +7,8 @@ decoded, normalized and checked for safe binary transport.
 
 from __future__ import annotations
 
+from time import perf_counter
+
 import asyncio
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -15,6 +17,7 @@ from app.modules.cbt.ai.authoring.assessment_integrity import (
     assessment_safe_generation_prompt,
 )
 from app.modules.cbt.ai.authoring.flow_logging import get_question_generation_logger
+from app.modules.cbt.ai.authoring.trace_logging import trace_event
 from app.modules.cbt.ai.authoring.image_materializer import (
     ImageMaterializationError,
     ImageMaterializer,
@@ -101,7 +104,14 @@ class GenerationOnlyImageResolver:
         del assessment_context
         prompt = assessment_safe_generation_prompt(visual_specification, "")
         generated_attempts: list[ProviderImageGenerationResult] = []
+        trace_event(
+            "image.started",
+            model=getattr(self.generation_provider, "model", None),
+            max_attempts=self.MAX_GENERATION_ATTEMPTS,
+        )
         for attempt in range(1, self.MAX_GENERATION_ATTEMPTS + 1):
+            started = perf_counter()
+            trace_event("image.attempt_started", attempt=attempt)
             try:
                 generated = await self.generation_provider.generate_image(
                     prompt=prompt,
@@ -109,12 +119,29 @@ class GenerationOnlyImageResolver:
                     reference_images=reference_images,
                 )
                 generated_attempts.append(generated)
+                trace_event(
+                    "image.provider_completed",
+                    attempt=attempt,
+                    duration_ms=(perf_counter() - started) * 1000,
+                    input_tokens=generated.usage.input_tokens,
+                    output_tokens=generated.usage.output_tokens,
+                    provider_cost=generated.usage.provider_cost,
+                )
                 # Reject malformed assets; retry only temporary failures.
                 materialized = await self.materializer.materialize_generated(
                     generated.image, label="generated_image"
                 )
             except (OpenRouterProviderError, ImageMaterializationError) as exc:
                 retryable = self._is_retryable_image_error(exc)
+                trace_event(
+                    "image.attempt_failed",
+                    attempt=attempt,
+                    max_attempts=self.MAX_GENERATION_ATTEMPTS,
+                    duration_ms=(perf_counter() - started) * 1000,
+                    error_type=type(exc).__name__,
+                    http_status=getattr(exc, "status_code", None),
+                    retryable=retryable,
+                )
                 logger.warning(
                     "cbt.ai.image_generation.attempt_failed",
                     extra={
@@ -127,10 +154,24 @@ class GenerationOnlyImageResolver:
                     },
                 )
                 if not retryable or attempt == self.MAX_GENERATION_ATTEMPTS:
+                    trace_event("image.exhausted", attempt=attempt, retryable=retryable)
                     raise
+                trace_event(
+                    "image.retry_scheduled",
+                    attempt=attempt,
+                    retry_delay_seconds=self.RETRY_DELAYS_SECONDS[attempt - 1],
+                )
                 await asyncio.sleep(self.RETRY_DELAYS_SECONDS[attempt - 1])
                 continue
 
+            trace_event(
+                "image.materialized",
+                attempt=attempt,
+                duration_ms=(perf_counter() - started) * 1000,
+                image_bytes=len(materialized.data),
+                image_width=materialized.width,
+                image_height=materialized.height,
+            )
             if attempt > 1:
                 logger.info(
                     "cbt.ai.image_generation.recovered",
