@@ -318,9 +318,9 @@ class QuestionAuthoringService:
                     trace_event(
                         "question.repair_started",
                         reason="contract_validation",
-                    validation_issue_count=len(validation_error.issues),
-                    issue_codes=[issue.code for issue in validation_error.issues[:12]],
-                )
+                        validation_issue_count=len(validation_error.issues),
+                        issue_codes=[issue.code for issue in validation_error.issues[:12]],
+                    )
                     repaired_result = await self._repair_questions(
                         original_request=request_payload,
                         invalid_questions=provider_result.questions,
@@ -397,9 +397,7 @@ class QuestionAuthoringService:
                 isinstance(option, Mapping) and option.get("image") is not None
                 for option in options
             )
-        repair_mode: AIVisualMode = (
-            "auto" if visual_mode == "auto" and has_visual else "text_only"
-        )
+        repair_mode: AIVisualMode = "auto" if visual_mode == "auto" and has_visual else "text_only"
         targeted_request = dict(request_payload)
         targeted_request["question_count"] = 1
         targeted_request["question_type_counts"] = {question_type: 1}
