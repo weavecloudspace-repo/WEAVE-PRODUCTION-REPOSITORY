@@ -165,13 +165,8 @@ async def test_multiple_failed_images_retry_independently_without_regenerating_g
         "diagram 11": 3,
     }
     assert qwen.max_active == 2
-    assert all(
-        result.questions[i].question_image is not None for i in [0, 1, 2, 3, 10, 11]
-    )
-    assert all(
-        result.questions[i].question_image is None
-        for i in [4, 5, 6, 7, 8, 9, 12, 13, 14]
-    )
+    assert all(result.questions[i].question_image is not None for i in [0, 1, 2, 3, 10, 11])
+    assert all(result.questions[i].question_image is None for i in [4, 5, 6, 7, 8, 9, 12, 13, 14])
     assert result.usage.input_tokens == 6
     assert result.usage.provider_cost == pytest.approx(0.06)
 
