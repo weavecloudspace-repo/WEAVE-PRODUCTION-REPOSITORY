@@ -45,8 +45,7 @@ def test_generation_rejects_fewer_than_four_options(count: int) -> None:
             [_question(count)], expected_count=1, visual_mode="text_only"
         )
     assert any(
-        issue.code == "too_short" and "options" in issue.path
-        for issue in error.value.issues
+        issue.code == "too_short" and "options" in issue.path for issue in error.value.issues
     )
 
 
@@ -86,8 +85,8 @@ def test_openrouter_response_schema_remains_provider_compatible() -> None:
     # Strict provider schemas intentionally use only widely supported JSON
     # keywords. Pydantic validates the minimum count after receiving JSON.
     contract = openrouter_question_response_format()
-    options = contract["json_schema"]["schema"]["properties"]["questions"]["items"][
-        "properties"
-    ]["options"]
+    options = contract["json_schema"]["schema"]["properties"]["questions"]["items"]["properties"][
+        "options"
+    ]
     assert options["type"] == "array"
     assert options["items"]["properties"]["is_correct"]["type"] == "boolean"
