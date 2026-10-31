@@ -35,6 +35,7 @@ from app.modules.cbt.ai.authoring.schemas import (
 from app.modules.cbt.ai.authoring.visual_policy import target_visual_question_count
 from app.modules.cbt.ai.authoring.validation import (
     AIResponseValidationError,
+    AIValidationIssue,
     SUPPORTED_VISUAL_MODES,
     validate_generated_question_batch,
     validate_regenerated_question,
@@ -410,10 +411,21 @@ class QuestionAuthoringService:
         # Existing provider repair API remains unchanged; only the offending
         # item and its validation feedback are sent for replacement.
         trace_event("question.targeted_repair_started", question_index=index + 1)
+        local_issues = [
+            AIValidationIssue(
+                path=re.sub(r"^questions\\[\\d+\\]", "questions[0]", issue.path),
+                code=issue.code,
+                message=issue.message,
+            )
+            for issue in validation_error.issues
+        ]
         repaired_result = await self._repair_questions(
             original_request=targeted_request,
             invalid_questions=[dict(original)],
-            validation_error=validation_error,
+            validation_error=AIResponseValidationError(
+                "Repair the single invalid question.",
+                issues=local_issues,
+            ),
             operation="generation",
         )
         replacement = self._validate_batch(
