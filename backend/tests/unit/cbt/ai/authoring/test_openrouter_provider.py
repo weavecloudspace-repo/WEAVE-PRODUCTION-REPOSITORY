@@ -349,7 +349,9 @@ def test_strict_question_schema_is_provider_compatible() -> None:
 async def test_regeneration_uses_single_question_schema(monkeypatch):
     async def post(self, url, *, headers, json):
         assert json["response_format"]["json_schema"]["schema"]["required"] == ["question"]
-        return fake_response({"choices": [{"message": {"content": '{"question":{"prompt":"test"}}'}}]})
+        return fake_response(
+            {"choices": [{"message": {"content": '{"question":{"prompt":"test"}}'}}]}
+        )
 
     monkeypatch.setattr(httpx.AsyncClient, "post", post)
     result = await OpenRouterQuestionGenerationProvider(api_key="test").regenerate_question(
