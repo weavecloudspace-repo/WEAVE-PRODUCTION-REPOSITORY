@@ -244,3 +244,83 @@ async def test_unfixed_cross_chunk_duplicate_fails_without_materializing_images(
         )
     assert len(provider.repairs) == 1
     assert resolver.calls == []
+
+
+class ProviderWithOneInvalidQuestion(ChunkAwareProvider):
+    def __init__(self, broken_index: int) -> None:
+        super().__init__()
+        self.broken_index = broken_index
+
+    async def generate_questions(self, *, request):
+        result = await super().generate_questions(request=request)
+        if request.get("batch_index", 1) == 1:
+            # In production this is Pydantic's too_short error.
+            result.questions[self.broken_index]["options"] = result.questions[
+                self.broken_index
+            ]["options"][:2]
+        return result
+
+    async def repair_questions(self, *, request, reference_images=None):
+        self.repairs.append(dict(request))
+        target = request["original_request"]
+        visual = target["visual_mode"] == "auto"
+        return ProviderQuestionGenerationResult(
+            questions=[
+                _question(
+                    "Targeted replacement question",
+                    visual=visual,
+                    kind=next(iter(target["question_type_counts"])),
+                )
+            ],
+            usage=ProviderUsage(input_tokens=3, output_tokens=4),
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("broken_index", [2, 6])
+async def test_repairs_only_one_invalid_question_and_preserves_other_nineteen(
+    broken_index: int,
+) -> None:
+    provider = ProviderWithOneInvalidQuestion(broken_index)
+    resolver = FakeImageResolver()
+    result = await QuestionAuthoringService(
+        question_provider=provider, image_resolver=resolver
+    ).generate_questions(
+        request={"visual_mode": "auto", "question_count": 20},
+        expected_count=20,
+    )
+    assert result.repaired is True
+    assert len(result.questions) == 20
+    assert len(provider.requests) == 2
+    assert len(provider.repairs) == 1
+    repair = provider.repairs[0]
+    assert repair["original_request"]["question_count"] == 1
+    assert len(repair["invalid_questions"]) == 1
+    assert len(repair["invalid_questions"][0]["options"]) == 2
+    assert repair["validation_feedback"]["issues"][0]["path"].startswith("questions[0]")
+    assert result.questions[broken_index].question.prompt == "Targeted replacement question"
+    assert result.questions[0].question.prompt == "Assessment item 1-0"
+    assert result.questions[10].question.prompt == "Assessment item 2-0"
+    assert len(resolver.calls) == 8
+    assert result.usage.input_tokens == 23
+
+
+class ProviderWithBadTargetedRepair(ProviderWithOneInvalidQuestion):
+    async def repair_questions(self, *, request, reference_images=None):
+        self.repairs.append(dict(request))
+        return ProviderQuestionGenerationResult(questions=[])
+
+
+@pytest.mark.asyncio
+async def test_invalid_targeted_repair_never_dispatches_qwen_images() -> None:
+    provider = ProviderWithBadTargetedRepair(broken_index=2)
+    resolver = FakeImageResolver()
+    with pytest.raises(AIResponseValidationError):
+        await QuestionAuthoringService(
+            question_provider=provider, image_resolver=resolver
+        ).generate_questions(
+            request={"visual_mode": "auto", "question_count": 20},
+            expected_count=20,
+        )
+    assert len(provider.repairs) == 1
+    assert resolver.calls == []
