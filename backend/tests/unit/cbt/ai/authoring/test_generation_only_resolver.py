@@ -126,6 +126,8 @@ def _questions() -> list[dict]:
             "options": [
                 {"text": "Correct", "image": None, "is_correct": True},
                 {"text": "Incorrect", "image": None, "is_correct": False},
+                {"text": "Another distractor", "image": None, "is_correct": False},
+                {"text": "Fourth alternative", "image": None, "is_correct": False},
             ],
         }
         for index in range(15)
