@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 MAX_QUESTION_PROMPT_LENGTH = 20_000
 MAX_QUESTION_INSTRUCTION_LENGTH = 10_000
 MAX_OPTION_TEXT_LENGTH = 10_000
+MIN_OPTIONS_PER_QUESTION = 4
 MAX_OPTIONS_PER_QUESTION = 50
 
 MAX_IMAGE_REQUIREMENT_LENGTH = 2_000
@@ -119,7 +120,7 @@ class AIQuestionDraftBase(AIDraftBase):
     image: AIImageDirective | None = None
 
     options: list[AIQuestionOptionDraft] = Field(
-        min_length=2,
+        min_length=MIN_OPTIONS_PER_QUESTION,
         max_length=MAX_OPTIONS_PER_QUESTION,
     )
 
