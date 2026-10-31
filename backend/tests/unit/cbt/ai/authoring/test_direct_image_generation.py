@@ -97,6 +97,8 @@ class FakeBatchProvider:
                     "options": [
                         {"text": "Stomach", "is_correct": True},
                         {"text": "Liver", "is_correct": False},
+                        {"text": "Pancreas", "is_correct": False},
+                        {"text": "Kidney", "is_correct": False},
                     ],
                 }
                 for index in range(count)
