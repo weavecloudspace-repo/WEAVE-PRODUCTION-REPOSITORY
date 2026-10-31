@@ -34,6 +34,9 @@ async def test_question_generation_normalizes_response(monkeypatch):
     async def post(self, url, *, headers, json):
         assert url.endswith("/chat/completions")
         assert json["model"] == "openai/gpt-oss-120b"
+        assert json["response_format"]["type"] == "json_schema"
+        assert json["response_format"]["json_schema"]["strict"] is True
+        assert json["provider"]["require_parameters"] is True
         return fake_response(
             {
                 "choices": [{"message": {"content": '{"questions":[{"stem":"Which?"}]}'}}],
@@ -314,3 +317,42 @@ async def test_truncated_json_is_repairable_but_429_is_not(monkeypatch):
     monkeypatch.setattr(httpx.AsyncClient, "post", truncated_post)
     with pytest.raises(ProviderStructuredOutputError):
         await OpenRouterQuestionGenerationProvider(api_key="test").generate_questions(request={})
+
+
+def test_strict_question_schema_is_provider_compatible() -> None:
+    from app.modules.cbt.ai.authoring.contracts import openrouter_question_response_format
+
+    for single in (False, True):
+        formatted = openrouter_question_response_format(single_question=single)
+        schema = formatted["json_schema"]["schema"]
+        assert formatted["type"] == "json_schema"
+        assert formatted["json_schema"]["strict"] is True
+        assert schema["additionalProperties"] is False
+        field = "question" if single else "questions"
+        assert schema["required"] == [field]
+        question_schema = schema["properties"][field]
+        if not single:
+            assert question_schema["type"] == "array"
+            question_schema = question_schema["items"]
+        assert question_schema["additionalProperties"] is False
+        assert set(question_schema["required"]) == set(question_schema["properties"])
+        option_schema = question_schema["properties"]["options"]["items"]
+        assert option_schema["additionalProperties"] is False
+        assert set(option_schema["required"]) == set(option_schema["properties"])
+        image = question_schema["properties"]["image"]["anyOf"][0]
+        assert image["additionalProperties"] is False
+        assert "search_query" not in image["properties"]
+        assert set(image["required"]) == set(image["properties"])
+
+
+@pytest.mark.asyncio
+async def test_regeneration_uses_single_question_schema(monkeypatch):
+    async def post(self, url, *, headers, json):
+        assert json["response_format"]["json_schema"]["schema"]["required"] == ["question"]
+        return fake_response({"choices": [{"message": {"content": '{"question":{"prompt":"test"}}'}}]})
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", post)
+    result = await OpenRouterQuestionGenerationProvider(api_key="test").regenerate_question(
+        request={"subject": "Math", "visual_mode": "text_only"}
+    )
+    assert result.question == {"prompt": "test"}
