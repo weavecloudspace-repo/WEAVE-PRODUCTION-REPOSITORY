@@ -96,9 +96,7 @@ class FakeQuestionProvider:
             question["image"] = (
                 {
                     "requirement": f"diagram {global_index}",
-                    "generation_prompt": (
-                        f"Create diagram {global_index} without answer labels."
-                    ),
+                    "generation_prompt": f"Create diagram {global_index} without answer labels.",
                 }
                 if index < visual_target
                 else None
