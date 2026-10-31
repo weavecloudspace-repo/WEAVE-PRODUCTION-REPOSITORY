@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from app.modules.cbt.ai.authoring.schemas import (
     AIQuestionBatchDraft,
     AIRegeneratedQuestionDraft,
+    MIN_OPTIONS_PER_QUESTION,
 )
 
 
@@ -213,7 +214,7 @@ Rules:
 - A multiple_choice question must have at least two options where
   is_correct is true and at least one option where is_correct is false.
 
-- Every question must have at least two answer options.
+- Every question must have at least {MIN_OPTIONS_PER_QUESTION} answer options.\n- Use four distinct, plausible alternatives by default; include more only when necessary.
 
 - Every answer option must contain text, an image directive, or both.
 
@@ -266,7 +267,7 @@ Rules:
 - A multiple_choice question must have at least two options where
   is_correct is true and at least one option where is_correct is false.
 
-- Every question must have at least two answer options.
+- Every question must have at least {MIN_OPTIONS_PER_QUESTION} answer options.\n- Use four distinct, plausible alternatives by default; include more only when necessary.
 
 - Every answer option must contain text, an image directive, or both.
 
@@ -316,6 +317,9 @@ Rules:
 - Keep candidate-facing `instruction` separate from the actual question `prompt`
   according to the field rules below.
 - Return the complete repaired batch, not a patch or diff.
+- Every repaired question must contain at least {MIN_OPTIONS_PER_QUESTION} distinct
+  answer options, including when the invalid input contains fewer.
+- Keep the requested question count and question-type distribution unchanged.
 - Follow the same response schema.
 - If `invalid_questions` is empty because the previous provider response could
   not be parsed as structured JSON, regenerate the complete batch once from
