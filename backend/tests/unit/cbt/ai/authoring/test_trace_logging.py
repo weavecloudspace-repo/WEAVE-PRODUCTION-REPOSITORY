@@ -22,7 +22,9 @@ def test_trace_events_share_operation_id_but_not_http_request_id(monkeypatch) ->
     monkeypatch.setattr(trace_logging, "_trace_logger", lambda: sink)
     monkeypatch.setattr(trace_logging, "_ENABLED", True)
 
-    with trace_logging.trace_request(idempotency_key="same-operation", operation="generate", request_id="request-one"):
+    with trace_logging.trace_request(
+        idempotency_key="same-operation", operation="generate", request_id="request-one"
+    ):
         trace_logging.trace_event(
             "request.accepted",
             question_count=20,
@@ -33,7 +35,9 @@ def test_trace_events_share_operation_id_but_not_http_request_id(monkeypatch) ->
             error_message="private error payload",
         )
 
-    with trace_logging.trace_request(idempotency_key="same-operation", operation="generate", request_id="request-two"):
+    with trace_logging.trace_request(
+        idempotency_key="same-operation", operation="generate", request_id="request-two"
+    ):
         trace_logging.trace_event("idempotency.in_progress")
 
     assert sink.info.call_count == 2
