@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import re
 from collections import Counter
 
@@ -86,7 +87,23 @@ class FakeQuestionProvider:
 
     async def generate_questions(self, *, request):
         self.generate_calls += 1
-        return ProviderQuestionGenerationResult(questions=self.questions)
+        count = request["question_count"]
+        offset = (request.get("batch_index", 1) - 1) * 10
+        visual_target = request.get("visual_question_target", 0)
+        questions = copy.deepcopy(self.questions[offset : offset + count])
+        for index, question in enumerate(questions):
+            global_index = offset + index
+            question["image"] = (
+                {
+                    "requirement": f"diagram {global_index}",
+                    "generation_prompt": (
+                        f"Create diagram {global_index} without answer labels."
+                    ),
+                }
+                if index < visual_target
+                else None
+            )
+        return ProviderQuestionGenerationResult(questions=questions)
 
     async def repair_questions(self, *, request, reference_images=None):
         raise AssertionError("Valid generated questions must not be regenerated.")
@@ -123,7 +140,7 @@ async def test_multiple_failed_images_retry_independently_without_regenerating_g
     qwen = FakeQwen(
         failures={
             "diagram 2": [_transient()],
-            "diagram 4": [_transient(), _transient()],
+            "diagram 11": [_transient(), _transient()],
         }
     )
     question_provider = FakeQuestionProvider(_questions())
@@ -140,18 +157,18 @@ async def test_multiple_failed_images_retry_independently_without_regenerating_g
     )
 
     assert len(result.questions) == 15
-    assert question_provider.generate_calls == 1
+    assert question_provider.generate_calls == 2
     assert {key: qwen.calls[key] for key in sorted(qwen.calls)} == {
         "diagram 0": 1,
         "diagram 1": 1,
         "diagram 2": 2,
         "diagram 3": 1,
-        "diagram 4": 3,
-        "diagram 5": 1,
+        "diagram 10": 1,
+        "diagram 11": 3,
     }
     assert qwen.max_active == 2
-    assert all(question.question_image is not None for question in result.questions[:6])
-    assert all(question.question_image is None for question in result.questions[6:])
+    assert all(result.questions[i].question_image is not None for i in [0, 1, 2, 3, 10, 11])
+    assert all(result.questions[i].question_image is None for i in [4, 5, 6, 7, 8, 9, 12, 13, 14])
     assert result.usage.input_tokens == 6
     assert result.usage.provider_cost == pytest.approx(0.06)
 
