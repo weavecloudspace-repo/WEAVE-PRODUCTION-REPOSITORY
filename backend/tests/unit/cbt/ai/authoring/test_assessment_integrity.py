@@ -21,6 +21,7 @@ def _seam_question() -> AISingleChoiceQuestionDraft:
                 {"text": "Flat-felled seam", "image": None, "is_correct": True},
                 {"text": "French seam", "image": None, "is_correct": False},
                 {"text": "Lapped seam", "image": None, "is_correct": False},
+                {"text": "Bound seam", "image": None, "is_correct": False},
             ],
         }
     )
