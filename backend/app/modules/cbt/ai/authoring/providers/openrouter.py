@@ -498,6 +498,14 @@ class OpenRouterQuestionGenerationProvider(_OpenRouterHTTP, BaseQuestionGenerati
             response = await self._post("chat/completions", payload, self.timeout)
             choices = response.get("choices")
             choice = choices[0] if isinstance(choices, list) and choices else {}
+            trace_event(
+                "question.provider_completion_received",
+                model=self.model,
+                finish_reason=choice.get("finish_reason")
+                if isinstance(choice, dict)
+                else None,
+                attempt=round_number + 1,
+            )
             message = choice.get("message") if isinstance(choice, dict) else None
             calls = message.get("tool_calls") if isinstance(message, dict) else None
             if not calls:
