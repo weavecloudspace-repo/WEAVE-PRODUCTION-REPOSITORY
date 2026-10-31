@@ -349,7 +349,6 @@ class QuestionAuthoringService:
         )
         return questions, question_usage, repaired
 
-
     async def _repair_one_invalid_question(
         self,
         *,
@@ -372,7 +371,7 @@ class QuestionAuthoringService:
             return None
         indices: set[int] = set()
         for issue in validation_error.issues:
-            match = re.match(r"^questions\\[(\\d+)\\](?:\\.|$)", issue.path)
+            match = re.match(r"^questions\[(\d+)\](?:\.|$)", issue.path)
             if match is None:
                 return None
             indices.add(int(match.group(1)))
