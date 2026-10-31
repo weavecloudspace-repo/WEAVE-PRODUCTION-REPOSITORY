@@ -56,9 +56,7 @@ def _visual_chunk_sizes(count: int, max_size: int) -> tuple[int, ...]:
 
     result = solve(count, overall_target)
     if result is None:
-        raise ValueError(
-            "Cannot partition the request while preserving its visual distribution."
-        )
+        raise ValueError("Cannot partition the request while preserving its visual distribution.")
     return result
 
 
