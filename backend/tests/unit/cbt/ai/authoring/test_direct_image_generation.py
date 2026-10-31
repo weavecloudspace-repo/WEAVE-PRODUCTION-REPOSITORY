@@ -73,9 +73,13 @@ async def test_direct_resolver_has_no_fallback_when_qwen_fails() -> None:
 
 
 class FakeBatchProvider:
+    def __init__(self) -> None:
+        self.offset = 0
+
     async def generate_questions(self, *, request):
         count = request["question_count"]
-        offset = (request.get("batch_index", 1) - 1) * 10
+        offset = self.offset
+        self.offset += count
         visual_target = request.get("visual_question_target", 0)
         return ProviderQuestionGenerationResult(
             questions=[
