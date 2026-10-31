@@ -83,7 +83,9 @@ async def generate_questions(
                 duration_ms=(perf_counter() - started) * 1000,
                 error_type=type(exc).__name__,
                 http_status=getattr(exc, "status_code", None),
-                reason=getattr(exc, "payload", {}).get("code") if isinstance(getattr(exc, "payload", None), dict) else None,
+                reason=getattr(exc, "payload", {}).get("code")
+                if isinstance(getattr(exc, "payload", None), dict)
+                else None,
             )
             raise
         trace_event(
