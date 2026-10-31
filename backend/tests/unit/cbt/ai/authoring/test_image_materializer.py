@@ -213,3 +213,41 @@ def test_image_download_user_agent_is_informative() -> None:
 async def test_external_image_url_rejects_non_public_targets(url: str) -> None:
     with pytest.raises(ImageDownloadError):
         await ImageMaterializer._validate_public_url(url)
+
+
+
+@pytest.mark.asyncio
+async def test_large_generated_image_is_resized_and_encoded_efficiently() -> None:
+    # Noise prevents PNG from unrealistically compressing to a few bytes.
+    original = Image.effect_noise((1700, 1200), 90).convert("RGB")
+    encoded = BytesIO()
+    original.save(encoded, format="PNG")
+    raw = encoded.getvalue()
+
+    materializer = ImageMaterializer()
+    optimized = await materializer.materialize_generated(
+        ProviderGeneratedImage(
+            content_type="image/png",
+            data_base64=base64.b64encode(raw).decode("ascii"),
+        )
+    )
+
+    assert max(optimized.width, optimized.height) <= materializer.TARGET_GENERATED_MAX_DIMENSION
+    assert optimized.content_type in {"image/png", "image/webp"}
+    assert len(optimized.data) < len(raw)
+    assert optimized.sha256 == hashlib.sha256(optimized.data).hexdigest()
+    with Image.open(BytesIO(optimized.data)) as inspected:
+        assert inspected.size == (optimized.width, optimized.height)
+
+
+@pytest.mark.asyncio
+async def test_transport_reference_image_is_not_recompressed_during_recovery() -> None:
+    raw = _encoded_image("PNG")
+    materializer = ImageMaterializer()
+    recovered = await materializer.materialize_transport_base64(
+        data_base64=base64.b64encode(raw).decode("ascii"),
+        content_type="image/png",
+        expected_sha256=hashlib.sha256(raw).hexdigest(),
+    )
+    assert recovered.data == raw
+    assert recovered.sha256 == hashlib.sha256(raw).hexdigest()
