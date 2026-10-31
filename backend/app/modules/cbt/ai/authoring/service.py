@@ -90,6 +90,37 @@ class QuestionAuthoringService:
         self.question_provider = question_provider
         self.image_resolver = image_resolver
 
+    @staticmethod
+    def _validate_batch(
+        raw_questions: Sequence[Mapping[str, Any]],
+        *,
+        stage: str,
+        expected_count: int | None,
+        expected_type_counts: Mapping[str, int] | None,
+        visual_mode: AIVisualMode,
+    ) -> list[AIQuestionDraft]:
+        """Log precise contract issues without logging student/teacher content."""
+        try:
+            return validate_generated_question_batch(
+                raw_questions,
+                expected_count=expected_count,
+                expected_type_counts=expected_type_counts,
+                visual_mode=visual_mode,
+            )
+        except AIResponseValidationError as exc:
+            logger.warning(
+                "cbt.ai.question_generation.batch_validation_failed",
+                extra={
+                    "ai_validation_stage": stage,
+                    "ai_validation_issue_count": len(exc.issues),
+                    "ai_validation_issues": [
+                        {"path": item.path, "code": item.code, "message": item.message[:160]}
+                        for item in exc.issues[:20]
+                    ],
+                },
+            )
+            raise
+
     async def generate_questions(
         self,
         *,
@@ -120,8 +151,9 @@ class QuestionAuthoringService:
                 provider_error=provider_error,
                 operation="generation",
             )
-            questions = validate_generated_question_batch(
+            questions = self._validate_batch(
                 repaired_result.questions,
+                stage="unparseable_repair",
                 expected_count=expected_count,
                 expected_type_counts=expected_type_counts,
                 visual_mode=visual_mode,
@@ -131,8 +163,9 @@ class QuestionAuthoringService:
         else:
             question_usage = provider_result.usage
             try:
-                questions = validate_generated_question_batch(
+                questions = self._validate_batch(
                     provider_result.questions,
+                    stage="initial",
                     expected_count=expected_count,
                     expected_type_counts=expected_type_counts,
                     visual_mode=visual_mode,
@@ -144,8 +177,9 @@ class QuestionAuthoringService:
                     validation_error=validation_error,
                     operation="generation",
                 )
-                questions = validate_generated_question_batch(
+                questions = self._validate_batch(
                     repaired_result.questions,
+                    stage="repair",
                     expected_count=expected_count,
                     expected_type_counts=expected_type_counts,
                     visual_mode=visual_mode,
