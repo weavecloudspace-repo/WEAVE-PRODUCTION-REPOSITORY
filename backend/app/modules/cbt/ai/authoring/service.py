@@ -5,6 +5,7 @@ from __future__ import annotations
 from time import perf_counter
 
 import asyncio
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, cast
@@ -300,30 +301,43 @@ class QuestionAuthoringService:
                     visual_mode=visual_mode,
                 )
             except AIResponseValidationError as validation_error:
-                trace_event(
-                    "question.repair_started",
-                    reason="contract_validation",
-                    validation_issue_count=len(validation_error.issues),
-                    issue_codes=[issue.code for issue in validation_error.issues[:12]],
-                )
-                repaired_result = await self._repair_questions(
-                    original_request=request_payload,
-                    invalid_questions=provider_result.questions,
+                targeted = await self._repair_one_invalid_question(
+                    request_payload=request_payload,
+                    raw_questions=provider_result.questions,
                     validation_error=validation_error,
-                    operation="generation",
-                )
-                questions = self._validate_batch(
-                    repaired_result.questions,
-                    stage="repair",
                     expected_count=expected_count,
                     expected_type_counts=expected_type_counts,
                     visual_mode=visual_mode,
                 )
-                question_usage = self._combine_usage(
-                    provider_result.usage,
-                    repaired_result.usage,
+                if targeted is not None:
+                    questions, repair_usage = targeted
+                    question_usage = self._combine_usage(provider_result.usage, repair_usage)
+                    repaired = True
+                else:
+                    trace_event(
+                        "question.repair_started",
+                        reason="contract_validation",
+                    validation_issue_count=len(validation_error.issues),
+                    issue_codes=[issue.code for issue in validation_error.issues[:12]],
                 )
-                repaired = True
+                    repaired_result = await self._repair_questions(
+                        original_request=request_payload,
+                        invalid_questions=provider_result.questions,
+                        validation_error=validation_error,
+                        operation="generation",
+                    )
+                    questions = self._validate_batch(
+                        repaired_result.questions,
+                        stage="repair",
+                        expected_count=expected_count,
+                        expected_type_counts=expected_type_counts,
+                        visual_mode=visual_mode,
+                    )
+                    question_usage = self._combine_usage(
+                        provider_result.usage,
+                        repaired_result.usage,
+                    )
+                    repaired = True
 
         trace_event(
             "question.model_completed",
@@ -334,6 +348,96 @@ class QuestionAuthoringService:
             output_tokens=question_usage.output_tokens,
         )
         return questions, question_usage, repaired
+
+
+    async def _repair_one_invalid_question(
+        self,
+        *,
+        request_payload: Mapping[str, Any],
+        raw_questions: list[dict[str, Any]],
+        validation_error: AIResponseValidationError,
+        expected_count: int | None,
+        expected_type_counts: Mapping[str, int] | None,
+        visual_mode: AIVisualMode,
+    ) -> tuple[list[AIQuestionDraft], ProviderUsage] | None:
+        """Repair one structurally invalid item; retain all other model output.
+
+        This only handles field errors at one question index. Batch-wide
+        mismatches and multiple invalid questions still follow the existing
+        whole-chunk repair policy. Never silently fix answer keys or options.
+        """
+        if expected_count is None or len(raw_questions) != expected_count:
+            return None
+        if not validation_error.issues:
+            return None
+        indices: set[int] = set()
+        for issue in validation_error.issues:
+            match = re.match(r"^questions\\[(\\d+)\\](?:\\.|$)", issue.path)
+            if match is None:
+                return None
+            indices.add(int(match.group(1)))
+        if len(indices) != 1:
+            return None
+        index = indices.pop()
+        if index >= len(raw_questions):
+            return None
+        original = raw_questions[index]
+        if not isinstance(original, Mapping):
+            return None
+        question_type = original.get("question_type")
+        if question_type not in {"single_choice", "multiple_choice"}:
+            return None
+
+        # A one-item auto batch requires one visual. Preserve whether the
+        # invalid question originally used images to keep the full 60/40 split.
+        has_visual = original.get("image") is not None
+        options = original.get("options")
+        if isinstance(options, list):
+            has_visual |= any(
+                isinstance(option, Mapping) and option.get("image") is not None
+                for option in options
+            )
+        repair_mode: AIVisualMode = (
+            "auto" if visual_mode == "auto" and has_visual else "text_only"
+        )
+        targeted_request = dict(request_payload)
+        targeted_request["question_count"] = 1
+        targeted_request["question_type_counts"] = {question_type: 1}
+        targeted_request["visual_mode"] = repair_mode
+        if repair_mode == "auto":
+            targeted_request["visual_question_target"] = 1
+        else:
+            targeted_request.pop("visual_question_target", None)
+        # Existing provider repair API remains unchanged; only the offending
+        # item and its validation feedback are sent for replacement.
+        trace_event("question.targeted_repair_started", question_index=index + 1)
+        repaired_result = await self._repair_questions(
+            original_request=targeted_request,
+            invalid_questions=[dict(original)],
+            validation_error=validation_error,
+            operation="generation",
+        )
+        replacement = self._validate_batch(
+            repaired_result.questions,
+            stage="targeted_repair",
+            expected_count=1,
+            expected_type_counts={question_type: 1},
+            visual_mode=repair_mode,
+        )[0]
+        combined: list[dict[str, Any]] = [
+            *raw_questions[:index],
+            replacement.model_dump(),
+            *raw_questions[index + 1 :],
+        ]
+        validated = self._validate_batch(
+            combined,
+            stage="targeted_repair_combined",
+            expected_count=expected_count,
+            expected_type_counts=expected_type_counts,
+            visual_mode=visual_mode,
+        )
+        trace_event("question.targeted_repair_completed", question_index=index + 1)
+        return validated, repaired_result.usage
 
     async def _generate_batched_questions(
         self,
