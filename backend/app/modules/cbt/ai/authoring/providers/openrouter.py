@@ -325,7 +325,9 @@ class _OpenRouterHTTP:
                     http_status=response.status_code,
                     duration_ms=(perf_counter() - started) * 1000,
                     input_tokens=usage.get("prompt_tokens") if isinstance(usage, dict) else None,
-                    output_tokens=usage.get("completion_tokens") if isinstance(usage, dict) else None,
+                    output_tokens=usage.get("completion_tokens")
+                    if isinstance(usage, dict)
+                    else None,
                     provider_cost=usage.get("cost") if isinstance(usage, dict) else None,
                 )
                 return result
