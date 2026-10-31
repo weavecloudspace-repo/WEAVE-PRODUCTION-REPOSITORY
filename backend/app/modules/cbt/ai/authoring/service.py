@@ -196,9 +196,7 @@ class QuestionAuthoringService:
             question_index: int,
         ) -> tuple[AuthoredQuestion, list[ProviderUsage]]:
             async with semaphore:
-                return await self._resolve_question_images(
-                    question, question_index=question_index
-                )
+                return await self._resolve_question_images(question, question_index=question_index)
 
         trace_event("image.batch_started", actual_count=len(questions))
         tasks = [
