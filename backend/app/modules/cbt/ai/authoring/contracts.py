@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -366,3 +367,68 @@ def build_question_regeneration_prompt() -> str:
 def build_question_repair_prompt() -> str:
     """Build the provider-neutral repair contract."""
     return f"{QUESTION_REPAIR_RULES}\n\nRESPONSE JSON SCHEMA:\n{question_generation_schema_text()}"
+
+
+def openrouter_question_response_format(*, single_question: bool = False) -> dict[str, Any]:
+    """OpenRouter-compatible strict output schema for GPT-OSS.
+
+    Keep this smaller than the complete Pydantic JSON Schema: provider support
+    for discriminator, defaults and validation keywords varies. Pydantic remains
+    the authoritative validator for correctness, counts, and assessment policy.
+    All fields are required, nullable where appropriate, and extra keys forbidden.
+    """
+    image_schema: dict[str, Any] = {
+        "anyOf": [
+            {
+                "type": "object",
+                "properties": {
+                    "requirement": {"type": "string"},
+                    "generation_prompt": {"type": "string"},
+                },
+                "required": ["requirement", "generation_prompt"],
+                "additionalProperties": False,
+            },
+            {"type": "null"},
+        ]
+    }
+    option_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "text": {"type": ["string", "null"]},
+            "image": image_schema,
+            "is_correct": {"type": "boolean"},
+        },
+        "required": ["text", "image", "is_correct"],
+        "additionalProperties": False,
+    }
+    question_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "question_type": {"type": "string", "enum": ["single_choice", "multiple_choice"]},
+            "prompt": {"type": "string"},
+            "instruction": {"type": ["string", "null"]},
+            "image": image_schema,
+            "options": {"type": "array", "items": option_schema},
+        },
+        "required": ["question_type", "prompt", "instruction", "image", "options"],
+        "additionalProperties": False,
+    }
+    field = "question" if single_question else "questions"
+    value_schema = (
+        question_schema
+        if single_question
+        else {"type": "array", "items": question_schema}
+    )
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "weave_cbt_regenerated_question" if single_question else "weave_cbt_question_batch",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {field: value_schema},
+                "required": [field],
+                "additionalProperties": False,
+            },
+        },
+    }
