@@ -85,9 +85,7 @@ class FakeBatchProvider:
                     "image": (
                         {
                             "requirement": "A precise unlabeled digestive organ",
-                            "generation_prompt": (
-                                f"An accurate digestive organ for figure {offset + index}"
-                            ),
+                            "generation_prompt": f"An accurate digestive organ for figure {offset + index}",
                         }
                         if index < visual_target
                         else None
