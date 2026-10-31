@@ -72,7 +72,13 @@ class ChunkAwareProvider:
             for index in range(request["question_count"])
         ]
         if self.duplicate_second_chunk and chunk == 2:
-            questions[0]["prompt"] = "Assessment item 1-0"
+            # Reproduce the same full question fingerprint, including image
+            # directive; merely sharing prompt text is not sufficient.
+            questions[0] = _question(
+                "Assessment item 1-0",
+                visual=target > 0,
+                kind=types[0],
+            )
         return ProviderQuestionGenerationResult(
             questions=questions,
             usage=ProviderUsage(input_tokens=10, output_tokens=20),
