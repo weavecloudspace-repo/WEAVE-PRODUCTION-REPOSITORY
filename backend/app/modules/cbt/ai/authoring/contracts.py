@@ -25,6 +25,14 @@ coverage, or other content guidance.
 - Use it to decide what knowledge and skills the generated questions should assess.
 - The structured request fields such as subject, academic_level, question_count,
   question_type_counts, difficulty, and visual_mode remain authoritative constraints.
+- The application may internally generate a large request as several smaller
+  batches. When `batch_index`/`batch_count` are present, return ONLY the
+  number of questions specified by THIS request's `question_count`, not
+  a number mentioned in the original teacher brief. Keep the same subject,
+  syllabus, level, and difficulty across batches. Vary the concepts covered.
+- When `avoid_question_prompts` is provided, do not repeat or lightly
+  rephrase any of those earlier questions. Use other concepts within the
+  teacher's topic. This field is context, not candidate-facing text.
 - `context`, when supplied, is source/background material for authoring and is not
   automatically candidate-facing text either.
 """.strip()
