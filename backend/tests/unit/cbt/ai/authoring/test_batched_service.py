@@ -19,6 +19,7 @@ def _question(prompt: str, *, visual: bool, kind: str = "single_choice") -> dict
         {"text": "A", "image": None, "is_correct": True},
         {"text": "B", "image": None, "is_correct": kind == "multiple_choice"},
         {"text": "C", "image": None, "is_correct": False},
+        {"text": "D", "image": None, "is_correct": False},
     ]
     return {
         "question_type": kind,
