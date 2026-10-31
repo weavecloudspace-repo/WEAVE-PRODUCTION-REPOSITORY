@@ -255,9 +255,9 @@ class ProviderWithOneInvalidQuestion(ChunkAwareProvider):
         result = await super().generate_questions(request=request)
         if request.get("batch_index", 1) == 1:
             # In production this is Pydantic's too_short error.
-            result.questions[self.broken_index]["options"] = result.questions[
-                self.broken_index
-            ]["options"][:2]
+            result.questions[self.broken_index]["options"] = result.questions[self.broken_index][
+                "options"
+            ][:2]
         return result
 
     async def repair_questions(self, *, request, reference_images=None):
