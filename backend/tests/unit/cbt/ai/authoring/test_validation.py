@@ -42,6 +42,8 @@ def _single(
                 "is_correct": True,
             },
             {"text": "5", "image": None, "is_correct": False},
+            {"text": "6", "image": None, "is_correct": False},
+            {"text": "7", "image": None, "is_correct": False},
         ],
     }
 
@@ -56,6 +58,7 @@ def _multiple(prompt: str = "Select the prime numbers.", *, visual: bool = False
             {"text": "2", "image": None, "is_correct": True},
             {"text": "3", "image": None, "is_correct": True},
             {"text": "4", "image": None, "is_correct": False},
+            {"text": "5", "image": None, "is_correct": False},
         ],
     }
 
@@ -79,6 +82,7 @@ def test_multiple_choice_requires_two_correct_and_one_incorrect() -> None:
 
     all_correct = _multiple()
     all_correct["options"][2]["is_correct"] = True
+    all_correct["options"][3]["is_correct"] = True
     with pytest.raises(ValidationError, match="at least one incorrect"):
         AIMultipleChoiceQuestionDraft.model_validate(all_correct)
 
@@ -93,6 +97,8 @@ def test_question_rejects_normalized_duplicate_options() -> None:
     raw["options"] = [
         {"text": " Lagos ", "image": None, "is_correct": True},
         {"text": "lagos", "image": None, "is_correct": False},
+        {"text": "Ibadan", "image": None, "is_correct": False},
+        {"text": "Abuja", "image": None, "is_correct": False},
     ]
     with pytest.raises(ValidationError, match="options must be unique"):
         AISingleChoiceQuestionDraft.model_validate(raw)
