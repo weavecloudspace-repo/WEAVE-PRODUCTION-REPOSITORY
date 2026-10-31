@@ -74,17 +74,22 @@ async def test_direct_resolver_has_no_fallback_when_qwen_fails() -> None:
 
 class FakeBatchProvider:
     async def generate_questions(self, *, request):
+        count = request["question_count"]
+        offset = (request.get("batch_index", 1) - 1) * 10
+        visual_target = request.get("visual_question_target", 0)
         return ProviderQuestionGenerationResult(
             questions=[
                 {
                     "question_type": "single_choice",
-                    "prompt": f"Which structure is shown in figure {index}?",
+                    "prompt": f"Which structure is shown in figure {offset + index}?",
                     "image": (
                         {
                             "requirement": "A precise unlabeled digestive organ",
-                            "generation_prompt": f"An accurate digestive organ for figure {index}",
+                            "generation_prompt": (
+                                f"An accurate digestive organ for figure {offset + index}"
+                            ),
                         }
-                        if index < 6
+                        if index < visual_target
                         else None
                     ),
                     "options": [
@@ -92,7 +97,7 @@ class FakeBatchProvider:
                         {"text": "Liver", "is_correct": False},
                     ],
                 }
-                for index in range(15)
+                for index in range(count)
             ]
         )
 
