@@ -501,9 +501,7 @@ class OpenRouterQuestionGenerationProvider(_OpenRouterHTTP, BaseQuestionGenerati
             trace_event(
                 "question.provider_completion_received",
                 model=self.model,
-                finish_reason=choice.get("finish_reason")
-                if isinstance(choice, dict)
-                else None,
+                finish_reason=choice.get("finish_reason") if isinstance(choice, dict) else None,
                 attempt=round_number + 1,
             )
             message = choice.get("message") if isinstance(choice, dict) else None
