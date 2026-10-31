@@ -30,7 +30,7 @@ _LOGGER_NAME = "weave.cbt.ai.hybrid_trace"
 # here to prevent accidentally logging prompt text, answers, keys or image data.
 SAFE_FIELDS = frozenset(
     {
-        "question_count", "visual_target", "visual_count", "text_count",
+        "question_count", "visual_mode", "visual_target", "visual_count", "text_count",
         "batch_count", "batch_index", "batch_size", "question_index",
         "option_index", "image_count", "image_bytes", "image_width",
         "image_height", "attempt", "max_attempts", "retryable",
@@ -46,7 +46,7 @@ SAFE_FIELDS = frozenset(
 )
 _STRING_FIELDS = frozenset(
     {
-        "error_type", "status", "model", "endpoint", "stage", "reason",
+        "error_type", "status", "model", "endpoint", "stage", "reason", "visual_mode",
         "finish_reason", "idempotency_status", "source", "request_stage",
         "quota_status",
     }
