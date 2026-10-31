@@ -58,11 +58,7 @@ class ChunkAwareProvider:
         type_counts = request.get("question_type_counts") or {
             "single_choice": request.get("question_count", 1)
         }
-        types = [
-            kind
-            for kind, amount in type_counts.items()
-            for _ in range(amount)
-        ]
+        types = [kind for kind, amount in type_counts.items() for _ in range(amount)]
         questions = [
             _question(
                 f"Assessment item {chunk}-{index}",
@@ -98,15 +94,17 @@ class ChunkAwareProvider:
         target = int(request.get("visual_question_target", 0))
         types = [
             kind
-            for kind, amount in (request.get("question_type_counts") or {
-                "single_choice": request["question_count"]
-            }).items()
+            for kind, amount in (
+                request.get("question_type_counts") or {"single_choice": request["question_count"]}
+            ).items()
             for _ in range(amount)
         ]
         chunk = int(request.get("batch_index", 1))
         return [
             _question(
-                "Assessment item 1-0" if self.repeat_on_repair and index == 0 else f"Replacement {chunk}-{index}",
+                "Assessment item 1-0"
+                if self.repeat_on_repair and index == 0
+                else f"Replacement {chunk}-{index}",
                 visual=index < target,
                 kind=types[index],
             )
