@@ -6,6 +6,8 @@ requests are never executed at import time.
 
 from __future__ import annotations
 
+from time import perf_counter
+
 import asyncio
 import base64
 from datetime import datetime, timezone
@@ -25,6 +27,7 @@ from app.modules.cbt.ai.authoring.contracts import (
     build_question_repair_prompt,
     openrouter_question_response_format,
 )
+from app.modules.cbt.ai.authoring.trace_logging import trace_event
 from app.modules.cbt.ai.authoring.image_contact_sheet import contact_sheet_candidate_count
 from app.modules.cbt.ai.authoring.providers.request_pacing import (
     vision_request_pacer,
@@ -159,9 +162,22 @@ class _OpenRouterHTTP:
         is_image = endpoint == "images" and model == settings.OPENROUTER_IMAGE_MODEL
         retries = settings.OPENROUTER_429_MAX_RETRIES
         backoff_cap = settings.OPENROUTER_429_MAX_BACKOFF_SECONDS
+        trace_event(
+            "provider.operation_started",
+            model=model,
+            endpoint=endpoint,
+            timeout_seconds=timeout,
+        )
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             for attempt in range(retries + 1):
+                started = perf_counter()
+                trace_event(
+                    "provider.attempt_started",
+                    attempt=attempt + 1,
+                    model=model,
+                    endpoint=endpoint,
+                )
                 try:
                     if is_vision:
                         # Serialize the local worker and pace all workers using
@@ -208,15 +224,39 @@ class _OpenRouterHTTP:
                             json=payload,
                         )
                 except httpx.TimeoutException as exc:
+                    trace_event(
+                        "provider.timeout",
+                        model=model,
+                        endpoint=endpoint,
+                        attempt=attempt + 1,
+                        duration_ms=(perf_counter() - started) * 1000,
+                        error_type=type(exc).__name__,
+                    )
                     raise OpenRouterProviderError(
                         "OpenRouter request timed out.", model=model
                     ) from exc
                 except httpx.RequestError as exc:
+                    trace_event(
+                        "provider.transport_failed",
+                        model=model,
+                        endpoint=endpoint,
+                        attempt=attempt + 1,
+                        duration_ms=(perf_counter() - started) * 1000,
+                        error_type=type(exc).__name__,
+                    )
                     raise OpenRouterProviderError(
                         "Unable to contact OpenRouter.", model=model
                     ) from exc
 
                 if response.status_code == 429:
+                    trace_event(
+                        "provider.rate_limited",
+                        model=model,
+                        endpoint=endpoint,
+                        attempt=attempt + 1,
+                        http_status=429,
+                        duration_ms=(perf_counter() - started) * 1000,
+                    )
                     error = _provider_error(response, model)
                     proposed_delay = (
                         error.retry_after_seconds
@@ -244,17 +284,50 @@ class _OpenRouterHTTP:
                     continue
 
                 if response.is_error:
+                    trace_event(
+                        "provider.http_failed",
+                        model=model,
+                        endpoint=endpoint,
+                        attempt=attempt + 1,
+                        http_status=response.status_code,
+                        duration_ms=(perf_counter() - started) * 1000,
+                    )
                     raise _provider_error(response, model)
                 try:
                     result = response.json()
                 except ValueError as exc:
+                    trace_event(
+                        "provider.invalid_json",
+                        model=model,
+                        endpoint=endpoint,
+                        attempt=attempt + 1,
+                        duration_ms=(perf_counter() - started) * 1000,
+                    )
                     raise OpenRouterProviderError(
                         "OpenRouter returned invalid JSON.", model=model
                     ) from exc
                 if not isinstance(result, dict):
+                    trace_event(
+                        "provider.invalid_payload",
+                        model=model,
+                        endpoint=endpoint,
+                        attempt=attempt + 1,
+                    )
                     raise OpenRouterProviderError(
                         "OpenRouter response was not a JSON object.", model=model
                     )
+                usage = result.get("usage")
+                trace_event(
+                    "provider.attempt_succeeded",
+                    model=model,
+                    endpoint=endpoint,
+                    attempt=attempt + 1,
+                    http_status=response.status_code,
+                    duration_ms=(perf_counter() - started) * 1000,
+                    input_tokens=usage.get("prompt_tokens") if isinstance(usage, dict) else None,
+                    output_tokens=usage.get("completion_tokens") if isinstance(usage, dict) else None,
+                    provider_cost=usage.get("cost") if isinstance(usage, dict) else None,
+                )
                 return result
         raise OpenRouterProviderError("OpenRouter retry budget exhausted.", model=model)
 
