@@ -214,7 +214,8 @@ Rules:
 - A multiple_choice question must have at least two options where
   is_correct is true and at least one option where is_correct is false.
 
-- Every question must have at least {MIN_OPTIONS_PER_QUESTION} answer options.\n- Use four distinct, plausible alternatives by default; include more only when necessary.
+- Every question must have at least {MIN_OPTIONS_PER_QUESTION} answer options.
+- Use four distinct, plausible alternatives by default; include more only when necessary.
 
 - Every answer option must contain text, an image directive, or both.
 
@@ -267,7 +268,8 @@ Rules:
 - A multiple_choice question must have at least two options where
   is_correct is true and at least one option where is_correct is false.
 
-- Every question must have at least {MIN_OPTIONS_PER_QUESTION} answer options.\n- Use four distinct, plausible alternatives by default; include more only when necessary.
+- Every question must have at least {MIN_OPTIONS_PER_QUESTION} answer options.
+- Use four distinct, plausible alternatives by default; include more only when necessary.
 
 - Every answer option must contain text, an image directive, or both.
 
