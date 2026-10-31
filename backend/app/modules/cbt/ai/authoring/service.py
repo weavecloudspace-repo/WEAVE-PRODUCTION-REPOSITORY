@@ -5,7 +5,6 @@ from __future__ import annotations
 from time import perf_counter
 
 import asyncio
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, cast
@@ -411,7 +410,7 @@ class QuestionAuthoringService:
         trace_event("question.targeted_repair_started", question_index=index + 1)
         local_issues = [
             AIValidationIssue(
-                path=re.sub(r"^questions\\[\\d+\\]", "questions[0]", issue.path),
+                path=issue.path.replace(f"questions[{index}]", "questions[0]", 1),
                 code=issue.code,
                 message=issue.message,
             )
