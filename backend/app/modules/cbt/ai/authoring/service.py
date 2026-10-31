@@ -8,6 +8,10 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, cast
 
 from app.modules.cbt.ai.authoring.assessment_integrity import assessment_context
+from app.modules.cbt.ai.authoring.batch_planning import (
+    MAX_QUESTIONS_PER_MODEL_CALL,
+    plan_question_batches,
+)
 from app.modules.cbt.ai.authoring.flow_logging import get_question_generation_logger
 from app.modules.cbt.ai.authoring.generation_only_resolver import GenerationOnlyImageResolver
 from app.modules.cbt.ai.authoring.image_resolver import ImageResolver
@@ -129,14 +133,70 @@ class QuestionAuthoringService:
         expected_type_counts: Mapping[str, int] | None = None,
     ) -> QuestionGenerationResult:
         request_payload, visual_mode = self._prepare_authoring_request(request)
-        # This internal hint is never part of the public CBT request schema.
-        # It ensures both initial generation and one-shot repair use the
-        # same count, while Text-only mode remains unaffected.
         count = (
             expected_count if expected_count is not None else request_payload.get("question_count")
         )
-        if visual_mode == "auto" and type(count) is int and count > 0:
-            request_payload["visual_question_target"] = target_visual_question_count(count)
+        if type(count) is int and count > MAX_QUESTIONS_PER_MODEL_CALL:
+            questions, question_usage, repaired = await self._generate_batched_questions(
+                request_payload=request_payload,
+                count=count,
+                expected_type_counts=expected_type_counts,
+                visual_mode=visual_mode,
+            )
+        else:
+            if visual_mode == "auto" and type(count) is int and count > 0:
+                request_payload["visual_question_target"] = target_visual_question_count(count)
+            questions, question_usage, repaired = await self._generate_validated_batch(
+                request_payload=request_payload,
+                expected_count=expected_count,
+                expected_type_counts=expected_type_counts,
+                visual_mode=visual_mode,
+            )
+
+        # Image operations are independent after the question batch has passed
+        # validation. Bound concurrency, retain question order, and never return
+        # a partial batch if any required image fails.
+        semaphore = asyncio.Semaphore(2)
+
+        async def resolve_one(
+            question: AIQuestionDraft,
+        ) -> tuple[AuthoredQuestion, list[ProviderUsage]]:
+            async with semaphore:
+                return await self._resolve_question_images(question)
+
+        tasks = [asyncio.create_task(resolve_one(question)) for question in questions]
+        try:
+            resolved = await asyncio.gather(*tasks)
+        except BaseException:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+
+        authored_questions: list[AuthoredQuestion] = []
+        image_usages: list[ProviderUsage] = []
+        materialized_image_bytes = 0
+        for authored_question, usages in resolved:
+            materialized_image_bytes += self._authored_question_image_bytes(authored_question)
+            self._enforce_image_budget(materialized_image_bytes)
+            authored_questions.append(authored_question)
+            image_usages.extend(usages)
+
+        return QuestionGenerationResult(
+            questions=authored_questions,
+            usage=self._combine_usage(question_usage, *image_usages),
+            repaired=repaired,
+        )
+
+    async def _generate_validated_batch(
+        self,
+        *,
+        request_payload: Mapping[str, Any],
+        expected_count: int | None,
+        expected_type_counts: Mapping[str, int] | None,
+        visual_mode: AIVisualMode,
+    ) -> tuple[list[AIQuestionDraft], ProviderUsage, bool]:
+        """Run one small GPT-OSS request with the existing single repair policy."""
         repaired = False
 
         try:
@@ -190,40 +250,133 @@ class QuestionAuthoringService:
                 )
                 repaired = True
 
-        # Image operations are independent after the question batch has passed
-        # validation. Bound concurrency, retain question order, and never return
-        # a partial batch if any required image fails.
-        semaphore = asyncio.Semaphore(2)
+        return questions, question_usage, repaired
 
-        async def resolve_one(
-            question: AIQuestionDraft,
-        ) -> tuple[AuthoredQuestion, list[ProviderUsage]]:
-            async with semaphore:
-                return await self._resolve_question_images(question)
+    async def _generate_batched_questions(
+        self,
+        *,
+        request_payload: Mapping[str, Any],
+        count: int,
+        expected_type_counts: Mapping[str, int] | None,
+        visual_mode: AIVisualMode,
+    ) -> tuple[list[AIQuestionDraft], ProviderUsage, bool]:
+        """Combine small question-only calls before any image generation.
 
-        tasks = [asyncio.create_task(resolve_one(question)) for question in questions]
-        try:
-            resolved = await asyncio.gather(*tasks)
-        except BaseException:
-            for task in tasks:
-                task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
-            raise
+        There is still exactly one inbound HTTP request, one idempotency key,
+        one credit reservation, and one completed response to local CBT.
+        """
+        type_counts = expected_type_counts
+        if type_counts is None:
+            raw_type_counts = request_payload.get("question_type_counts")
+            if isinstance(raw_type_counts, Mapping):
+                type_counts = raw_type_counts
 
-        authored_questions: list[AuthoredQuestion] = []
-        image_usages: list[ProviderUsage] = []
-        materialized_image_bytes = 0
-        for authored_question, usages in resolved:
-            materialized_image_bytes += self._authored_question_image_bytes(authored_question)
-            self._enforce_image_budget(materialized_image_bytes)
-            authored_questions.append(authored_question)
-            image_usages.extend(usages)
-
-        return QuestionGenerationResult(
-            questions=authored_questions,
-            usage=self._combine_usage(question_usage, *image_usages),
-            repaired=repaired,
+        plans = plan_question_batches(
+            count,
+            visual_mode=visual_mode,
+            expected_type_counts=type_counts,
         )
+        logger.info(
+            "cbt.ai.question_generation.batching_started",
+            extra={
+                "ai_question_count": count,
+                "ai_batch_count": len(plans),
+                "ai_batch_sizes": [plan.count for plan in plans],
+            },
+        )
+        assembled: list[AIQuestionDraft] = []
+        usages: list[ProviderUsage] = []
+        repaired_any = False
+
+        for index, plan in enumerate(plans, start=1):
+            chunk_request = dict(request_payload)
+            chunk_request["question_count"] = plan.count
+            if plan.type_counts is not None:
+                chunk_request["question_type_counts"] = dict(plan.type_counts)
+            if plan.visual_target is not None:
+                chunk_request["visual_question_target"] = plan.visual_target
+            else:
+                chunk_request.pop("visual_question_target", None)
+            chunk_request["batch_index"] = index
+            chunk_request["batch_count"] = len(plans)
+            # Topic diversity hint only: final full-batch validation remains
+            # authoritative. Truncate to bound model input and protect latency.
+            if assembled:
+                chunk_request["avoid_question_prompts"] = [
+                    question.prompt[:200] for question in assembled[-30:]
+                ]
+            else:
+                chunk_request.pop("avoid_question_prompts", None)
+
+            logger.info(
+                "cbt.ai.question_generation.batch_started",
+                extra={"ai_batch_index": index, "ai_batch_size": plan.count},
+            )
+            chunk, chunk_usage, chunk_repaired = await self._generate_validated_batch(
+                request_payload=chunk_request,
+                expected_count=plan.count,
+                expected_type_counts=plan.type_counts,
+                visual_mode=visual_mode,
+            )
+
+            # Each chunk is valid individually. Check cross-chunk duplicates
+            # before proceeding, so only the offending chunk gets one repair.
+            combined = [*assembled, *chunk]
+            if assembled:
+                try:
+                    validate_generated_question_batch(
+                        [question.model_dump() for question in combined],
+                        visual_mode=None,
+                    )
+                except AIResponseValidationError as duplicate_error:
+                    if chunk_repaired:
+                        raise  # Never add a second repair attempt to this chunk.
+                    repaired_result = await self._repair_questions(
+                        original_request=chunk_request,
+                        invalid_questions=[question.model_dump() for question in chunk],
+                        validation_error=duplicate_error,
+                        operation="generation",
+                    )
+                    chunk = self._validate_batch(
+                        repaired_result.questions,
+                        stage=f"batch_{index}_duplicate_repair",
+                        expected_count=plan.count,
+                        expected_type_counts=plan.type_counts,
+                        visual_mode=visual_mode,
+                    )
+                    combined = [*assembled, *chunk]
+                    validate_generated_question_batch(
+                        [question.model_dump() for question in combined],
+                        visual_mode=None,
+                    )
+                    chunk_usage = self._combine_usage(chunk_usage, repaired_result.usage)
+                    chunk_repaired = True
+
+            assembled.extend(chunk)
+            usages.append(chunk_usage)
+            repaired_any |= chunk_repaired
+            logger.info(
+                "cbt.ai.question_generation.batch_completed",
+                extra={
+                    "ai_batch_index": index,
+                    "ai_batch_size": len(chunk),
+                    "ai_batch_repaired": chunk_repaired,
+                },
+            )
+
+        # Check the original client contract in full, not just chunk targets.
+        validated = self._validate_batch(
+            [question.model_dump() for question in assembled],
+            stage="combined_batches",
+            expected_count=count,
+            expected_type_counts=type_counts,
+            visual_mode=visual_mode,
+        )
+        logger.info(
+            "cbt.ai.question_generation.batching_completed",
+            extra={"ai_question_count": len(validated), "ai_batch_count": len(plans)},
+        )
+        return validated, self._combine_usage(*usages), repaired_any
 
     async def regenerate_question(
         self,
