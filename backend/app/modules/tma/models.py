@@ -79,7 +79,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Enum as SQLEnum,
     Numeric,
-    ForeignKeyConstraint
+    ForeignKeyConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from app.shared.base_model import BaseModel, PUBLIC_SCHEMA
@@ -172,14 +172,6 @@ class TMAAssignment(BaseModel):
         Integer, nullable=False, default=1, server_default="1"
     )
 
-    # ==========================#
-    # Assignment Scoring
-    # ==========================#
-
-    total_marks: Mapped[Decimal] = mapped_column(
-        Numeric(10, 2), nullable=False, default=Decimal("0.00"), server_default="0.00"
-    )
-
     created_by_actor_type: Mapped[TMAActorType] = mapped_column(
         SQLEnum(
             TMAActorType,
@@ -209,10 +201,6 @@ class TMAAssignment(BaseModel):
             "current_revision_number >= 1",
             name="ck_tma_assignment_revision_positive",
         ),
-        CheckConstraint(
-            "total_marks >= 0",
-            name="ck_tma_assignment_marks_nonnegative",
-        ),
         Index(
             "ix_tma_assignments_tenant_term_status",
             "tenant_id",
@@ -228,8 +216,6 @@ class TMAAssignment(BaseModel):
     )
 
 
-
-
 class TMAAssignmentRevision(BaseModel):
     """
     Represents a specific revision of a Tutor-Marked Assignment.
@@ -243,44 +229,22 @@ class TMAAssignmentRevision(BaseModel):
     The parent TMAAssignment controls the assignment lifecycle
     """
 
-
     __tablename__ = "tma_assignment_revisions"
 
+    assignment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
-    assignment_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        nullable=False
-    )
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    revision_number: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False
-    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-
-    published_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True
-    )
-
-
-
-    invalidated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True
-    )
-
-
-
+    invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     invalidated_by_actor_type: Mapped[TMAActorType | None] = mapped_column(
         SQLEnum(
             TMAActorType,
             name="tma_actor_type",
             schema=PUBLIC_SCHEMA,
-            values_callable=lambda enum_cls: [
-                member.value for member in enum_cls
-            ],
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
         ),
         nullable=True,
     )
@@ -310,7 +274,6 @@ class TMAAssignmentRevision(BaseModel):
             name="fk_tma_revisions_tenant_assignment",
             ondelete="RESTRICT",
         ),
-
         # Prevent duplicate revision numbers.
         UniqueConstraint(
             "tenant_id",
@@ -318,20 +281,17 @@ class TMAAssignmentRevision(BaseModel):
             "revision_number",
             name="uq_tma_revisions_assignment_number",
         ),
-
         # Support tenant-scoped references from child tables.
         UniqueConstraint(
             "tenant_id",
             "id",
             name="uq_tma_revisions_tenant_id",
         ),
-
         # Revision numbers must be positive.
         CheckConstraint(
             "revision_number >= 1",
             name="ck_tma_revisions_number_positive",
         ),
-
         # Invalidation must contain actor information.
         CheckConstraint(
             """
@@ -349,7 +309,6 @@ class TMAAssignmentRevision(BaseModel):
             """,
             name="ck_tma_revisions_invalidation_metadata",
         ),
-
         # A revision cannot be invalidated before publication.
         CheckConstraint(
             """
@@ -360,5 +319,108 @@ class TMAAssignmentRevision(BaseModel):
             )
             """,
             name="ck_tma_revisions_invalidation_chronology",
+        ),
+    )
+
+
+class TMAQuestion(BaseModel):
+    """
+    Represents an objective question belonging to a TMA revision.
+
+    Each question contributes exactly one raw mark to the assignment.
+
+    Questions may contain text, an image or both. Image binaries are
+    stored in Cloudflare R2 and referenced through TMAMediaAssest
+
+    Questions belong to a specific assignment revision , preserving
+    historical question records when an assignment is revised
+
+    Question ordering is maintained for administrative purposes
+    Student-facing question randomization is handled separately
+    """
+
+    __tablename__ = "tma_questions"
+
+    # =============================#
+    # Assignment Revision Reference
+    # =============================#
+
+    revision_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    question_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    image_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+
+    author_actor_type: Mapped[TMAActorType] = mapped_column(
+        SQLEnum(
+            TMAActorType,
+            name="tma_actor_type",
+            schema=PUBLIC_SCHEMA,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+    )
+
+    author_actor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    __table_args__ = (
+        # Ensure the revision belongs to the same tenant.
+        ForeignKeyConstraint(
+            ["tenant_id", "revision_id"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_assignment_revisions.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_assignment_revisions.id",
+            ],
+            name="fk_tma_questions_tenant_revision",
+            ondelete="RESTRICT",
+        ),
+        # Ensure the referenced image belongs to the same tenant.
+        ForeignKeyConstraint(
+            ["tenant_id", "image_asset_id"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_media_assets.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_media_assets.id",
+            ],
+            name="fk_tma_questions_tenant_media",
+            ondelete="RESTRICT",
+        ),
+        # Ensure each question has a unique position
+        # within its revision.
+        UniqueConstraint(
+            "tenant_id",
+            "revision_id",
+            "position",
+            name="uq_tma_questions_revision_position",
+        ),
+        # Support tenant-safe references from question options.
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            name="uq_tma_questions_tenant_id",
+        ),
+        # Every question must contain text or an image.
+        CheckConstraint(
+            """
+            (
+                question_text IS NOT NULL
+                AND LENGTH(BTRIM(question_text)) > 0
+            )
+            OR image_asset_id IS NOT NULL
+            """,
+            name="ck_tma_questions_content_required",
+        ),
+        # Question positions start from 1.
+        CheckConstraint(
+            "position >= 1",
+            name="ck_tma_questions_position_positive",
+        ),
+        # Question versions must be positive.
+        CheckConstraint(
+            "version >= 1",
+            name="ck_tma_questions_version_positive",
         ),
     )
