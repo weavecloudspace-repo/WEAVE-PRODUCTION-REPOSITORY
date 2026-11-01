@@ -259,7 +259,7 @@ async def test_invalid_lead_is_rejected_by_scope_validation(monkeypatch):
             teacher_id=assigned.id,
             academic_level_id=uid(),
             curriculum_subject_id=uid(),
-            academic_term_id=uid()
+            academic_term_id=uid(),
         )
     access.assert_awaited_once()
     db.execute.return_value.scalar_one_or_none.return_value = None
@@ -270,7 +270,7 @@ async def test_invalid_lead_is_rejected_by_scope_validation(monkeypatch):
             teacher_id=uid(),
             academic_level_id=uid(),
             curriculum_subject_id=uid(),
-            academic_term_id=uid()
+            academic_term_id=uid(),
         )
 
 
