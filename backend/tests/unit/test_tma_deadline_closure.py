@@ -62,9 +62,7 @@ async def test_worker_closes_due_assignments_without_touching_student_scores(mon
 @pytest.mark.asyncio
 async def test_worker_is_idempotent_when_no_due_assignments(monkeypatch):
     db = AsyncMock()
-    db.execute.return_value = SimpleNamespace(
-        scalars=lambda: SimpleNamespace(all=lambda: [])
-    )
+    db.execute.return_value = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: []))
     invalidation = AsyncMock()
     monkeypatch.setattr(expiration, "flush_cache_invalidation_events", invalidation)
     assert await expiration.TMAExpirationService.close_due_assignments(db) == {"closed": 0}
