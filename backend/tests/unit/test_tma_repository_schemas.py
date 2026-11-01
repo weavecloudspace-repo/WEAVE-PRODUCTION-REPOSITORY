@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.dialects import postgresql
 
 from app.modules.tma.models import TMAAttemptStatus, TMAParticipant
 from app.modules.tma.repository import (
@@ -110,6 +111,9 @@ async def test_repository_rejects_cross_tenant_batch_participation() -> None:
 @pytest.mark.asyncio
 async def test_question_and_attempt_empty_batch_reads_skip_database() -> None:
     db = AsyncMock()
+    db.execute.return_value = SimpleNamespace(
+        scalars=lambda: SimpleNamespace(all=lambda: [])
+    )
     await TMAParticipantRepository.insert_missing(db, uuid.uuid4(), [])
     assert (
         await TMAQuestionRepository.list_for_revision_with_options(db, uuid.uuid4(), uuid.uuid4())
@@ -132,14 +136,12 @@ async def test_invalid_assignment_pagination_rejected_before_database() -> None:
 @pytest.mark.asyncio
 async def test_answer_upsert_uses_unique_attempt_question_constraint() -> None:
     db = AsyncMock()
-    db.execute.return_value.scalar_one.return_value = SimpleNamespace(question_id=uuid.uuid4())
+    db.execute.return_value = SimpleNamespace(
+        scalar_one=lambda: SimpleNamespace(question_id=uuid.uuid4())
+    )
     await TMAAnswerRepository.save_selection(
         db, uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     )
     statement = db.execute.await_args.args[0]
-    compiled = str(
-        statement.compile(
-            dialect=__import__("sqlalchemy.dialects.postgresql", fromlist=["dialect"]).dialect()
-        )
-    )
+    compiled = str(statement.compile(dialect=postgresql.dialect()))
     assert "ON CONFLICT ON CONSTRAINT uq_tma_answers_attempt_question" in compiled
