@@ -107,7 +107,6 @@ class TMAActorType(str, PyEnum):
 class TMAAttemptStatus(str, PyEnum):
     """Lifecycle states of a student's TMA attempt."""
 
-    NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
     SUBMITTED = "submitted"
 
@@ -791,13 +790,14 @@ class TMAAttempt(BaseModel):
             ],
         ),
         nullable=False,
-        default=TMAAttemptStatus.NOT_STARTED,
-        server_default=TMAAttemptStatus.NOT_STARTED.value,
+        default=TMAAttemptStatus.IN_PROGRESS,
+        server_default=TMAAttemptStatus.IN_PROGRESS.value,
     )
 
-    started_at: Mapped[datetime | None] = mapped_column(
+    started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        nullable=True,
+        nullable=False,
+        server_default=func.now(),
     )
 
     submitted_at: Mapped[datetime | None] = mapped_column(
