@@ -52,9 +52,7 @@ class TMAReportingRepository:
                     == assignment.curriculum_subject_id,
                 )
             )
-            conditions.append(
-                and_(enrollment.class_id.in_(grouped_elective_class_ids), selected)
-            )
+            conditions.append(and_(enrollment.class_id.in_(grouped_elective_class_ids), selected))
         eligible_condition = or_(*conditions) if conditions else False
         eligible = (
             select(
@@ -140,9 +138,7 @@ class TMAReportingRepository:
             (history.c.attempt_status == TMAAttemptStatus.IN_PROGRESS, "in_progress"),
             else_="not_started",
         )
-        name = func.trim(
-            func.concat_ws(" ", Student.first_name, Student.last_name)
-        )
+        name = func.trim(func.concat_ws(" ", Student.first_name, Student.last_name))
         base = (
             select(
                 Student.id.label("student_id"),
@@ -152,13 +148,17 @@ class TMAReportingRepository:
                 func.concat_ws(" ", AcademicLevel.name, ArmLabel.label).label("class_name"),
                 status.label("participation_status"),
                 case(
-                    (history.c.attempt_status == TMAAttemptStatus.SUBMITTED,
-                     StudentAssessmentScore.score),
+                    (
+                        history.c.attempt_status == TMAAttemptStatus.SUBMITTED,
+                        StudentAssessmentScore.score,
+                    ),
                     else_=None,
                 ).label("score"),
                 case(
-                    (history.c.attempt_status == TMAAttemptStatus.SUBMITTED,
-                     history.c.submitted_at),
+                    (
+                        history.c.attempt_status == TMAAttemptStatus.SUBMITTED,
+                        history.c.submitted_at,
+                    ),
                     else_=None,
                 ).label("submitted_at"),
                 eligible.c.student_id.is_not(None).label("is_currently_eligible"),
@@ -193,10 +193,8 @@ class TMAReportingRepository:
                 and_(
                     StudentSubjectResult.tenant_id == tenant_id,
                     StudentSubjectResult.student_id == Student.id,
-                    StudentSubjectResult.curriculum_subject_id
-                    == assignment.curriculum_subject_id,
-                    StudentSubjectResult.academic_session_id
-                    == assignment.academic_session_id,
+                    StudentSubjectResult.curriculum_subject_id == assignment.curriculum_subject_id,
+                    StudentSubjectResult.academic_session_id == assignment.academic_session_id,
                     StudentSubjectResult.academic_term_id == assignment.academic_term_id,
                 ),
             )
@@ -204,8 +202,7 @@ class TMAReportingRepository:
                 StudentAssessmentScore,
                 and_(
                     StudentAssessmentScore.tenant_id == tenant_id,
-                    StudentAssessmentScore.student_subject_result_id
-                    == StudentSubjectResult.id,
+                    StudentAssessmentScore.student_subject_result_id == StudentSubjectResult.id,
                     StudentAssessmentScore.assessment_component_id
                     == assignment.assessment_component_id,
                 ),
@@ -216,10 +213,7 @@ class TMAReportingRepository:
         if participation_status is not None:
             base = base.where(status == participation_status.value)
         if search:
-            escaped = (
-                search.strip().replace("\\", "\\\\")
-                .replace("%", "\\%").replace("_", "\\_")
-            )
+            escaped = search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             if escaped:
                 pattern = f"%{escaped}%"
                 base = base.where(
@@ -261,6 +255,6 @@ class TMAReportingRepository:
             Student.id,
         )
         rows = (
-            await db.execute(query.order_by(*order).offset(offset).limit(limit))
-        ).mappings().all()
+            (await db.execute(query.order_by(*order).offset(offset).limit(limit))).mappings().all()
+        )
         return list(rows), total

@@ -35,23 +35,31 @@ class TMAReportingService:
         limit: int = 50,
     ) -> TMASubmissionListResponse:
         assignment = await TMAAssignmentRepository.get_by_id(
-            db, actor.tenant_id, assignment_id,
+            db,
+            actor.tenant_id,
+            assignment_id,
         )
         if assignment is None:
             raise NotFoundException("TMA assignment not found.")
         await TMAAuthorizationService.require_assignment_access(
-            db, actor=actor, assignment=assignment,
+            db,
+            actor=actor,
+            assignment=assignment,
         )
 
         classrooms = set(
-            (await db.execute(
-                select(ClassRoom.id).where(
-                    ClassRoom.tenant_id == actor.tenant_id,
-                    ClassRoom.academic_level_id == assignment.academic_level_id,
-                    ClassRoom.is_active.is_(True),
-                    ClassRoom.archived_at.is_(None),
+            (
+                await db.execute(
+                    select(ClassRoom.id).where(
+                        ClassRoom.tenant_id == actor.tenant_id,
+                        ClassRoom.academic_level_id == assignment.academic_level_id,
+                        ClassRoom.is_active.is_(True),
+                        ClassRoom.archived_at.is_(None),
+                    )
                 )
-            )).scalars().all()
+            )
+            .scalars()
+            .all()
         )
         subjects_by_class = await CurriculumResolutionService.resolve_classes_subjects(
             db,
@@ -61,7 +69,9 @@ class TMAReportingService:
             skip_unresolvable=True,
         )
         term = await StudentAcademicRepository.get_term_by_id(
-            db, actor.tenant_id, assignment.academic_term_id,
+            db,
+            actor.tenant_id,
+            assignment.academic_term_id,
         )
         regular_classes: set[uuid.UUID] = set()
         grouped_elective_classes: set[uuid.UUID] = set()
@@ -70,8 +80,10 @@ class TMAReportingService:
                 if subject.curriculum_subject_id != assignment.curriculum_subject_id:
                     continue
                 if (
-                    term is not None and term.is_current
-                    and subject.is_elective and subject.elective_group_id is not None
+                    term is not None
+                    and term.is_current
+                    and subject.is_elective
+                    and subject.elective_group_id is not None
                 ):
                     grouped_elective_classes.add(current_class_id)
                 else:

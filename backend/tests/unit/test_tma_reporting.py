@@ -87,7 +87,8 @@ def test_filters_restrict_class_status_and_literal_search() -> None:
 def test_elective_eligibility_is_student_specific() -> None:
     elective_class = _id()
     sql, params = _compile(
-        _assignment(), regular_class_ids=set(),
+        _assignment(),
+        regular_class_ids=set(),
         grouped_elective_class_ids={elective_class},
     )
     assert "student_elective_selections" in sql
@@ -97,7 +98,8 @@ def test_elective_eligibility_is_student_specific() -> None:
 
 def test_no_active_classes_still_keeps_historical_roster() -> None:
     sql, _ = _compile(
-        _assignment(), regular_class_ids=set(),
+        _assignment(),
+        regular_class_ids=set(),
         grouped_elective_class_ids=set(),
     )
     assert "UNION" in sql
@@ -154,32 +156,47 @@ async def test_service_applies_term_elective_policy_and_returns_scores(monkeypat
     general_class, grouped_class = _id(), _id()
 
     monkeypatch.setattr(
-        mod.TMAAssignmentRepository, "get_by_id",
+        mod.TMAAssignmentRepository,
+        "get_by_id",
         AsyncMock(return_value=assignment),
     )
     allowed = AsyncMock()
     monkeypatch.setattr(
-        mod.TMAAuthorizationService, "require_assignment_access", allowed,
+        mod.TMAAuthorizationService,
+        "require_assignment_access",
+        allowed,
     )
+
     def _scalars():
         return SimpleNamespace(all=lambda: [general_class, grouped_class])
+
     db = AsyncMock()
     db.execute.return_value = SimpleNamespace(scalars=_scalars)
     monkeypatch.setattr(
-        mod.CurriculumResolutionService, "resolve_classes_subjects",
-        AsyncMock(return_value={
-            general_class: [SimpleNamespace(
-                curriculum_subject_id=assignment.curriculum_subject_id,
-                is_elective=False, elective_group_id=None,
-            )],
-            grouped_class: [SimpleNamespace(
-                curriculum_subject_id=assignment.curriculum_subject_id,
-                is_elective=True, elective_group_id=_id(),
-            )],
-        }),
+        mod.CurriculumResolutionService,
+        "resolve_classes_subjects",
+        AsyncMock(
+            return_value={
+                general_class: [
+                    SimpleNamespace(
+                        curriculum_subject_id=assignment.curriculum_subject_id,
+                        is_elective=False,
+                        elective_group_id=None,
+                    )
+                ],
+                grouped_class: [
+                    SimpleNamespace(
+                        curriculum_subject_id=assignment.curriculum_subject_id,
+                        is_elective=True,
+                        elective_group_id=_id(),
+                    )
+                ],
+            }
+        ),
     )
     monkeypatch.setattr(
-        mod.StudentAcademicRepository, "get_term_by_id",
+        mod.StudentAcademicRepository,
+        "get_term_by_id",
         AsyncMock(return_value=SimpleNamespace(is_current=True)),
     )
     student = {
@@ -197,8 +214,12 @@ async def test_service_applies_term_elective_policy_and_returns_scores(monkeypat
     monkeypatch.setattr(mod.TMAReportingRepository, "list_participation", read)
     response = await TMAReportingService.list_assignment_participation(
         db,
-        actor=actor, assignment_id=assignment.id, offset=0, limit=50,
-        search="Ada", participation_status=TMAParticipationStatus.SUBMITTED,
+        actor=actor,
+        assignment_id=assignment.id,
+        offset=0,
+        limit=50,
+        search="Ada",
+        participation_status=TMAParticipationStatus.SUBMITTED,
     )
     assert response.total == 1
     assert response.items[0].score == Decimal("11.00")
@@ -217,31 +238,45 @@ async def test_historical_terms_do_not_reuse_current_elective_choices(monkeypatc
     classroom = _id()
     actor = SimpleNamespace(tenant_id=assignment.tenant_id)
     monkeypatch.setattr(
-        mod.TMAAssignmentRepository, "get_by_id",
+        mod.TMAAssignmentRepository,
+        "get_by_id",
         AsyncMock(return_value=assignment),
     )
     monkeypatch.setattr(
-        mod.TMAAuthorizationService, "require_assignment_access", AsyncMock(),
+        mod.TMAAuthorizationService,
+        "require_assignment_access",
+        AsyncMock(),
     )
     db = AsyncMock()
     db.execute.return_value = SimpleNamespace(
         scalars=lambda: SimpleNamespace(all=lambda: [classroom])
     )
     monkeypatch.setattr(
-        mod.CurriculumResolutionService, "resolve_classes_subjects",
-        AsyncMock(return_value={classroom: [SimpleNamespace(
-            curriculum_subject_id=assignment.curriculum_subject_id,
-            is_elective=True, elective_group_id=_id(),
-        )]}),
+        mod.CurriculumResolutionService,
+        "resolve_classes_subjects",
+        AsyncMock(
+            return_value={
+                classroom: [
+                    SimpleNamespace(
+                        curriculum_subject_id=assignment.curriculum_subject_id,
+                        is_elective=True,
+                        elective_group_id=_id(),
+                    )
+                ]
+            }
+        ),
     )
     monkeypatch.setattr(
-        mod.StudentAcademicRepository, "get_term_by_id",
+        mod.StudentAcademicRepository,
+        "get_term_by_id",
         AsyncMock(return_value=SimpleNamespace(is_current=False)),
     )
     read = AsyncMock(return_value=([], 0))
     monkeypatch.setattr(mod.TMAReportingRepository, "list_participation", read)
     await TMAReportingService.list_assignment_participation(
-        db, actor=actor, assignment_id=assignment.id,
+        db,
+        actor=actor,
+        assignment_id=assignment.id,
     )
     assert read.await_args.kwargs["regular_class_ids"] == {classroom}
     assert read.await_args.kwargs["grouped_elective_class_ids"] == set()
@@ -259,16 +294,21 @@ async def test_missing_assignment_and_forbidden_teacher_do_not_read_roster(monke
     monkeypatch.setattr(mod.TMAAssignmentRepository, "get_by_id", get)
     with pytest.raises(NotFoundException):
         await TMAReportingService.list_assignment_participation(
-            AsyncMock(), actor=actor, assignment_id=assignment.id,
+            AsyncMock(),
+            actor=actor,
+            assignment_id=assignment.id,
         )
     get.return_value = assignment
     monkeypatch.setattr(
-        mod.TMAAuthorizationService, "require_assignment_access",
+        mod.TMAAuthorizationService,
+        "require_assignment_access",
         AsyncMock(side_effect=ForbiddenException("Not assigned")),
     )
     with pytest.raises(ForbiddenException):
         await TMAReportingService.list_assignment_participation(
-            AsyncMock(), actor=actor, assignment_id=assignment.id,
+            AsyncMock(),
+            actor=actor,
+            assignment_id=assignment.id,
         )
     read.assert_not_awaited()
 
@@ -277,16 +317,23 @@ def test_response_distinguishes_no_submission_from_zero_score() -> None:
     from app.modules.tma.schemas import TMASubmissionStudentResponse
 
     common = {
-        "student_id": _id(), "admission_number": "WVS001",
-        "student_name": "Ada Ben", "class_id": _id(),
-        "class_name": "JSS3 A", "is_currently_eligible": True,
+        "student_id": _id(),
+        "admission_number": "WVS001",
+        "student_name": "Ada Ben",
+        "class_id": _id(),
+        "class_name": "JSS3 A",
+        "is_currently_eligible": True,
         "submitted_at": None,
     }
     pending = TMASubmissionStudentResponse(
-        **common, participation_status="in_progress", score=None,
+        **common,
+        participation_status="in_progress",
+        score=None,
     )
     submitted_zero = TMASubmissionStudentResponse(
-        **common, participation_status="submitted", score=Decimal("0"),
+        **common,
+        participation_status="submitted",
+        score=Decimal("0"),
     )
     assert pending.score is None
     assert submitted_zero.score == Decimal("0")

@@ -443,7 +443,8 @@ async def list_assignment_submissions(
     search: str | None = Query(default=None, max_length=200),
     class_id: uuid.UUID | None = None,
     participation_status: TMAParticipationStatus | None = Query(
-        default=None, alias="status",
+        default=None,
+        alias="status",
     ),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),

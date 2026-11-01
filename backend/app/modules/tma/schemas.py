@@ -228,7 +228,6 @@ class TMAMediaDeleteResponse(TMAOutput):
     storage_cleaned: bool
 
 
-
 # ---------- Basic staff submissions roster ----------
 
 
