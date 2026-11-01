@@ -80,7 +80,7 @@ test("edit and delete are exposed only for editable questions the actor can mana
     assert.doesNotMatch(html, /Edit question 1|Delete question 1/);
     assert.match(html, /Full preview/);
   }
-  assert.equal((render({ busy: true }).match(/disabled=""/g) || []).length, 3);
+  assert.equal((render({ busy: true }).match(/disabled=""/g) || []).length, 4);
 });
 
 test("edit and delete callbacks receive the selected saved question", () => {
