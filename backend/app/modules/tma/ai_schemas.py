@@ -6,8 +6,8 @@ from pydantic import Field
 
 from app.modules.cbt.ai.authoring.schemas import AIQuestionDifficulty, AIVisualMode
 from app.modules.cbt.ai.schemas import (
+    AIExistingQuestion,
     AIQuestionResponse,
-    AIRegenerateQuestionRequest,
     CBTAISchemaBase,
 )
 
@@ -22,7 +22,7 @@ class TMAAIGenerateRequest(CBTAISchemaBase):
 
 class TMAAIRegenerateRequest(CBTAISchemaBase):
     generation_prompt: str = Field(min_length=1, max_length=10_000)
-    existing_question: AIRegenerateQuestionRequest.model_fields["existing_question"].annotation
+    existing_question: AIExistingQuestion
     instruction: str = Field(min_length=1, max_length=10_000)
     difficulty: AIQuestionDifficulty = "medium"
     visual_mode: AIVisualMode = "auto"

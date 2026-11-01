@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import io
 import uuid
 
@@ -87,7 +89,9 @@ class TMAAIService:
             db,
             actor=to_existing_ai_actor(actor),
             request=request,
-            idempotency_key=f"tma:{idempotency_key}",
+            idempotency_key=hashlib.sha256(
+                f"tma:{assignment_id}:{idempotency_key}".encode("utf-8")
+            ).hexdigest(),
         )
 
     @staticmethod
@@ -157,7 +161,7 @@ class TMAAIService:
         async def upload(image: AIImageTransportPayload | None) -> uuid.UUID | None:
             if image is None:
                 return None
-            raw = __import__("base64").b64decode(image.data_base64, validate=True)
+            raw = base64.b64decode(image.data_base64, validate=True)
             extension = {"image/png": "png", "image/jpeg": "jpg",
                          "image/webp": "webp"}[image.content_type]
             file = UploadFile(
