@@ -128,6 +128,10 @@ from app.modules.superadmin.bootstrap import SuperadminBootstrapService
 from app.modules.superadmin.models import SuperAdmin
 from app.modules.superadmin.router import router as superadmin_router
 from app.modules.teachers.router import router as teacher_router
+from app.modules.tma.router import (
+    author_router as tma_author_router,
+    student_router as tma_student_router,
+)
 from app.modules.tenant_admins.router import router as tenant_admin_router
 from app.modules.tenant_branding.router import (
     router as tenant_branding_router,
@@ -264,6 +268,8 @@ def create_app() -> FastAPI:
     app.include_router(teacher_router, prefix=f"{API_V1_PREFIX}/teachers", tags=["Teachers"])
     app.include_router(student_router, prefix=f"{API_V1_PREFIX}/students", tags=["Students"])
     app.include_router(student_academic_context_router, prefix=API_V1_PREFIX)
+    app.include_router(tma_author_router, prefix=API_V1_PREFIX)
+    app.include_router(tma_student_router, prefix=API_V1_PREFIX)
     app.include_router(parent_router, prefix=API_V1_PREFIX)
     app.include_router(realtime_router, prefix=API_V1_PREFIX)
     app.include_router(subject_router, prefix=f"{API_V1_PREFIX}/subjects", tags=["Subjects"])
