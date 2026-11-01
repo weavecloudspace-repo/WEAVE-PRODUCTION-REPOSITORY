@@ -103,12 +103,6 @@ class TMAActorType(str, PyEnum):
     TENANT_ADMIN = "tenant_admin"
 
 
-class TMAParticipantEligibilityStatus(str, PyEnum):
-    """Academic eligibility of a student for a TMA revision."""
-
-    ELIGIBLE = "eligible"
-    EXCUSED = "excused"
-
 class TMAAssignment(BaseModel):
     """
     Represents a Tutor-Marked Assignment belonging to a school.
@@ -660,8 +654,7 @@ class TMAMediaAsset(BaseModel):
 
 class TMAParticipant(BaseModel):
     """
-    Represents a student's participation eligibility
-    for a specific TMA assignment revision.
+    Records a student's participation in a TMA assignment revision.
 
     Participants are registered when an assignment is activated.
 
@@ -670,7 +663,8 @@ class TMAParticipant(BaseModel):
     to their academic enrollment or classroom.
 
     The original enrollment and classroom references are
-    preserved for historical academic context.
+    preserved for historical academic context. Current roster
+    eligibility is derived from live enrollment and curriculum.
 
     Assessment scores are managed by WEAVE's existing
     academic assessment infrastructure, not this model.
@@ -714,38 +708,6 @@ class TMAParticipant(BaseModel):
     )
 
     # ==========================================
-    # Eligibility
-    # ==========================================
-
-    eligibility_status: Mapped[TMAParticipantEligibilityStatus] = mapped_column(
-        SQLEnum(
-            TMAParticipantEligibilityStatus,
-            name="tma_participant_eligibility_status",
-            schema=PUBLIC_SCHEMA,
-            values_callable=lambda enum_cls: [
-                member.value for member in enum_cls
-            ],
-        ),
-        nullable=False,
-        default=TMAParticipantEligibilityStatus.ELIGIBLE,
-        server_default=TMAParticipantEligibilityStatus.ELIGIBLE.value,
-    )
-
-    # ==========================================
-    # Excusal Information
-    # ==========================================
-
-    excused_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-
-    excused_reason: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
-    # ==========================================
     # Database Constraints and Indexes
     # ==========================================
 
@@ -776,34 +738,6 @@ class TMAParticipant(BaseModel):
             "tenant_id",
             "id",
             name="uq_tma_participants_tenant_id",
-        ),
-
-        # Ensure excused participants have a reason
-        # and an excusal timestamp.
-        CheckConstraint(
-            """
-            (
-                eligibility_status = 'eligible'
-                AND excused_at IS NULL
-                AND excused_reason IS NULL
-            )
-            OR
-            (
-                eligibility_status = 'excused'
-                AND excused_at IS NOT NULL
-                AND excused_reason IS NOT NULL
-                AND LENGTH(BTRIM(excused_reason)) > 0
-            )
-            """,
-            name="ck_tma_participants_excusal_consistency",
-        ),
-
-        # Optimize assignment participant lookups.
-        Index(
-            "ix_tma_participants_revision_status",
-            "tenant_id",
-            "revision_id",
-            "eligibility_status",
         ),
 
         # Optimize student participation history.
