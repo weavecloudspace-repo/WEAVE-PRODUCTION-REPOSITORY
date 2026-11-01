@@ -22,10 +22,15 @@ navigator. Leave and Submit TMA sit beneath the question grid; Submit TMA is
 shown only at the last question. The confirmation uses
 plain unanswered-count text without a colored warning strip.
 
-The quiz uses an unboxed subject heading and slim progress row above one main
-question panel. Answer choices use native radio controls, and Previous/Next sit
-outside the panel. The navigator highlights current and answered questions
-without a color legend. Presentation uses existing tenant/theme colors.
+The quiz uses a solid theme-colored subject header with an integrated progress
+meter above one bordered question panel. Answer choices use native radio controls, and Previous/Next sit
+outside the panel. The desktop picker can collapse without hiding the question;
+the card remains centered at a readable width and the picker stays on the right.
+On mobile, a raised floating Questions launcher opens the same navigator from the right,
+replacing the bottom grid. The launcher uses existing dock clearance. Choosing
+a number closes the panel and focuses the question. Review & submit and Submit
+TMA share the same confirmation action. Question states need no color legend. Quiz and picker
+headers use the existing theme color, with compact answer rows in one card.
 
 Answers are saved immediately through a serial, coalescing queue. A slow earlier
 request cannot finish after a newer save and overwrite it. Failed choices remain

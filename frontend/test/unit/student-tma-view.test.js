@@ -48,6 +48,32 @@ for (const node of ast.body.filter(
   for (const specifier of node.specifiers)
     context[specifier.local.name] = () => null;
 }
+const pickerSource = await readFile(
+  new URL("../../src/features/tma/student/QuestionPicker.jsx", import.meta.url),
+  "utf8",
+);
+const pickerAst = parse(pickerSource, {
+  ecmaVersion: "latest",
+  sourceType: "module",
+  ecmaFeatures: { jsx: true },
+  range: true,
+});
+const pickerFunctions = pickerAst.body
+  .filter((node) => node.declaration?.type === "FunctionDeclaration")
+  .map((node) => pickerSource.slice(...node.declaration.range))
+  .join("\n");
+const { code: pickerCode } = await transformWithOxc(
+  pickerFunctions,
+  "QuestionPicker.jsx",
+  { jsx: { runtime: "classic" } },
+);
+Object.assign(
+  context,
+  runInNewContext(
+    pickerCode + "\n({QuestionPicker,QuestionPickerActions})",
+    context,
+  ),
+);
 const View = runInNewContext(code + "\nStudentTmaView", context);
 const base = {
   back: "/student/subjects/math",
@@ -173,4 +199,185 @@ test("saving feedback appears only for pending or failed saves", () => {
     }),
     /Some answers are not saved/,
   );
+});
+
+test("the desktop picker collapses without hiding the question", () => {
+  const original = context.useState;
+  const state = [];
+  let cursor = 0;
+  context.useState = (initial) => {
+    const index = cursor++;
+    if (!(index in state)) state[index] = initial;
+    return [
+      state[index],
+      (value) => {
+        state[index] =
+          typeof value === "function" ? value(state[index]) : value;
+      },
+    ];
+  };
+  const props = {
+    ...base,
+    delivery: { attempt: { id: "attempt" } },
+    questions: [{ id: "q", question_text: "Still visible", options: [] }],
+    current: { id: "q", question_text: "Still visible", options: [] },
+    position: 0,
+  };
+  const draw = () => {
+    cursor = 0;
+    return View(props);
+  };
+  const nodes = (node) =>
+    !node || typeof node !== "object"
+      ? []
+      : [node, ...React.Children.toArray(node.props?.children).flatMap(nodes)];
+  try {
+    const first = nodes(draw());
+    const toggle = first.find(
+      (node) => node.props?.["aria-controls"] === "student-tma-desktop-picker",
+    );
+    assert.equal(toggle.props["aria-expanded"], true);
+    toggle.props.onClick();
+    const second = nodes(draw());
+    assert.equal(
+      second.find((node) => node.props?.id === "student-tma-desktop-picker")
+        .props.hidden,
+      true,
+    );
+    assert.ok(
+      second.some((node) => node.props?.className === "student-tma-question"),
+    );
+    second
+      .find(
+        (node) =>
+          node.props?.["aria-controls"] === "student-tma-desktop-picker",
+      )
+      .props.onClick();
+    assert.equal(
+      nodes(draw()).find(
+        (node) => node.props?.id === "student-tma-desktop-picker",
+      ).props.hidden,
+      false,
+    );
+  } finally {
+    context.useState = original;
+  }
+});
+
+test("mobile picker opens from its launcher and closes after choosing a question", () => {
+  const state = [];
+  let cursor = 0,
+    selected = null,
+    focusCount = 0;
+  const brandScope = {};
+  let portalTarget = null;
+  const mobileContext = {
+    ...context,
+    document: { body: {}, querySelector: () => brandScope },
+    createPortal: (child, target) => {
+      portalTarget = target;
+      return child;
+    },
+    window: {
+      matchMedia: () => ({ matches: true }),
+      requestAnimationFrame: (fn) => fn(),
+    },
+    useState(initial) {
+      const index = cursor++;
+      if (!(index in state)) state[index] = initial;
+      return [
+        state[index],
+        (value) => {
+          state[index] =
+            typeof value === "function" ? value(state[index]) : value;
+        },
+      ];
+    },
+  };
+  const MobileView = runInNewContext(code + "\nStudentTmaView", mobileContext);
+  const questions = [
+    { id: "one", question_text: "Question one", options: [] },
+    { id: "two", question_text: "Question two", options: [] },
+  ];
+  const props = {
+    ...base,
+    delivery: { attempt: { id: "attempt" } },
+    questions,
+    current: questions[0],
+    position: 0,
+    go: (index) => {
+      selected = index;
+    },
+    questionHeading: { current: { focus: () => ++focusCount } },
+  };
+  const nodes = (node) =>
+    !node || typeof node !== "object"
+      ? []
+      : [node, ...React.Children.toArray(node.props?.children).flatMap(nodes)];
+  const draw = () => {
+    cursor = 0;
+    return nodes(MobileView(props));
+  };
+  draw();
+  assert.equal(
+    portalTarget,
+    brandScope,
+    "floating controls inherit the school's theme",
+  );
+  draw()
+    .find((node) => node.props?.["aria-label"] === "Open question picker")
+    .props.onClick();
+  const open = draw();
+  const sheet = open.find(
+    (node) =>
+      node.type === context.Modal && node.props.title === "Your questions",
+  );
+  assert.equal(sheet.props.open, true);
+  assert.equal(
+    open.find((node) => node.props?.["aria-label"] === "Open question picker")
+      .props["aria-expanded"],
+    true,
+  );
+  nodes(sheet.props.children)
+    .find((node) => node.type === context.QuestionPicker)
+    .props.onPick(1);
+  assert.equal(selected, 1);
+  assert.equal(focusCount, 1);
+  assert.equal(
+    draw().find(
+      (node) =>
+        node.type === context.Modal && node.props.title === "Your questions",
+    ).props.open,
+    false,
+  );
+});
+
+test("Review & submit and the picker Submit TMA use the same confirmation action", () => {
+  let confirmationValue = false;
+  const props = {
+    ...base,
+    delivery: { attempt: { id: "attempt" } },
+    questions: [{ id: "one", question_text: "Last", options: [] }],
+    current: { id: "one", question_text: "Last", options: [] },
+    position: 0,
+    setConfirmation: (value) => {
+      confirmationValue = value;
+    },
+  };
+  const nodes = (node) =>
+    !node || typeof node !== "object"
+      ? []
+      : [node, ...React.Children.toArray(node.props?.children).flatMap(nodes)];
+  const tree = nodes(View(props));
+  const review = tree.find(
+    (node) =>
+      node.type === context.Button &&
+      React.Children.toArray(node.props.children).includes("Review & submit"),
+  );
+  const picker = tree.find(
+    (node) => node.type === context.QuestionPickerActions,
+  );
+  assert.equal(review.props.onClick, picker.props.onSubmit);
+  review.props.onClick();
+  assert.equal(confirmationValue, true);
 });

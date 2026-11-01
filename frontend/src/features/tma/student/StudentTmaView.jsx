@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft,
@@ -9,6 +10,7 @@ import {
   Pause,
   BookOpen,
   ListChecks,
+  X,
   ArrowUpRight,
 } from "lucide-react";
 import Button from "../../../components/ui/Button";
@@ -16,6 +18,7 @@ import Card from "../../../components/ui/Card";
 import Modal from "../../../components/ui/Modal";
 import { studentTmaService as service } from "../../../services/studentTmaService";
 import MathText from "../MathText.jsx";
+import QuestionPicker, { QuestionPickerActions } from "./QuestionPicker";
 
 function StudentImage({ attemptId, assetId, alt }) {
   const [url, setUrl] = useState("");
@@ -100,6 +103,35 @@ export default function StudentTmaView({
 }) {
   const entry = useRef(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(true);
+  const [mobilePickerOpen, setMobilePickerOpen] = useState(false);
+  const pickerToggle = useRef(null);
+  const requestSubmission = () => {
+    setMobilePickerOpen(false);
+    setConfirmation(true);
+  };
+  const pickerProps = {
+    questions,
+    position,
+    answers,
+    pending: saveState.pending,
+    disabled: busy || submissionStarted,
+    onPick: go,
+  };
+  const pickerActions = {
+    position,
+    total: questions.length,
+    busy,
+    onLeave: leave,
+    onSubmit: requestSubmission,
+  };
+  const dismissConfirmation = () => {
+    if (busy) return;
+    setConfirmation(false);
+    window.requestAnimationFrame(() =>
+      questionHeading.current?.focus({ preventScroll: true }),
+    );
+  };
   useLayoutEffect(() => {
     const element = entry.current;
     if (!element) return;
@@ -124,7 +156,9 @@ export default function StudentTmaView({
     };
   }, [loading, delivery, result, assignment]);
   return (
-    <div className="student-tma">
+    <div
+      className={`student-tma ${delivery && !result ? "student-tma--attempt" : ""}`}
+    >
       {(!delivery ||
         result ||
         saveState.error ||
@@ -200,11 +234,10 @@ export default function StudentTmaView({
           </Link>
         </Card>
       ) : delivery ? (
-        <div className="student-tma-workspace">
+        <div
+          className={`student-tma-workspace ${pickerOpen ? "" : "student-tma-workspace--picker-closed"}`}
+        >
           <header className="student-tma-quiz-heading">
-            <span className="student-tma-context-icon">
-              <BookOpen size={26} aria-hidden="true" />
-            </span>
             <div>
               <h2>{subject?.subject_name || "Your assignment"}</h2>
               <p>
@@ -213,30 +246,29 @@ export default function StudentTmaView({
                 <span aria-hidden="true">·</span> Single choice
               </p>
             </div>
-          </header>
-          <div className="student-tma-main">
-            <section
-              className="student-tma-progress"
-              ref={questionHeading}
-              tabIndex={-1}
+            <button
+              ref={pickerToggle}
+              type="button"
+              className="student-tma-picker-toggle"
+              aria-expanded={pickerOpen}
+              aria-controls="student-tma-desktop-picker"
+              onClick={() => setPickerOpen((open) => !open)}
             >
-              <div className="student-tma-progress-labels">
-                <h2 id="student-tma-question-heading">
-                  Question {position + 1} of {questions.length}
-                </h2>
-                <p className="student-tma-count">
-                  <strong>
-                    {answered} / {questions.length}
-                  </strong>{" "}
-                  answered
-                </p>
-              </div>
+              <ListChecks size={18} />
+              <span>{pickerOpen ? "Collapse picker" : "Question picker"}</span>
+            </button>
+            <div className="student-tma-header-progress">
+              <span>
+                {answered} / {questions.length} answered
+              </span>
               <progress
                 max={questions.length || 1}
                 value={answered}
                 aria-label="Answered questions"
               />
-            </section>
+            </div>
+          </header>
+          <div className="student-tma-main">
             {saveState.error && (
               <div role="alert" className="student-tma-alert">
                 Your latest choices are still on this screen but have not been
@@ -259,6 +291,15 @@ export default function StudentTmaView({
                   className="student-tma-question"
                   aria-labelledby="student-tma-question-heading"
                 >
+                  <div
+                    className="student-tma-question-meta"
+                    ref={questionHeading}
+                    tabIndex={-1}
+                  >
+                    <h3 id="student-tma-question-heading">
+                      Question {position + 1} of {questions.length}
+                    </h3>
+                  </div>
                   <div className="student-tma-prompt">
                     <MathText>{current.question_text}</MathText>
                     {current.image_asset_id && (
@@ -342,12 +383,17 @@ export default function StudentTmaView({
                     variant="primary"
                     disabled={
                       busy ||
-                      submissionStarted ||
-                      position === questions.length - 1
+                      (submissionStarted && position !== questions.length - 1)
                     }
-                    onClick={() => go(position + 1)}
+                    onClick={
+                      position === questions.length - 1
+                        ? requestSubmission
+                        : () => go(position + 1)
+                    }
                   >
-                    Next
+                    {position === questions.length - 1
+                      ? "Review & submit"
+                      : "Next"}
                     <ArrowRight size={16} />
                   </Button>
                 </div>
@@ -365,42 +411,69 @@ export default function StudentTmaView({
               </Card>
             )}
           </div>
-          <aside className="student-tma-map">
-            <h2>
-              <ListChecks size={20} aria-hidden="true" />
-              Your questions
-            </h2>
-            <nav aria-label="Question navigator">
-              {questions.map((q, i) => (
-                <button
-                  type="button"
-                  key={q.id}
-                  disabled={busy || submissionStarted}
-                  aria-current={position === i ? "step" : undefined}
-                  aria-label={`Question ${i + 1}, ${saveState.pending.includes(q.id) ? "saving" : answers[q.id] ? "answered" : "unanswered"}`}
-                  className={answers[q.id] ? "is-answered" : ""}
-                  onClick={() => go(i)}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </nav>
-            <div className="student-tma-map-actions">
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={leave}
-                aria-label="Save and leave assignment"
+          <aside
+            id="student-tma-desktop-picker"
+            className="student-tma-map"
+            hidden={!pickerOpen}
+          >
+            <header>
+              <h2>
+                <ListChecks size={20} aria-hidden="true" />
+                Your questions
+              </h2>
+              <button
+                type="button"
+                aria-label="Collapse question picker"
+                onClick={() => {
+                  setPickerOpen(false);
+                  pickerToggle.current?.focus();
+                }}
               >
-                Leave
-              </Button>
-              {position === questions.length - 1 && questions.length > 0 && (
-                <Button disabled={busy} onClick={() => setConfirmation(true)}>
-                  Submit TMA
-                </Button>
-              )}
-            </div>
+                <X size={18} />
+              </button>
+            </header>
+            <QuestionPicker {...pickerProps} />
+            <QuestionPickerActions {...pickerActions} />
           </aside>
+          {typeof document !== "undefined" &&
+            !confirmation &&
+            createPortal(
+              <button
+                type="button"
+                className="student-tma-picker-fab"
+                aria-label="Open question picker"
+                aria-haspopup="dialog"
+                aria-expanded={mobilePickerOpen}
+                onClick={() => setMobilePickerOpen(true)}
+              >
+                <ListChecks size={20} />
+                <span>Questions</span>
+                <strong>
+                  {position + 1}/{questions.length}
+                </strong>
+              </button>,
+              document.querySelector?.('[data-tenant-branding-scope="true"]') ||
+                document.body,
+            )}
+          <Modal
+            open={mobilePickerOpen}
+            title="Your questions"
+            placement="responsive"
+            className="max-w-lg student-tma-mobile-picker"
+            onClose={() => setMobilePickerOpen(false)}
+            footer={<QuestionPickerActions {...pickerActions} />}
+          >
+            <QuestionPicker
+              {...pickerProps}
+              onPick={(index) => {
+                go(index);
+                setMobilePickerOpen(false);
+                window.requestAnimationFrame(() =>
+                  questionHeading.current?.focus({ preventScroll: true }),
+                );
+              }}
+            />
+          </Modal>
         </div>
       ) : assignment && !error ? (
         <section className="student-tma-welcome" ref={entry}>
@@ -513,9 +586,7 @@ export default function StudentTmaView({
       <Modal
         open={confirmation}
         title="Submit your assignment?"
-        onClose={() => {
-          if (!busy) setConfirmation(false);
-        }}
+        onClose={dismissConfirmation}
         closeOnOverlay={!busy}
         showClose={!busy}
       >
@@ -543,7 +614,7 @@ export default function StudentTmaView({
             <Button
               variant="outline"
               disabled={busy}
-              onClick={() => setConfirmation(false)}
+              onClick={dismissConfirmation}
             >
               Keep working
             </Button>
