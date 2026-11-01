@@ -93,7 +93,9 @@ function Configuration({
           return;
         const closingPayload = {
           closes_at: closing ? new Date(closing).toISOString() : null,
-          ...(isAdmin ? { lead_teacher_membership_id: lead || null } : {}),
+          ...(isAdmin && assignment?.status !== "closed"
+            ? { lead_teacher_membership_id: lead || null }
+            : {}),
         };
         onSave(
           locked
@@ -170,7 +172,7 @@ function Configuration({
       <p className="text-xs leading-5 text-text-muted">
         Only non-examinable, non-hybrid assessment components are available.
       </p>
-      {isAdmin && (
+      {isAdmin && assignment?.status !== "closed" && (
         <div className="rounded-xl border border-border bg-surface-muted/40 p-4 space-y-2">
           <Select
             label="Lead teacher"
@@ -204,7 +206,7 @@ function Configuration({
         </p>
       )}
       <label className="grid gap-1.5 text-sm font-medium">
-        Expected closing (optional)
+        Submission deadline (optional)
         <input
           type="datetime-local"
           className={field}
@@ -213,8 +215,8 @@ function Configuration({
         />
       </label>
       <p className="text-xs text-text-muted">
-        This is an estimate. Only manually closing the assignment stops student
-        access.
+        Students cannot start, save, or submit after this time. The assignment
+        automatically changes to Closed. Manual closing remains available.
       </p>
       <Button
         type="submit"
@@ -237,6 +239,9 @@ export default function TmaPage({ role }) {
   const base = `/${role}/tma`;
   const [config, setConfig] = useState(null);
   const [list, setList] = useState([]);
+  const [listTotal, setListTotal] = useState(0);
+  const [terms, setTerms] = useState([]);
+  const [termId, setTermId] = useState("");
   const [offset, setOffset] = useState(0);
   const [assignment, setAssignment] = useState(null);
   const [questions, setQuestions] = useState([]);
@@ -269,9 +274,13 @@ export default function TmaPage({ role }) {
       if (!background) setLoading(true);
       setLoadFailed(false);
       try {
-        const c = await service.configuration();
+        const [c, termOptions] = await Promise.all([
+          service.configuration(),
+          assignmentId ? Promise.resolve([]) : service.terms(),
+        ]);
         if (version !== loadVersion.current) return;
         setConfig(c);
+        if (!assignmentId) setTerms(termOptions);
         if (assignmentId) {
           const [a, q, images, revisions] = await Promise.all([
             service.get(assignmentId),
@@ -289,8 +298,17 @@ export default function TmaPage({ role }) {
             if (version === loadVersion.current) setCancellation(status);
           }
         } else {
-          const page = await service.list(offset);
-          if (version === loadVersion.current) setList(rows(page));
+          const selected = termOptions.some((term) => term.id === termId)
+            ? termId
+            : (termOptions.find((term) => term.is_current)?.id || termOptions[0]?.id || "");
+          if (selected !== termId) setTermId(selected);
+          const response = selected
+            ? await service.list(offset, selected)
+            : { items: [], total: 0 };
+          if (version === loadVersion.current) {
+            setList(rows(response));
+            setListTotal(response.total || 0);
+          }
         }
       } catch (e) {
         if (version === loadVersion.current) {
@@ -301,7 +319,7 @@ export default function TmaPage({ role }) {
         if (version === loadVersion.current) setLoading(false);
       }
     },
-    [assignmentId, offset, showError],
+    [assignmentId, offset, showError, termId],
   );
   useEffect(() => {
     load();
@@ -490,7 +508,7 @@ export default function TmaPage({ role }) {
           {!assignmentId ? (
             <Button
               onClick={() => setDialog("create")}
-              disabled={!config?.term_open}
+              disabled={!config?.term_open || termId !== config?.academic_term_id}
             >
               <Plus className="h-4 w-4" />
               Create assignment
@@ -502,7 +520,7 @@ export default function TmaPage({ role }) {
                 {
                   label: "Settings",
                   icon: Settings,
-                  visible: canManage && ["draft", "active"].includes(assignment?.status),
+                  visible: canManage && ["draft", "active", "closed"].includes(assignment?.status),
                   onClick: () => setDialog("settings"),
                 },
                 {
@@ -572,7 +590,27 @@ export default function TmaPage({ role }) {
           <p role="status">Loading assignments…</p>
         ) : loadFailed ? null : !assignmentId ? (
           <>
-            <div className="grid items-end gap-3 rounded-2xl border border-border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_190px_190px]">
+            <div className="grid items-end gap-3 rounded-2xl border border-border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="min-w-0 sm:col-span-2 lg:col-span-1">
+                <Select
+                  label="Academic term"
+                  value={termId}
+                  onChange={(value) => {
+                    setOffset(0);
+                    setTermId(value);
+                    setStatusFilter("");
+                    setLevelFilter("");
+                  }}
+                  disabled={!terms.length}
+                >
+                  {terms.map((term) => (
+                    <option key={term.id} value={term.id}>
+                      {term.session_name} · {term.name.replaceAll("_", " ")}
+                      {term.is_current ? " (Current)" : ""}
+                    </option>
+                  ))}
+                </Select>
+              </div>
               <label className="grid min-w-0 gap-1.5 text-xs text-text-muted sm:col-span-2 lg:col-span-1">
                 Find an assignment
                 <input
@@ -616,7 +654,7 @@ export default function TmaPage({ role }) {
               </div>
             </div>
             <p className="text-xs text-text-muted">
-              {visibleList.length} assignments on this page
+              Showing {visibleList.length} of {listTotal} assignments for the selected term
             </p>
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {visibleList.map((a) => (
@@ -650,7 +688,7 @@ export default function TmaPage({ role }) {
               </Button>
               <Button
                 variant="outline"
-                disabled={list.length === 0}
+                disabled={offset + list.length >= listTotal}
                 onClick={() => setOffset(offset + 24)}
               >
                 Next page

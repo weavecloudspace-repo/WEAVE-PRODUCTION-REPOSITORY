@@ -55,6 +55,14 @@ class TMALeadTeacherChoice(TMAOutput):
     display_name: str
 
 
+class TMAAuthoringTerm(TMAOutput):
+    id: uuid.UUID
+    name: str
+    session_name: str
+    status: str
+    is_current: bool
+
+
 class TMAAuthoringConfiguration(TMAOutput):
     academic_session_id: uuid.UUID | None
     academic_term_id: uuid.UUID | None

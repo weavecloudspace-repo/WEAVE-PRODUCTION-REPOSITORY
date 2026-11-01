@@ -36,6 +36,7 @@ from app.modules.student_academics.models import (  # noqa: E402
 )
 from app.modules.tma.cancellation_service import TMACancellationService  # noqa: E402
 from app.modules.tma.models import TMACancellationRun  # noqa: E402
+from app.modules.tma.expiration_service import TMAExpirationService  # noqa: E402
 from app.modules.student_academics.session_closure_service import (  # noqa: E402
     SessionClosureService,
 )
@@ -235,6 +236,13 @@ async def poll_tma_cancellations(ctx: dict[str, Any]) -> dict[str, int]:
     return {"processed": len(pending)}
 
 
+async def poll_tma_deadlines(ctx: dict[str, Any]) -> dict[str, int]:
+    """Persist scheduled TMA closure; write paths enforce the deadline immediately."""
+    _ = ctx
+    async with AsyncSessionLocal() as db:
+        return await TMAExpirationService.close_due_assignments(db)
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     """Initialize optional monitoring for this worker process."""
 
@@ -268,6 +276,14 @@ class WorkerSettings:
         process_tma_cancellation_job,
     ]
     cron_jobs = [
+        cron(
+            poll_tma_deadlines,
+            minute=set(range(0, 60)),
+            run_at_startup=True,
+            unique=True,
+            timeout=120,
+            max_tries=1,
+        ),
         cron(recover_cbt_result_rollbacks, minute=set(range(0, 60, 2)), unique=True),
         cron(
             poll_tma_cancellations,

@@ -174,7 +174,8 @@ class TMAAssignment(BaseModel):
 
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Informational target; actual closing is a separate staff-triggered action.
+    # Enforced UTC deadline. The worker persists CLOSED; student writes reject
+    # overdue assignments immediately, even if the worker has not run yet.
     closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

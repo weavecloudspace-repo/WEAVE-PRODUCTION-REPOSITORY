@@ -41,6 +41,8 @@ class TMALifecycleService:
         TMAAuthorizationService.require_assignment_management(actor, assignment)
         if assignment.status != TMAAssignmentStatus.CLOSED:
             raise ConflictException("Only a closed TMA can be reopened.")
+        if getattr(assignment, "closes_at", None) is not None and assignment.closes_at <= datetime.now(timezone.utc):
+            raise ConflictException("Extend or clear the passed deadline before reopening.")
         errors = await TMALifecycleService._readiness_errors(db, assignment)
         if errors:
             raise ConflictException("TMA cannot be reopened: " + "; ".join(errors))
@@ -152,6 +154,8 @@ class TMALifecycleService:
         )
         TMAAuthorizationService.require_assignment_management(actor, assignment)
         TMAAuthorizationService.require_draft_assignment(assignment)
+        if getattr(assignment, "closes_at", None) is not None and assignment.closes_at <= datetime.now(timezone.utc):
+            raise ConflictException("Set a future deadline or clear the deadline before publishing.")
         errors = await TMALifecycleService._readiness_errors(db, assignment)
         if errors:
             raise ConflictException("TMA is not ready: " + "; ".join(errors))

@@ -13,7 +13,12 @@ from app.modules.student_academics.curriculum_models import Curriculum, Curricul
 from app.modules.student_academics.curriculum_service import CurriculumResolutionService
 from app.modules.student_academics.repository import StudentAcademicRepository
 from app.modules.student_academics.assessment_repository import AssessmentRepository
-from app.modules.student_academics.models import AssessmentComponent
+from app.modules.student_academics.models import (
+    AcademicSession,
+    AcademicTerm,
+    AcademicTermStatus,
+    AssessmentComponent,
+)
 from app.modules.tma.authorization import TMAAuthor, TMAAuthorizationService
 from app.modules.teachers.models import TeacherAccount, TeacherMembership, TeacherMembershipStatus
 from app.modules.tenant_admins.models import TenantAdmin
@@ -189,3 +194,32 @@ async def get_authoring_configuration(db: AsyncSession, actor: TMAAuthor) -> dic
         "classes": classes,
         "lead_teachers": lead_teachers,
     }
+
+
+async def list_authoring_terms(db: AsyncSession, actor: TMAAuthor) -> list[dict]:
+    """Return school term history for both teacher and admin TMA dashboards."""
+    rows = (
+        await db.execute(
+            select(AcademicTerm, AcademicSession)
+            .join(
+                AcademicSession,
+                AcademicSession.id == AcademicTerm.academic_session_id,
+            )
+            .where(
+                AcademicTerm.tenant_id == actor.tenant_id,
+                AcademicSession.tenant_id == actor.tenant_id,
+                AcademicTerm.status != AcademicTermStatus.DRAFT,
+            )
+            .order_by(AcademicTerm.created_at.desc(), AcademicTerm.id.desc())
+        )
+    ).all()
+    return [
+        {
+            "id": term.id,
+            "name": term.name.value,
+            "session_name": session.name,
+            "status": term.status.value,
+            "is_current": bool(term.is_current),
+        }
+        for term, session in rows
+    ]

@@ -30,6 +30,7 @@ from app.modules.tma.repository import TMARevisionRepository
 from app.modules.tma.schemas import (
     TMAAnswerSaveRequest,
     TMAAuthoringConfiguration,
+    TMAAuthoringTerm,
     TMAAnswerSaveResponse,
     TMAAssignmentCreate,
     TMAAssignmentListResponse,
@@ -125,6 +126,13 @@ def _admin_question(question, options) -> TMAQuestionAdminResponse:
             for option in options
         ],
     )
+
+
+@author_router.get("/terms", response_model=list[TMAAuthoringTerm])
+async def authoring_terms(db: DbSession, actor: Author) -> list[TMAAuthoringTerm]:
+    from app.modules.tma.configuration_service import list_authoring_terms
+
+    return [TMAAuthoringTerm.model_validate(row) for row in await list_authoring_terms(db, actor)]
 
 
 @author_router.post(

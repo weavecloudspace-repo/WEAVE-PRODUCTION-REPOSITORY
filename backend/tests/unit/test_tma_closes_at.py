@@ -1,4 +1,4 @@
-"""Regression tests for optional, informational TMA closing estimates."""
+"""Regression tests for enforced TMA deadlines and visible closed assignments."""
 
 from __future__ import annotations
 
@@ -154,7 +154,7 @@ async def test_can_change_only_closing_estimate_without_touching_questions(
     assignment = _assignment(author, status)
     actor, save, questions = _setup(monkeypatch, assignment)
     db = AsyncMock()
-    date = _date(-5)  # Past dates are informational, not a submission cutoff.
+    date = _date(-5)  # Deadlines may be edited; live student requests reject overdue TMAs.
     updated = await mod.TMAAssignmentService.update_draft_assignment(
         db,
         actor=actor,
@@ -206,20 +206,21 @@ async def test_active_cannot_change_academic_scope_even_with_closes_at(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_closed_cannot_change_closing_estimate(monkeypatch) -> None:
+async def test_closed_manager_can_extend_closing_deadline_before_reopen(monkeypatch) -> None:
     from app.modules.tma import assignment_service as mod
 
     actor = _actor()
     assignment = _assignment(actor, TMAAssignmentStatus.CLOSED)
     current, save, _ = _setup(monkeypatch, assignment)
-    with pytest.raises(ConflictException):
-        await mod.TMAAssignmentService.update_draft_assignment(
-            AsyncMock(),
-            actor=current,
-            assignment_id=assignment.id,
-            payload=TMAAssignmentUpdate(closes_at=_date()),
-        )
-    save.assert_not_awaited()
+    deadline = _date()
+    updated = await mod.TMAAssignmentService.update_draft_assignment(
+        AsyncMock(),
+        actor=current,
+        assignment_id=assignment.id,
+        payload=TMAAssignmentUpdate(closes_at=deadline),
+    )
+    assert updated.closes_at == deadline
+    save.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -316,7 +317,7 @@ async def test_academic_scope_edit_still_requires_lead_permission(monkeypatch) -
 @pytest.mark.parametrize(
     "attempt_status", [None, TMAAttemptStatus.IN_PROGRESS, TMAAttemptStatus.SUBMITTED]
 )
-async def test_student_list_displays_closes_at_without_enforcing_it(
+async def test_student_list_keeps_expired_tma_visible_but_disables_attempts(
     monkeypatch, attempt_status
 ) -> None:
     from app.modules.tma import attempt_service as mod
@@ -397,7 +398,8 @@ async def test_student_list_displays_closes_at_without_enforcing_it(
     )
     assert len(items) == 1
     assert items[0].closes_at == assignment.closes_at
-    assert items[0].can_start_or_resume is (attempt_status != TMAAttemptStatus.SUBMITTED)
+    assert items[0].can_start_or_resume is False
+    assert items[0].status == TMAAssignmentStatus.CLOSED
     assert items[0].attempt_status == attempt_status
     assert items[0].attempt_id == (attempt.id if attempt_status else None)
 

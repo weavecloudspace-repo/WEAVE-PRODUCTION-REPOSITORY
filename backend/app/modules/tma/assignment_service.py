@@ -261,8 +261,12 @@ class TMAAssignmentService:
         if "lead_teacher_membership_id" in changes and not isinstance(actor, TenantAdmin):
             raise ForbiddenException("Only an administrator can assign or change the lead teacher.")
         # Only staff action changes availability; this estimate is display-only.
-        if assignment.status not in (TMAAssignmentStatus.DRAFT, TMAAssignmentStatus.ACTIVE):
-            raise ConflictException("Only draft or active assignments can be updated.")
+        if assignment.status not in (
+            TMAAssignmentStatus.DRAFT,
+            TMAAssignmentStatus.ACTIVE,
+            TMAAssignmentStatus.CLOSED,
+        ):
+            raise ConflictException("Only draft, active, or closed assignments can be updated.")
 
         scope_changes = {
             key: value
@@ -271,6 +275,10 @@ class TMAAssignmentService:
         }
         if any(value is None for value in scope_changes.values()):
             raise BadRequestException("Academic configuration fields cannot be null.")
+        if assignment.status == TMAAssignmentStatus.CLOSED and any(
+            key != "closes_at" for key in changes
+        ):
+            raise ConflictException("Closed assignments only allow adjusting the deadline.")
         if scope_changes:
             TMAAuthorizationService.require_draft_assignment(assignment)
             revision = await TMARevisionRepository.get_by_number(

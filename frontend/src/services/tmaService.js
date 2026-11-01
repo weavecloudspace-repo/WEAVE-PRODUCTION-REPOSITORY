@@ -6,7 +6,9 @@ const read = (endpoint) =>
   tmaReadRequest((signal) => api.get(endpoint, { signal }));
 export const tmaService = {
   configuration: () => read("/tma/configuration"),
-  list: (offset = 0) => read(`/tma/assignments?offset=${offset}&limit=24`),
+  terms: () => read("/tma/terms"),
+  list: (offset = 0, termId = null) =>
+    read(`/tma/assignments?offset=${offset}&limit=24${termId ? `&academic_term_id=${encodeURIComponent(termId)}` : ""}`),
   create: (body) => api.post("/tma/assignments", body),
   get: (id) => read(path(id)),
   update: (id, body) => api.patch(path(id), body),

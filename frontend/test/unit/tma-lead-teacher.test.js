@@ -65,6 +65,6 @@ test("admin assignment form selects an eligible teacher and submits the chosen I
   assert.match(source, /config\.lead_teachers/);
   assert.match(source, /teacher\.academic_level_id === level|item\.academic_level_id === level/);
   assert.match(source, /item\.curriculum_subject_id === subject/);
-  assert.match(source, /isAdmin \? \{ lead_teacher_membership_id: lead \|\| null \} : \{\}/);
+  assert.match(source, /lead_teacher_membership_id: lead \|\| null/);
   assert.match(source, /visible: canManage && \["draft", "active"\]/);
 });

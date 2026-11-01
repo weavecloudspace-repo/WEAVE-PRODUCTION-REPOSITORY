@@ -60,6 +60,9 @@ class TMAAttemptService:
             raise NotFoundException("Assignment not found.")
         if assignment.status != TMAAssignmentStatus.ACTIVE:
             raise ConflictException("This assignment is not active.")
+        deadline = getattr(assignment, "closes_at", None)
+        if deadline is not None and datetime.now(timezone.utc) >= deadline:
+            raise ConflictException("This assignment's submission deadline has passed.")
         await TMAAuthorizationService.require_open_term(db, assignment)
         enrollment = await TMAAuthorizationService.require_student_eligibility(
             db,
@@ -107,7 +110,7 @@ class TMAAttemptService:
             student.tenant_id,
             academic_term_id=term.id,
             academic_level_id=enrollment.academic_level_id,
-            status=TMAAssignmentStatus.ACTIVE,
+            statuses={TMAAssignmentStatus.ACTIVE, TMAAssignmentStatus.CLOSED},
             limit=100,
         )
         history = await TMAParticipantRepository.list_for_student(
@@ -143,18 +146,23 @@ class TMAAttemptService:
                 continue
             participant = revisions.get(revision.id)
             attempt = attempts.get(participant.id) if participant else None
+            expired = (
+                assignment.closes_at is not None
+                and datetime.now(timezone.utc) >= assignment.closes_at
+            )
+            is_open = assignment.status == TMAAssignmentStatus.ACTIVE and not expired
             items.append(
                 TMAStudentAssignmentResponse(
                     assignment_id=assignment.id,
                     academic_term_id=assignment.academic_term_id,
                     curriculum_subject_id=assignment.curriculum_subject_id,
                     assessment_component_id=assignment.assessment_component_id,
-                    status=assignment.status,
+                    status=TMAAssignmentStatus.CLOSED if expired else assignment.status,
                     attempt_status=attempt.status if attempt else None,
                     attempt_id=attempt.id if attempt else None,
                     closes_at=assignment.closes_at,
-                    can_start_or_resume=attempt is None
-                    or attempt.status == TMAAttemptStatus.IN_PROGRESS,
+                    can_start_or_resume=is_open
+                    and (attempt is None or attempt.status == TMAAttemptStatus.IN_PROGRESS),
                     component_maximum_score=component.maximum_score,
                 )
             )

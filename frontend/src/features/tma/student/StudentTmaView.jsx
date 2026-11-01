@@ -482,19 +482,25 @@ export default function StudentTmaView({
               {component?.name || "Tutor Marked Assignment"}
             </p>
             <h2>{subject?.subject_name}</h2>
-            <p>Take your time. You can pause and come back.</p>
+            <p>
+              {assignment.status === "closed"
+                ? "This assignment is closed. You can no longer start or submit it."
+                : "Take your time. You can pause and come back before the deadline."}
+            </p>
           </div>
           <Button
             className="student-tma-start"
-            disabled={busy || !assignment.can_start_or_resume}
+            disabled={busy || !assignment.can_start_or_resume || assignment.status === "closed"}
             onClick={start}
           >
             {busy && <LoaderCircle className="animate-spin" size={18} />}
             {busy
               ? "Opening your TMA…"
-              : assignment.attempt_status === "in_progress"
-                ? "Continue TMA"
-                : "Start TMA"}
+              : assignment.status === "closed"
+                ? "Closed"
+                : assignment.attempt_status === "in_progress"
+                  ? "Continue TMA"
+                  : "Start TMA"}
             {!busy && <ArrowRight size={18} />}
           </Button>
           <div className="student-tma-entry-notes">
@@ -556,9 +562,8 @@ export default function StudentTmaView({
             <div>
               <h3>Take a break anytime</h3>
               <p>
-                You do not have to finish today. Come back and continue while
-                your teacher has the assignment open and the term is still
-                active.
+                You can return to your saved attempt before the deadline, while
+                the assignment and academic term are still open.
               </p>
             </div>
           </div>
@@ -576,9 +581,9 @@ export default function StudentTmaView({
           </div>
           {assignment?.closes_at && (
             <p className="student-tma-guide-estimate">
-              Expected closing:{" "}
-              {new Date(assignment.closes_at).toLocaleString()}. This is an
-              estimate; your teacher decides when it closes.
+              Submission deadline:{" "}
+              {new Date(assignment.closes_at).toLocaleString()}. The assignment
+              closes automatically at this time.
             </p>
           )}
         </div>

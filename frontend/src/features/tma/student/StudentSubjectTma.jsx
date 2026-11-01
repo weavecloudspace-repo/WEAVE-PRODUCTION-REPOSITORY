@@ -80,27 +80,43 @@ export default function StudentSubjectTma({ subject }) {
               <ClipboardList className="h-5 w-5 shrink-0 text-primary" />
               <div>
                 <p className="text-sm font-semibold text-text">{name}</p>
+                {item.status === "closed" && (
+                  <span className="mt-1 inline-flex rounded-full border border-border px-2 py-0.5 text-xs font-semibold text-text-muted">
+                    Closed
+                  </span>
+                )}
                 <p className="mt-1 text-xs text-text-muted">
                   {item.attempt_status === "submitted"
                     ? "Submitted · your result is ready"
-                    : item.attempt_status === "in_progress"
-                      ? "Your saved attempt is ready to continue"
-                      : "A new assignment is available"}{" "}
+                    : item.status === "closed"
+                      ? "Closed · the submission deadline has passed"
+                      : item.attempt_status === "in_progress"
+                        ? "Your saved attempt is ready to continue"
+                        : "A new assignment is available"}{" "}
                   · {item.component_maximum_score} marks
                 </p>
               </div>
             </div>
-            <Link
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-              to={`/student/subjects/${subject.id}/tma/${item.assignment_id}`}
-            >
-              {item.attempt_status === "submitted"
-                ? "View TMA result"
-                : item.attempt_status === "in_progress"
-                  ? "Continue TMA"
-                  : "Start TMA"}
-              <ArrowRight size={16} />
-            </Link>
+            {item.attempt_status === "submitted" ? (
+              <Link
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none focus-visible:ring-primary focus-visible:ring-offset-2"
+                to={`/student/subjects/${subject.id}/tma/${item.assignment_id}`}
+              >
+                View TMA result <ArrowRight size={16} />
+              </Link>
+            ) : item.status === "closed" || !item.can_start_or_resume ? (
+              <span className="inline-flex min-h-11 items-center rounded-xl border border-border bg-surface-muted px-4 py-2 text-sm font-semibold text-text-muted">
+                Closed
+              </span>
+            ) : (
+              <Link
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                to={`/student/subjects/${subject.id}/tma/${item.assignment_id}`}
+              >
+                {item.attempt_status === "in_progress" ? "Continue TMA" : "Start TMA"}
+                <ArrowRight size={16} />
+              </Link>
+            )}
           </div>
         );
       })}

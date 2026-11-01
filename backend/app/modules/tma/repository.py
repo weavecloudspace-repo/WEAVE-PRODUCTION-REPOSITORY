@@ -86,6 +86,7 @@ class TMAAssignmentRepository:
         academic_level_id: uuid.UUID | None = None,
         curriculum_subject_id: uuid.UUID | None = None,
         status: TMAAssignmentStatus | None = None,
+        statuses: set[TMAAssignmentStatus] | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[TMAAssignment], int]:
@@ -102,6 +103,8 @@ class TMAAssignmentRepository:
             filters.append(TMAAssignment.curriculum_subject_id == curriculum_subject_id)
         if status is not None:
             filters.append(TMAAssignment.status == status)
+        if statuses is not None:
+            filters.append(TMAAssignment.status.in_(statuses))
         total = (
             await db.execute(select(func.count(TMAAssignment.id)).where(*filters))
         ).scalar_one()

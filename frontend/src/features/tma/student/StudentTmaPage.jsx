@@ -107,7 +107,12 @@ export default function StudentTmaPage() {
           throw new Error(
             "This assignment is no longer available. It may have been closed, or your eligibility may have changed.",
           );
-        } else if (item.attempt_status === "in_progress" && item.attempt_id) {
+        } else if (
+          item.status === "active" &&
+          item.can_start_or_resume &&
+          item.attempt_status === "in_progress" &&
+          item.attempt_id
+        ) {
           const data = await service.resume(item.attempt_id);
           if (live.current === generation) installAttempt(data, generation);
         }
