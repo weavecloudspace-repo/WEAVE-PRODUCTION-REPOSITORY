@@ -311,33 +311,47 @@ async def test_verified_tma_score_is_reversed_without_touching_other_components(
 
     assignment, _ = fake(TMAAssignmentStatus.CANCELLING)
     revision = SimpleNamespace(
-        id=uid(), assignment_id=assignment.id,
-        revision_number=1, invalidated_at=None,
+        id=uid(),
+        assignment_id=assignment.id,
+        revision_number=1,
+        invalidated_at=None,
     )
     run = SimpleNamespace(
-        id=uid(), tenant_id=assignment.tenant_id,
-        assignment_id=assignment.id, revision_id=revision.id,
-        status="pending", reversed_scores=0,
+        id=uid(),
+        tenant_id=assignment.tenant_id,
+        assignment_id=assignment.id,
+        revision_id=revision.id,
+        status="pending",
+        reversed_scores=0,
         requested_by_actor_type=TMAActorType.TENANT_ADMIN,
         requested_by_actor_id=uid(),
-        reason="Incorrect key", error_message=None,
+        reason="Incorrect key",
+        error_message=None,
         completed_at=None,
     )
     student_id = uid()
     score_id = uid()
     attempt = SimpleNamespace(
-        id=uid(), score_id=score_id,
-        score_snapshot=Decimal("15.00"), score_reversed_at=None,
+        id=uid(),
+        score_id=score_id,
+        score_snapshot=Decimal("15.00"),
+        score_reversed_at=None,
     )
     participant = SimpleNamespace(student_id=student_id)
     score = SimpleNamespace(
-        id=score_id, score=Decimal("15.00"), cbt_score=None,
-        theory_score=None, source_exam_id=None,
+        id=score_id,
+        score=Decimal("15.00"),
+        cbt_score=None,
+        theory_score=None,
+        source_exam_id=None,
     )
     result = SimpleNamespace(
-        id=uid(), status=AcademicResultStatus.DRAFT,
-        total_score=Decimal("24.00"), grade="A",
-        remark="Good", grading_scale_id=uid(),
+        id=uid(),
+        status=AcademicResultStatus.DRAFT,
+        total_score=Decimal("24.00"),
+        grade="A",
+        remark="Good",
+        grading_scale_id=uid(),
     )
     db = AsyncMock()
     db.execute.side_effect = [
@@ -346,24 +360,31 @@ async def test_verified_tma_score_is_reversed_without_touching_other_components(
         SimpleNamespace(one_or_none=lambda: (score, result)),
     ]
     monkeypatch.setattr(
-        mod.TMAAssignmentRepository, "get_by_id",
+        mod.TMAAssignmentRepository,
+        "get_by_id",
         AsyncMock(return_value=assignment),
     )
     monkeypatch.setattr(
-        mod.TMARevisionRepository, "get_by_id",
+        mod.TMARevisionRepository,
+        "get_by_id",
         AsyncMock(return_value=revision),
     )
     monkeypatch.setattr(mod, "ensure_academic_write_window", AsyncMock())
     other_score = SimpleNamespace(score=Decimal("9.00"))
     monkeypatch.setattr(
-        mod.StudentAcademicRepository, "list_result_component_scores",
-        AsyncMock(return_value=[
-            (SimpleNamespace(), None),
-            (SimpleNamespace(), other_score),
-        ]),
+        mod.StudentAcademicRepository,
+        "list_result_component_scores",
+        AsyncMock(
+            return_value=[
+                (SimpleNamespace(), None),
+                (SimpleNamespace(), other_score),
+            ]
+        ),
     )
     response = await TMACancellationService.process(
-        db, tenant_id=assignment.tenant_id, run_id=run.id,
+        db,
+        tenant_id=assignment.tenant_id,
+        run_id=run.id,
     )
     assert response == {"status": "completed", "reversed_scores": 1}
     db.delete.assert_awaited_once_with(score)
@@ -384,22 +405,30 @@ async def test_reversal_never_deletes_modified_or_submitted_academic_result(monk
 
     assignment, _ = fake(TMAAssignmentStatus.CANCELLING)
     revision = SimpleNamespace(
-        id=uid(), assignment_id=assignment.id,
-        revision_number=1, invalidated_at=None,
+        id=uid(),
+        assignment_id=assignment.id,
+        revision_number=1,
+        invalidated_at=None,
     )
     run = SimpleNamespace(
-        id=uid(), tenant_id=assignment.tenant_id,
-        assignment_id=assignment.id, revision_id=revision.id,
-        status="pending", reversed_scores=0,
+        id=uid(),
+        tenant_id=assignment.tenant_id,
+        assignment_id=assignment.id,
+        revision_id=revision.id,
+        status="pending",
+        reversed_scores=0,
     )
     score_id, student_id = uid(), uid()
     attempt = SimpleNamespace(
-        score_id=score_id, score_snapshot=Decimal("14.00"),
+        score_id=score_id,
+        score_snapshot=Decimal("14.00"),
         score_reversed_at=None,
     )
     score = SimpleNamespace(
-        score=Decimal("14.00"), source_exam_id=None,
-        cbt_score=None, theory_score=None,
+        score=Decimal("14.00"),
+        source_exam_id=None,
+        cbt_score=None,
+        theory_score=None,
     )
     result = SimpleNamespace(
         status=AcademicResultStatus.SUBMITTED,
@@ -407,23 +436,25 @@ async def test_reversal_never_deletes_modified_or_submitted_academic_result(monk
     db = AsyncMock()
     db.execute.side_effect = [
         SimpleNamespace(scalar_one_or_none=lambda: run),
-        SimpleNamespace(all=lambda: [
-            (attempt, SimpleNamespace(student_id=student_id))
-        ]),
+        SimpleNamespace(all=lambda: [(attempt, SimpleNamespace(student_id=student_id))]),
         SimpleNamespace(one_or_none=lambda: (score, result)),
     ]
     monkeypatch.setattr(
-        mod.TMAAssignmentRepository, "get_by_id",
+        mod.TMAAssignmentRepository,
+        "get_by_id",
         AsyncMock(return_value=assignment),
     )
     monkeypatch.setattr(
-        mod.TMARevisionRepository, "get_by_id",
+        mod.TMARevisionRepository,
+        "get_by_id",
         AsyncMock(return_value=revision),
     )
     monkeypatch.setattr(mod, "ensure_academic_write_window", AsyncMock())
     with pytest.raises(ConflictException, match="submitted|locked|edited"):
         await TMACancellationService.process(
-            db, tenant_id=assignment.tenant_id, run_id=run.id,
+            db,
+            tenant_id=assignment.tenant_id,
+            run_id=run.id,
         )
     db.delete.assert_not_awaited()
     db.commit.assert_not_awaited()
