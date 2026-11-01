@@ -350,7 +350,10 @@ async def upload_tma_image(
     file: Annotated[UploadFile, File()],
 ) -> TMAMediaAssetResponse:
     asset = await TMAMediaService.upload_image(
-        db, actor=actor, assignment_id=assignment_id, file=file,
+        db,
+        actor=actor,
+        assignment_id=assignment_id,
+        file=file,
     )
     return TMAMediaAssetResponse.model_validate(asset)
 
@@ -360,10 +363,14 @@ async def upload_tma_image(
     response_model=list[TMAMediaAssetResponse],
 )
 async def list_tma_images(
-    assignment_id: uuid.UUID, db: DbSession, actor: Author,
+    assignment_id: uuid.UUID,
+    db: DbSession,
+    actor: Author,
 ) -> list[TMAMediaAssetResponse]:
     assets = await TMAMediaService.list_assignment_images(
-        db, actor=actor, assignment_id=assignment_id,
+        db,
+        actor=actor,
+        assignment_id=assignment_id,
     )
     return [TMAMediaAssetResponse.model_validate(asset) for asset in assets]
 
@@ -373,11 +380,16 @@ async def list_tma_images(
     response_model=TMAMediaSignedUrlResponse,
 )
 async def get_tma_image_url(
-    assignment_id: uuid.UUID, asset_id: uuid.UUID,
-    db: DbSession, actor: Author,
+    assignment_id: uuid.UUID,
+    asset_id: uuid.UUID,
+    db: DbSession,
+    actor: Author,
 ) -> TMAMediaSignedUrlResponse:
     return await TMAMediaService.get_image_url(
-        db, actor=actor, assignment_id=assignment_id, asset_id=asset_id,
+        db,
+        actor=actor,
+        assignment_id=assignment_id,
+        asset_id=asset_id,
     )
 
 
@@ -386,11 +398,16 @@ async def get_tma_image_url(
     response_model=TMAMediaDeleteResponse,
 )
 async def delete_unused_tma_image(
-    assignment_id: uuid.UUID, asset_id: uuid.UUID,
-    db: DbSession, actor: Author,
+    assignment_id: uuid.UUID,
+    asset_id: uuid.UUID,
+    db: DbSession,
+    actor: Author,
 ) -> TMAMediaDeleteResponse:
     return await TMAMediaService.delete_unused_image(
-        db, actor=actor, assignment_id=assignment_id, asset_id=asset_id,
+        db,
+        actor=actor,
+        assignment_id=assignment_id,
+        asset_id=asset_id,
     )
 
 
@@ -399,9 +416,14 @@ async def delete_unused_tma_image(
     response_model=TMAMediaSignedUrlResponse,
 )
 async def get_student_tma_image_url(
-    attempt_id: uuid.UUID, asset_id: uuid.UUID,
-    db: DbSession, student: CurrentStudent,
+    attempt_id: uuid.UUID,
+    asset_id: uuid.UUID,
+    db: DbSession,
+    student: CurrentStudent,
 ) -> TMAMediaSignedUrlResponse:
     return await TMAMediaService.get_student_image_url(
-        db, student=student, attempt_id=attempt_id, asset_id=asset_id,
+        db,
+        student=student,
+        attempt_id=attempt_id,
+        asset_id=asset_id,
     )

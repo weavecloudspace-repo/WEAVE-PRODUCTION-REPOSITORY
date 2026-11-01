@@ -27,9 +27,7 @@ def _file(data: bytes, *, name: str = "figure.png", mime: str = "image/png") -> 
 
 def _image(format_name: str, *, width: int = 64, height: int = 32) -> bytes:
     file = io.BytesIO()
-    Image.new("RGB", (width, height), color=(120, 30, 10)).save(
-        file, format=format_name
-    )
+    Image.new("RGB", (width, height), color=(120, 30, 10)).save(file, format=format_name)
     return file.getvalue()
 
 
@@ -43,7 +41,10 @@ def _image(format_name: str, *, width: int = 64, height: int = 32) -> bytes:
     ],
 )
 async def test_accepts_real_images_and_hashes_original_bytes(
-    format_name: str, filename: str, mime: str, extension: str,
+    format_name: str,
+    filename: str,
+    mime: str,
+    extension: str,
 ) -> None:
     data = _image(format_name)
     actual = await validate_tma_image(_file(data, name=filename, mime=mime))
@@ -75,7 +76,9 @@ async def test_accepts_generic_octet_stream_but_uses_detected_mime() -> None:
     ],
 )
 async def test_rejects_empty_corrupt_and_spoofed_images(
-    data: bytes, filename: str, mime: str,
+    data: bytes,
+    filename: str,
+    mime: str,
 ) -> None:
     with pytest.raises(BadRequestException):
         await validate_tma_image(_file(data, name=filename, mime=mime))

@@ -34,37 +34,50 @@ SIGNED_URL_TTL_SECONDS = 300
 class TMAMediaService:
     @staticmethod
     async def _author_assignment(
-        db: AsyncSession, *, actor: TMAAuthor,
-        assignment_id: uuid.UUID, lock: bool = False,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
+        lock: bool = False,
     ):
         assignment = await TMAAssignmentRepository.get_by_id(
-            db, actor.tenant_id, assignment_id, lock=lock,
+            db,
+            actor.tenant_id,
+            assignment_id,
+            lock=lock,
         )
         if assignment is None:
             raise NotFoundException("TMA assignment not found.")
         await TMAAuthorizationService.require_assignment_access(
-            db, actor=actor, assignment=assignment,
+            db,
+            actor=actor,
+            assignment=assignment,
         )
         return assignment
 
     @staticmethod
     async def upload_image(
-        db: AsyncSession, *, actor: TMAAuthor,
-        assignment_id: uuid.UUID, file: UploadFile,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
+        file: UploadFile,
     ) -> TMAMediaAsset:
         """Upload a private draft image, then create tenant-scoped metadata.
 
         If persistence fails, remove the newly uploaded object to avoid an orphan.
         """
         assignment = await TMAMediaService._author_assignment(
-            db, actor=actor, assignment_id=assignment_id, lock=True,
+            db,
+            actor=actor,
+            assignment_id=assignment_id,
+            lock=True,
         )
         TMAAuthorizationService.require_draft_assignment(assignment)
         validated = await validate_tma_image(file)
         asset_id = uuid.uuid4()
         object_key = (
-            f"tenants/{actor.tenant_id}/tma/{assignment.id}/images/"
-            f"{asset_id}.{validated.extension}"
+            f"tenants/{actor.tenant_id}/tma/{assignment.id}/images/{asset_id}.{validated.extension}"
         )
         storage = get_media_storage()
         uploaded = await storage.upload_object(
@@ -73,8 +86,7 @@ class TMAMediaService:
             content_type=validated.content_type,
             visibility=MediaVisibility.PRIVATE,
             cache_control="private, max-age=300",
-            metadata={"tenant-id": str(actor.tenant_id),
-                      "assignment-id": str(assignment.id)},
+            metadata={"tenant-id": str(actor.tenant_id), "assignment-id": str(assignment.id)},
         )
         asset = TMAMediaAsset(
             id=asset_id,
@@ -99,52 +111,76 @@ class TMAMediaService:
 
     @staticmethod
     async def list_assignment_images(
-        db: AsyncSession, *, actor: TMAAuthor,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
         assignment_id: uuid.UUID,
     ) -> list[TMAMediaAsset]:
         await TMAMediaService._author_assignment(
-            db, actor=actor, assignment_id=assignment_id,
+            db,
+            actor=actor,
+            assignment_id=assignment_id,
         )
         return await TMAMediaAssetRepository.list_for_assignment(
-            db, actor.tenant_id, assignment_id,
+            db,
+            actor.tenant_id,
+            assignment_id,
         )
 
     @staticmethod
     async def get_image_url(
-        db: AsyncSession, *, actor: TMAAuthor,
-        assignment_id: uuid.UUID, asset_id: uuid.UUID,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
+        asset_id: uuid.UUID,
     ) -> TMAMediaSignedUrlResponse:
         await TMAMediaService._author_assignment(
-            db, actor=actor, assignment_id=assignment_id,
+            db,
+            actor=actor,
+            assignment_id=assignment_id,
         )
         asset = await TMAMediaService._get_asset(
-            db, tenant_id=actor.tenant_id,
-            assignment_id=assignment_id, asset_id=asset_id,
+            db,
+            tenant_id=actor.tenant_id,
+            assignment_id=assignment_id,
+            asset_id=asset_id,
         )
         return await TMAMediaService._sign(asset)
 
     @staticmethod
     async def get_student_image_url(
-        db: AsyncSession, *, student: Student,
-        attempt_id: uuid.UUID, asset_id: uuid.UUID,
+        db: AsyncSession,
+        *,
+        student: Student,
+        attempt_id: uuid.UUID,
+        asset_id: uuid.UUID,
     ) -> TMAMediaSignedUrlResponse:
         """Only serve images referenced by the student's published attempt."""
         attempt, _, revision = await TMAAttemptService._load_owned_attempt(
-            db, student=student, attempt_id=attempt_id,
+            db,
+            student=student,
+            attempt_id=attempt_id,
         )
         if attempt.status != TMAAttemptStatus.IN_PROGRESS:
             raise ConflictException("Image access requires an in-progress assignment.")
         assignment, active_revision, _ = await TMAAttemptService._active_assignment(
-            db, student=student, assignment_id=revision.assignment_id,
+            db,
+            student=student,
+            assignment_id=revision.assignment_id,
         )
         if revision.id != active_revision.id:
             raise ConflictException("This attempt is no longer the current revision.")
         asset = await TMAMediaService._get_asset(
-            db, tenant_id=student.tenant_id,
-            assignment_id=assignment.id, asset_id=asset_id,
+            db,
+            tenant_id=student.tenant_id,
+            assignment_id=assignment.id,
+            asset_id=asset_id,
         )
         questions = await TMAQuestionRepository.list_for_revision_with_options(
-            db, student.tenant_id, revision.id,
+            db,
+            student.tenant_id,
+            revision.id,
         )
         used = any(
             question.image_asset_id == asset_id
@@ -157,8 +193,11 @@ class TMAMediaService:
 
     @staticmethod
     async def _get_asset(
-        db: AsyncSession, *, tenant_id: uuid.UUID,
-        assignment_id: uuid.UUID, asset_id: uuid.UUID,
+        db: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        assignment_id: uuid.UUID,
+        asset_id: uuid.UUID,
     ) -> TMAMediaAsset:
         asset = await TMAMediaAssetRepository.get_by_id(db, tenant_id, asset_id)
         if asset is None or asset.assignment_id != assignment_id:
@@ -174,14 +213,16 @@ class TMAMediaService:
         return TMAMediaSignedUrlResponse(
             media_asset_id=asset.id,
             signed_url=url,
-            expires_at=datetime.now(timezone.utc)
-            + timedelta(seconds=SIGNED_URL_TTL_SECONDS),
+            expires_at=datetime.now(timezone.utc) + timedelta(seconds=SIGNED_URL_TTL_SECONDS),
         )
 
     @staticmethod
     async def delete_unused_image(
-        db: AsyncSession, *, actor: TMAAuthor,
-        assignment_id: uuid.UUID, asset_id: uuid.UUID,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
+        asset_id: uuid.UUID,
     ) -> TMAMediaDeleteResponse:
         """Remove unused draft metadata, then best-effort delete physical object.
 
@@ -189,15 +230,22 @@ class TMAMediaService:
         R2 deletion fails. The returned cleanup flag makes orphan cleanup visible.
         """
         assignment = await TMAMediaService._author_assignment(
-            db, actor=actor, assignment_id=assignment_id, lock=True,
+            db,
+            actor=actor,
+            assignment_id=assignment_id,
+            lock=True,
         )
         TMAAuthorizationService.require_draft_assignment(assignment)
         asset = await TMAMediaService._get_asset(
-            db, tenant_id=actor.tenant_id,
-            assignment_id=assignment_id, asset_id=asset_id,
+            db,
+            tenant_id=actor.tenant_id,
+            assignment_id=assignment_id,
+            asset_id=asset_id,
         )
         deleted = await TMAMediaAssetRepository.delete_unreferenced(
-            db, actor.tenant_id, asset.id,
+            db,
+            actor.tenant_id,
+            asset.id,
         )
         if not deleted:
             raise ConflictException("The image is still referenced by a question or option.")
@@ -207,8 +255,12 @@ class TMAMediaService:
         except Exception:
             logger.exception("TMA R2 object cleanup pending for %s", asset.object_key)
             return TMAMediaDeleteResponse(
-                media_asset_id=asset.id, deleted=True, storage_cleaned=False,
+                media_asset_id=asset.id,
+                deleted=True,
+                storage_cleaned=False,
             )
         return TMAMediaDeleteResponse(
-            media_asset_id=asset.id, deleted=True, storage_cleaned=True,
+            media_asset_id=asset.id,
+            deleted=True,
+            storage_cleaned=True,
         )

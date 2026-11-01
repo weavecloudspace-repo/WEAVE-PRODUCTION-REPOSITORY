@@ -62,8 +62,13 @@ async def validate_tma_image(file: UploadFile) -> ValidatedTMAImage:
                 image.load()
     except BadRequestException:
         raise
-    except (OSError, ValueError, Image.DecompressionBombWarning, Image.DecompressionBombError,
-            UnidentifiedImageError) as exc:
+    except (
+        OSError,
+        ValueError,
+        Image.DecompressionBombWarning,
+        Image.DecompressionBombError,
+        UnidentifiedImageError,
+    ) as exc:
         raise BadRequestException("Invalid or corrupt TMA image.") from exc
 
     mime = MIME_BY_FORMAT.get((image_format or "").upper())
