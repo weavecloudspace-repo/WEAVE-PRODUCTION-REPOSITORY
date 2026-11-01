@@ -86,7 +86,9 @@ def _setup(monkeypatch, assignment):
     monkeypatch.setattr(mod.TMAAssignmentRepository, "save", saved)
     questions = AsyncMock()
     monkeypatch.setattr(
-        mod.TMAQuestionRepository, "list_for_revision_with_options", questions,
+        mod.TMAQuestionRepository,
+        "list_for_revision_with_options",
+        questions,
     )
     return actor, saved, questions
 
@@ -102,9 +104,7 @@ def test_schemas_accept_aware_closing_estimate_and_explicit_clear() -> None:
     when = _date()
     assert _scope_payload(closes_at=when).closes_at == when
     assert TMAAssignmentUpdate(closes_at=when).closes_at == when
-    assert TMAAssignmentUpdate(closes_at=None).model_dump(exclude_unset=True) == {
-        "closes_at": None
-    }
+    assert TMAAssignmentUpdate(closes_at=None).model_dump(exclude_unset=True) == {"closes_at": None}
     assert TMAAssignmentUpdate().model_dump(exclude_unset=True) == {}
 
 
@@ -125,13 +125,9 @@ async def test_create_includes_closes_at_but_not_in_uniqueness_lookup(monkeypatc
     date = _date()
     payload = _scope_payload(closes_at=date)
     monkeypatch.setattr(mod.TMAAssignmentService, "_validate_scope", AsyncMock())
-    monkeypatch.setattr(
-        mod.TMAAuthorizationService, "require_authoring_access", AsyncMock()
-    )
+    monkeypatch.setattr(mod.TMAAuthorizationService, "require_authoring_access", AsyncMock())
     lookup = AsyncMock(return_value=None)
-    monkeypatch.setattr(
-        mod.TMAAssignmentRepository, "get_by_component_scope", lookup
-    )
+    monkeypatch.setattr(mod.TMAAssignmentRepository, "get_by_component_scope", lookup)
 
     async def add(db, assignment):
         assignment.id = _id()
@@ -140,9 +136,7 @@ async def test_create_includes_closes_at_but_not_in_uniqueness_lookup(monkeypatc
     monkeypatch.setattr(mod.TMAAssignmentRepository, "add", add)
     monkeypatch.setattr(mod.TMARevisionRepository, "add", AsyncMock())
     db = AsyncMock()
-    created = await mod.TMAAssignmentService.create_assignment(
-        db, actor=actor, payload=payload
-    )
+    created = await mod.TMAAssignmentService.create_assignment(db, actor=actor, payload=payload)
     assert created.closes_at == date
     assert "closes_at" not in lookup.await_args.kwargs
     db.commit.assert_awaited_once()
@@ -151,7 +145,8 @@ async def test_create_includes_closes_at_but_not_in_uniqueness_lookup(monkeypatc
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", [TMAAssignmentStatus.DRAFT, TMAAssignmentStatus.ACTIVE])
 async def test_can_change_only_closing_estimate_without_touching_questions(
-    monkeypatch, status,
+    monkeypatch,
+    status,
 ) -> None:
     from app.modules.tma import assignment_service as mod
 
@@ -203,9 +198,7 @@ async def test_active_cannot_change_academic_scope_even_with_closes_at(monkeypat
             AsyncMock(),
             actor=current,
             assignment_id=assignment.id,
-            payload=TMAAssignmentUpdate(
-                curriculum_subject_id=_id(), closes_at=_date()
-            ),
+            payload=TMAAssignmentUpdate(curriculum_subject_id=_id(), closes_at=_date()),
         )
     assert assignment.closes_at is None
     save.assert_not_awaited()
@@ -221,8 +214,10 @@ async def test_closed_cannot_change_closing_estimate(monkeypatch) -> None:
     current, save, _ = _setup(monkeypatch, assignment)
     with pytest.raises(ConflictException):
         await mod.TMAAssignmentService.update_draft_assignment(
-            AsyncMock(), actor=current, assignment_id=assignment.id,
-            payload=TMAAssignmentUpdate(closes_at=_date())
+            AsyncMock(),
+            actor=current,
+            assignment_id=assignment.id,
+            payload=TMAAssignmentUpdate(closes_at=_date()),
         )
     save.assert_not_awaited()
 
@@ -235,16 +230,17 @@ async def test_draft_scope_edit_still_requires_no_questions(monkeypatch) -> None
     assignment = _assignment(actor, TMAAssignmentStatus.DRAFT)
     current, save, questions = _setup(monkeypatch, assignment)
     monkeypatch.setattr(
-        mod.TMARevisionRepository, "get_by_number",
+        mod.TMARevisionRepository,
+        "get_by_number",
         AsyncMock(return_value=SimpleNamespace(id=_id())),
     )
     questions.return_value = [(SimpleNamespace(), [])]
     with pytest.raises(ConflictException, match="after questions exist"):
         await mod.TMAAssignmentService.update_draft_assignment(
-            AsyncMock(), actor=current, assignment_id=assignment.id,
-            payload=TMAAssignmentUpdate(
-                academic_level_id=_id(), closes_at=_date()
-            ),
+            AsyncMock(),
+            actor=current,
+            assignment_id=assignment.id,
+            payload=TMAAssignmentUpdate(academic_level_id=_id(), closes_at=_date()),
         )
     save.assert_not_awaited()
 
@@ -258,10 +254,10 @@ async def test_null_academic_scope_remains_invalid(monkeypatch) -> None:
     current, save, _ = _setup(monkeypatch, assignment)
     with pytest.raises(BadRequestException):
         await mod.TMAAssignmentService.update_draft_assignment(
-            AsyncMock(), actor=current, assignment_id=assignment.id,
-            payload=TMAAssignmentUpdate(
-                academic_level_id=None, closes_at=_date()
-            ),
+            AsyncMock(),
+            actor=current,
+            assignment_id=assignment.id,
+            payload=TMAAssignmentUpdate(academic_level_id=None, closes_at=_date()),
         )
     save.assert_not_awaited()
 
@@ -282,7 +278,9 @@ async def test_authorized_collaborator_can_change_closing_estimate(monkeypatch) 
     )
     date = _date()
     changed = await mod.TMAAssignmentService.update_draft_assignment(
-        AsyncMock(), actor=current, assignment_id=assignment.id,
+        AsyncMock(),
+        actor=current,
+        assignment_id=assignment.id,
         payload=TMAAssignmentUpdate(closes_at=date),
     )
     assert changed.closes_at == date
@@ -305,7 +303,9 @@ async def test_academic_scope_edit_still_requires_lead_permission(monkeypatch) -
     )
     with pytest.raises(ForbiddenException):
         await mod.TMAAssignmentService.update_draft_assignment(
-            AsyncMock(), actor=current, assignment_id=assignment.id,
+            AsyncMock(),
+            actor=current,
+            assignment_id=assignment.id,
             payload=TMAAssignmentUpdate(academic_level_id=_id()),
         )
     save.assert_not_awaited()
@@ -317,13 +317,17 @@ async def test_student_list_displays_closes_at_without_enforcing_it(monkeypatch)
 
     student = SimpleNamespace(id=_id(), tenant_id=_id())
     term = SimpleNamespace(
-        id=_id(), status=AcademicTermStatus.OPEN, is_current=True,
+        id=_id(),
+        status=AcademicTermStatus.OPEN,
+        is_current=True,
         academic_session_id=_id(),
     )
     enrollment = SimpleNamespace(academic_level_id=_id())
     assignment = SimpleNamespace(
-        id=_id(), academic_term_id=term.id,
-        curriculum_subject_id=_id(), assessment_component_id=_id(),
+        id=_id(),
+        academic_term_id=term.id,
+        curriculum_subject_id=_id(),
+        assessment_component_id=_id(),
         current_revision_number=1,
         status=TMAAssignmentStatus.ACTIVE,
         closes_at=_date(-3),
@@ -331,46 +335,57 @@ async def test_student_list_displays_closes_at_without_enforcing_it(monkeypatch)
     revision = SimpleNamespace(id=_id(), published_at=_date(-10), invalidated_at=None)
     scheme = SimpleNamespace(id=_id())
     component = SimpleNamespace(
-        maximum_score=Decimal("20.00"), assessment_scheme_id=scheme.id,
+        maximum_score=Decimal("20.00"),
+        assessment_scheme_id=scheme.id,
     )
-    monkeypatch.setattr(mod.StudentAcademicRepository, "get_current_term",
-                        AsyncMock(return_value=term))
     monkeypatch.setattr(
-        mod.StudentEnrollmentRepository, "get_authoritative_for_session",
+        mod.StudentAcademicRepository, "get_current_term", AsyncMock(return_value=term)
+    )
+    monkeypatch.setattr(
+        mod.StudentEnrollmentRepository,
+        "get_authoritative_for_session",
         AsyncMock(return_value=enrollment),
     )
     monkeypatch.setattr(
-        mod.CurriculumResolutionService, "resolve_student_subjects",
-        AsyncMock(return_value=[
-            SimpleNamespace(curriculum_subject_id=assignment.curriculum_subject_id)
-        ]),
+        mod.CurriculumResolutionService,
+        "resolve_student_subjects",
+        AsyncMock(
+            return_value=[SimpleNamespace(curriculum_subject_id=assignment.curriculum_subject_id)]
+        ),
     )
     monkeypatch.setattr(
-        mod.TMAAssignmentRepository, "list_for_scope",
+        mod.TMAAssignmentRepository,
+        "list_for_scope",
         AsyncMock(return_value=([assignment], 1)),
     )
     monkeypatch.setattr(
-        mod.TMAParticipantRepository, "list_for_student",
+        mod.TMAParticipantRepository,
+        "list_for_student",
         AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(
-        mod.TMAAttemptRepository, "list_for_participants",
+        mod.TMAAttemptRepository,
+        "list_for_participants",
         AsyncMock(return_value={}),
     )
     monkeypatch.setattr(
-        mod.TMARevisionRepository, "get_by_number",
+        mod.TMARevisionRepository,
+        "get_by_number",
         AsyncMock(return_value=revision),
     )
     monkeypatch.setattr(
-        mod.AssessmentRepository, "get_active_scheme",
+        mod.AssessmentRepository,
+        "get_active_scheme",
         AsyncMock(return_value=scheme),
     )
     monkeypatch.setattr(
-        mod.AssessmentRepository, "get_component",
+        mod.AssessmentRepository,
+        "get_component",
         AsyncMock(return_value=component),
     )
     items = await mod.TMAAttemptService.list_available_assignments(
-        AsyncMock(), student=student,
+        AsyncMock(),
+        student=student,
     )
     assert len(items) == 1
     assert items[0].closes_at == assignment.closes_at
@@ -379,10 +394,14 @@ async def test_student_list_displays_closes_at_without_enforcing_it(monkeypatch)
 
 def test_student_schema_exposes_optional_closes_at() -> None:
     item = TMAStudentAssignmentResponse(
-        assignment_id=_id(), academic_term_id=_id(),
-        curriculum_subject_id=_id(), assessment_component_id=_id(),
-        status=TMAAssignmentStatus.ACTIVE, attempt_status=None,
-        closes_at=None, can_start_or_resume=True,
+        assignment_id=_id(),
+        academic_term_id=_id(),
+        curriculum_subject_id=_id(),
+        assessment_component_id=_id(),
+        status=TMAAssignmentStatus.ACTIVE,
+        attempt_status=None,
+        closes_at=None,
+        can_start_or_resume=True,
         component_maximum_score=Decimal("20"),
     )
     assert item.model_dump()["closes_at"] is None
