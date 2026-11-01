@@ -44,15 +44,20 @@ class TMAGradingService:
     def scaled_component_score(correct: int, total: int, maximum: Decimal) -> Decimal:
         if total <= 0 or not 0 <= correct <= total or maximum <= 0:
             raise ConflictException("Invalid TMA score or assessment allocation.")
-        return (
-            Decimal(correct) * maximum / Decimal(total)
-        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return (Decimal(correct) * maximum / Decimal(total)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
     @staticmethod
     async def persist_component_score(
-        db: AsyncSession, *, tenant_id: uuid.UUID,
-        student_id: uuid.UUID, enrollment: StudentEnrollment,
-        assignment: TMAAssignment, correct: int, total: int,
+        db: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        student_id: uuid.UUID,
+        enrollment: StudentEnrollment,
+        assignment: TMAAssignment,
+        correct: int,
+        total: int,
     ) -> Decimal:
         """Write only this TMA's component in the academic DRAFT result.
 
@@ -62,11 +67,15 @@ class TMAGradingService:
         await ensure_academic_write_window(db, tenant_id=tenant_id)
         scheme = await AssessmentRepository.get_active_scheme(db, tenant_id)
         component = await AssessmentRepository.get_component(
-            db, tenant_id, assignment.assessment_component_id,
+            db,
+            tenant_id,
+            assignment.assessment_component_id,
         )
         if (
-            scheme is None or scheme.status != AssessmentSchemeStatus.ACTIVE
-            or component is None or not component.is_active
+            scheme is None
+            or scheme.status != AssessmentSchemeStatus.ACTIVE
+            or component is None
+            or not component.is_active
             or component.assessment_scheme_id != scheme.id
             or component.is_hybrid
         ):
@@ -74,11 +83,18 @@ class TMAGradingService:
         if enrollment.class_id is None:
             raise ConflictException("Student has no active classroom.")
         score = TMAGradingService.scaled_component_score(
-            correct, total, component.maximum_score,
+            correct,
+            total,
+            component.maximum_score,
         )
         results = await StudentAcademicRepository.get_results_by_scope_batch(
-            db, tenant_id, {student_id}, assignment.curriculum_subject_id,
-            assignment.academic_session_id, assignment.academic_term_id, lock=True,
+            db,
+            tenant_id,
+            {student_id},
+            assignment.curriculum_subject_id,
+            assignment.academic_session_id,
+            assignment.academic_term_id,
+            lock=True,
         )
         result = results.get(student_id)
         if result is not None:
@@ -89,7 +105,11 @@ class TMAGradingService:
             if result.class_id != enrollment.class_id:
                 raise ConflictException("Result enrollment/class scope does not match.")
             existing = await StudentAcademicRepository.get_component_scores_batch(
-                db, tenant_id, {result.id}, component.id, lock=True,
+                db,
+                tenant_id,
+                {result.id},
+                component.id,
+                lock=True,
             )
             if result.id in existing:
                 raise ConflictException(
@@ -97,25 +117,38 @@ class TMAGradingService:
                 )
         else:
             owners = await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
-                db, tenant_id, {enrollment.class_id},
-                assignment.curriculum_subject_id, date.today(),
+                db,
+                tenant_id,
+                {enrollment.class_id},
+                assignment.curriculum_subject_id,
+                date.today(),
             )
             teacher_assignment = owners.get(enrollment.class_id)
             if teacher_assignment is None:
-                raise ConflictException("No current teacher assignment can own the academic result.")
+                raise ConflictException(
+                    "No current teacher assignment can own the academic result."
+                )
             curricula = await CurriculumResolutionService.resolve_student_subjects(
-                db, tenant_id=tenant_id, student_id=student_id,
+                db,
+                tenant_id=tenant_id,
+                student_id=student_id,
                 academic_term_id=assignment.academic_term_id,
             )
             subject = next(
-                (row for row in curricula if row.curriculum_subject_id == assignment.curriculum_subject_id),
+                (
+                    row
+                    for row in curricula
+                    if row.curriculum_subject_id == assignment.curriculum_subject_id
+                ),
                 None,
             )
             if subject is None:
                 raise ConflictException("Student is no longer eligible for this subject.")
             result = StudentSubjectResult(
-                tenant_id=tenant_id, student_id=student_id,
-                class_id=enrollment.class_id, subject_id=subject.subject_id,
+                tenant_id=tenant_id,
+                student_id=student_id,
+                class_id=enrollment.class_id,
+                subject_id=subject.subject_id,
                 curriculum_subject_id=assignment.curriculum_subject_id,
                 teacher_membership_id=teacher_assignment.teacher_membership_id,
                 teacher_assignment_id=teacher_assignment.id,
@@ -125,11 +158,13 @@ class TMAGradingService:
                 assessment_scheme_id=scheme.id,
                 total_score=Decimal("0"),
                 status=AcademicResultStatus.DRAFT,
-                recorded_by_actor_type="tma", recorded_by_actor_id=student_id,
+                recorded_by_actor_type="tma",
+                recorded_by_actor_id=student_id,
             )
             await StudentAcademicRepository.upsert_result(db, result)
         await StudentAcademicRepository.add_component_scores_batch(
-            db, [
+            db,
+            [
                 StudentAssessmentScore(
                     tenant_id=tenant_id,
                     student_subject_result_id=result.id,
@@ -139,14 +174,18 @@ class TMAGradingService:
             ],
         )
         components = await StudentAcademicRepository.list_result_component_scores(
-            db, tenant_id, result,
+            db,
+            tenant_id,
+            result,
         )
         persisted = [row.score for _, row in components if row is not None]
         result.total_score = sum(persisted, Decimal("0"))
         complete = bool(components) and all(row is not None for _, row in components)
         if complete:
             scale = await StudentAcademicRepository.find_grade_for_score(
-                db, tenant_id, result.total_score,
+                db,
+                tenant_id,
+                result.total_score,
             )
             result.grade = scale.grade if scale else None
             result.remark = scale.remark if scale else None

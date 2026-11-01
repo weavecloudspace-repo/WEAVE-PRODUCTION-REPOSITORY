@@ -24,13 +24,20 @@ from app.modules.tma.schemas import TMAAssignmentCreate, TMAAssignmentUpdate
 class TMAAssignmentService:
     @staticmethod
     async def _validate_scope(
-        db: AsyncSession, *, tenant_id: uuid.UUID, payload: TMAAssignmentCreate,
+        db: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        payload: TMAAssignmentCreate,
     ) -> None:
         session = await StudentAcademicRepository.get_academic_session_by_id(
-            db, tenant_id, payload.academic_session_id,
+            db,
+            tenant_id,
+            payload.academic_session_id,
         )
         term = await StudentAcademicRepository.get_term_by_id(
-            db, tenant_id, payload.academic_term_id,
+            db,
+            tenant_id,
+            payload.academic_term_id,
         )
         if session is None or term is None or term.academic_session_id != session.id:
             raise BadRequestException("Academic session and term do not match.")
@@ -38,11 +45,15 @@ class TMAAssignmentService:
             raise ConflictException("The current academic session must be open.")
         scheme = await AssessmentRepository.get_active_scheme(db, tenant_id)
         component = await AssessmentRepository.get_component(
-            db, tenant_id, payload.assessment_component_id,
+            db,
+            tenant_id,
+            payload.assessment_component_id,
         )
         if (
-            scheme is None or scheme.status != AssessmentSchemeStatus.ACTIVE
-            or component is None or not component.is_active
+            scheme is None
+            or scheme.status != AssessmentSchemeStatus.ACTIVE
+            or component is None
+            or not component.is_active
             or component.assessment_scheme_id != scheme.id
         ):
             raise ConflictException("Select an active component in the current assessment scheme.")
@@ -51,32 +62,44 @@ class TMAAssignmentService:
 
     @staticmethod
     async def create_assignment(
-        db: AsyncSession, *, actor: TMAAuthor, payload: TMAAssignmentCreate,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        payload: TMAAssignmentCreate,
     ) -> TMAAssignment:
         try:
             await TMAAssignmentService._validate_scope(
-                db, tenant_id=actor.tenant_id, payload=payload,
+                db,
+                tenant_id=actor.tenant_id,
+                payload=payload,
             )
             await TMAAuthorizationService.require_authoring_access(
-                db, actor=actor,
+                db,
+                actor=actor,
                 academic_level_id=payload.academic_level_id,
                 curriculum_subject_id=payload.curriculum_subject_id,
                 academic_term_id=payload.academic_term_id,
             )
             existing = await TMAAssignmentRepository.get_by_component_scope(
-                db, actor.tenant_id, **payload.model_dump(),
+                db,
+                actor.tenant_id,
+                **payload.model_dump(),
             )
             if existing is not None:
-                raise ConflictException("This level, subject, term and component already have a TMA.")
+                raise ConflictException(
+                    "This level, subject, term and component already have a TMA."
+                )
             assignment = TMAAssignment(
-                tenant_id=actor.tenant_id, **payload.model_dump(),
+                tenant_id=actor.tenant_id,
+                **payload.model_dump(),
                 created_by_actor_type=TMAAuthorizationService.actor_type(actor),
                 created_by_actor_id=actor.id,
                 current_revision_number=1,
             )
             await TMAAssignmentRepository.add(db, assignment)
             await TMARevisionRepository.add(
-                db, TMAAssignmentRevision(
+                db,
+                TMAAssignmentRevision(
                     tenant_id=actor.tenant_id,
                     assignment_id=assignment.id,
                     revision_number=1,
@@ -91,29 +114,42 @@ class TMAAssignmentService:
 
     @staticmethod
     async def get_assignment(
-        db: AsyncSession, *, actor: TMAAuthor, assignment_id: uuid.UUID,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
     ) -> TMAAssignment:
         assignment = await TMAAssignmentRepository.get_by_id(
-            db, actor.tenant_id, assignment_id,
+            db,
+            actor.tenant_id,
+            assignment_id,
         )
         if assignment is None:
             raise NotFoundException("Assignment not found.")
         await TMAAuthorizationService.require_assignment_access(
-            db, actor=actor, assignment=assignment,
+            db,
+            actor=actor,
+            assignment=assignment,
         )
         return assignment
 
     @staticmethod
     async def list_assignments(
-        db: AsyncSession, *, actor: TMAAuthor,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
         academic_term_id: uuid.UUID | None = None,
-        offset: int = 0, limit: int = 50,
+        offset: int = 0,
+        limit: int = 50,
     ) -> tuple[list[TMAAssignment], int]:
         # Administrative listings include all subjects. Teachers see only
         # assignments for which they currently have authoring permission.
         rows, total = await TMAAssignmentRepository.list_for_scope(
-            db, actor.tenant_id, academic_term_id=academic_term_id,
-            offset=offset, limit=limit,
+            db,
+            actor.tenant_id,
+            academic_term_id=academic_term_id,
+            offset=offset,
+            limit=limit,
         )
         if TMAAuthorizationService.actor_type(actor).value == "tenant_admin":
             return rows, total
@@ -121,12 +157,15 @@ class TMAAssignmentService:
         for assignment in rows:
             try:
                 await TMAAuthorizationService.require_assignment_access(
-                    db, actor=actor, assignment=assignment,
+                    db,
+                    actor=actor,
+                    assignment=assignment,
                 )
             except (NotFoundException, ConflictException, BadRequestException):
                 continue
             except Exception as exc:
                 from app.core.exceptions import ForbiddenException
+
                 if not isinstance(exc, ForbiddenException):
                     raise
                 continue
@@ -137,16 +176,24 @@ class TMAAssignmentService:
 
     @staticmethod
     async def update_draft_assignment(
-        db: AsyncSession, *, actor: TMAAuthor,
-        assignment_id: uuid.UUID, payload: TMAAssignmentUpdate,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
+        payload: TMAAssignmentUpdate,
     ) -> TMAAssignment:
         assignment = await TMAAssignmentRepository.get_by_id(
-            db, actor.tenant_id, assignment_id, lock=True,
+            db,
+            actor.tenant_id,
+            assignment_id,
+            lock=True,
         )
         if assignment is None:
             raise NotFoundException("Assignment not found.")
         await TMAAuthorizationService.require_assignment_access(
-            db, actor=actor, assignment=assignment,
+            db,
+            actor=actor,
+            assignment=assignment,
         )
         TMAAuthorizationService.require_assignment_management(actor, assignment)
         TMAAuthorizationService.require_draft_assignment(assignment)
@@ -155,24 +202,35 @@ class TMAAssignmentService:
             raise BadRequestException("Academic configuration fields cannot be null.")
         if changes:
             revision = await TMARevisionRepository.get_by_number(
-                db, actor.tenant_id, assignment.id, assignment.current_revision_number,
+                db,
+                actor.tenant_id,
+                assignment.id,
+                assignment.current_revision_number,
             )
             if revision is None:
                 raise ConflictException("The current assignment revision is missing.")
             questions = await TMAQuestionRepository.list_for_revision_with_options(
-                db, actor.tenant_id, revision.id,
+                db,
+                actor.tenant_id,
+                revision.id,
             )
             if questions:
                 raise ConflictException("Cannot change academic scope after questions exist.")
-            effective = TMAAssignmentCreate.model_validate({
-                field: changes.get(field, getattr(assignment, field))
-                for field in TMAAssignmentCreate.model_fields
-            })
+            effective = TMAAssignmentCreate.model_validate(
+                {
+                    field: changes.get(field, getattr(assignment, field))
+                    for field in TMAAssignmentCreate.model_fields
+                }
+            )
             await TMAAssignmentService._validate_scope(
-                db, tenant_id=actor.tenant_id, payload=effective,
+                db,
+                tenant_id=actor.tenant_id,
+                payload=effective,
             )
             await TMAAuthorizationService.require_authoring_access(
-                db, actor=actor, academic_level_id=effective.academic_level_id,
+                db,
+                actor=actor,
+                academic_level_id=effective.academic_level_id,
                 curriculum_subject_id=effective.curriculum_subject_id,
                 academic_term_id=effective.academic_term_id,
             )

@@ -535,8 +535,10 @@ class TMAAttemptRepository:
 
     @staticmethod
     async def create_if_missing(
-        db: AsyncSession, tenant_id: uuid.UUID,
-        participant_id: uuid.UUID, revision_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        participant_id: uuid.UUID,
+        revision_id: uuid.UUID,
     ) -> TMAAttempt:
         """Concurrent starts converge on the existing unique participant attempt."""
         statement = (
@@ -556,7 +558,10 @@ class TMAAttemptRepository:
         if inserted is not None:
             return inserted
         attempt = await TMAAttemptRepository.get_by_participant(
-            db, tenant_id, participant_id, lock=True,
+            db,
+            tenant_id,
+            participant_id,
+            lock=True,
         )
         if attempt is None:
             raise RuntimeError("Concurrent attempt not visible after conflict")
