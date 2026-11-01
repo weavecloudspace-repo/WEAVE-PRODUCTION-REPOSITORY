@@ -70,21 +70,18 @@ import uuid
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import (
     CheckConstraint,
-    Column,
     Index,
     String,
     Integer,
     DateTime,
     ForeignKey,
-    Boolean,
     Text,
     UniqueConstraint,
-    ForeignKeyConstraint,
     Enum as SQLEnum,
     Numeric,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.shared.database import BaseModel, PUBLIC_SCHEMA
+from sqlalchemy.orm import Mapped, mapped_column
+from app.shared.base_model import BaseModel, PUBLIC_SCHEMA
 
 
 class TMAAssignmentStatus(str, PyEnum):
@@ -99,7 +96,7 @@ class TMAActorType(str, PyEnum):
     """Authorized actor types responsible for TMA operations"""
 
     TEACHER = "teacher"
-    TENANT_ADMIN = "tenant"
+    TENANT_ADMIN = "tenant_admin"
 
 
 class Assignment(BaseModel):
