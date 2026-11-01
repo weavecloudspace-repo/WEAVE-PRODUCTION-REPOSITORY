@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
 from app.core.dependencies.db import DbSession
 from app.core.dependencies.route_guards import (
@@ -19,6 +19,7 @@ from app.modules.tenant_admins.models import TenantAdmin
 from app.modules.tma.assignment_service import TMAAssignmentService
 from app.modules.tma.attempt_service import TMAAttemptService
 from app.modules.tma.lifecycle_service import TMALifecycleService
+from app.modules.tma.media_service import TMAMediaService
 from app.modules.tma.question_service import TMAQuestionService
 from app.modules.tma.schemas import (
     TMAAnswerSaveRequest,
@@ -31,6 +32,9 @@ from app.modules.tma.schemas import (
     TMAQuestionAdminResponse,
     TMAQuestionCreate,
     TMAQuestionUpdate,
+    TMAMediaAssetResponse,
+    TMAMediaDeleteResponse,
+    TMAMediaSignedUrlResponse,
     TMAStartResponse,
     TMAStudentAssignmentResponse,
     TMASubmitResponse,
@@ -331,4 +335,73 @@ async def get_my_score(
         db,
         student=student,
         attempt_id=attempt_id,
+    )
+
+
+@author_router.post(
+    "/assignments/{assignment_id}/images",
+    response_model=TMAMediaAssetResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_tma_image(
+    assignment_id: uuid.UUID,
+    db: DbSession,
+    actor: Author,
+    file: Annotated[UploadFile, File()],
+) -> TMAMediaAssetResponse:
+    asset = await TMAMediaService.upload_image(
+        db, actor=actor, assignment_id=assignment_id, file=file,
+    )
+    return TMAMediaAssetResponse.model_validate(asset)
+
+
+@author_router.get(
+    "/assignments/{assignment_id}/images",
+    response_model=list[TMAMediaAssetResponse],
+)
+async def list_tma_images(
+    assignment_id: uuid.UUID, db: DbSession, actor: Author,
+) -> list[TMAMediaAssetResponse]:
+    assets = await TMAMediaService.list_assignment_images(
+        db, actor=actor, assignment_id=assignment_id,
+    )
+    return [TMAMediaAssetResponse.model_validate(asset) for asset in assets]
+
+
+@author_router.get(
+    "/assignments/{assignment_id}/images/{asset_id}/url",
+    response_model=TMAMediaSignedUrlResponse,
+)
+async def get_tma_image_url(
+    assignment_id: uuid.UUID, asset_id: uuid.UUID,
+    db: DbSession, actor: Author,
+) -> TMAMediaSignedUrlResponse:
+    return await TMAMediaService.get_image_url(
+        db, actor=actor, assignment_id=assignment_id, asset_id=asset_id,
+    )
+
+
+@author_router.delete(
+    "/assignments/{assignment_id}/images/{asset_id}",
+    response_model=TMAMediaDeleteResponse,
+)
+async def delete_unused_tma_image(
+    assignment_id: uuid.UUID, asset_id: uuid.UUID,
+    db: DbSession, actor: Author,
+) -> TMAMediaDeleteResponse:
+    return await TMAMediaService.delete_unused_image(
+        db, actor=actor, assignment_id=assignment_id, asset_id=asset_id,
+    )
+
+
+@student_router.get(
+    "/attempts/{attempt_id}/images/{asset_id}/url",
+    response_model=TMAMediaSignedUrlResponse,
+)
+async def get_student_tma_image_url(
+    attempt_id: uuid.UUID, asset_id: uuid.UUID,
+    db: DbSession, student: CurrentStudent,
+) -> TMAMediaSignedUrlResponse:
+    return await TMAMediaService.get_student_image_url(
+        db, student=student, attempt_id=attempt_id, asset_id=asset_id,
     )
