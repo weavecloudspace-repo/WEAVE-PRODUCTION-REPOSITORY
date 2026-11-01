@@ -728,7 +728,7 @@ class TMAMediaAsset(BaseModel):
             name="ck_tma_media_assets_content_type_required",
         ),
         CheckConstraint(
-            "checksum_sha256 IS NULL OR LENGTH(checksum_sha256) = 64",
+            "checksum_sha256 IS NULL OR checksum_sha256 ~ '^[0-9a-fA-F]{64}$'",
             name="ck_tma_media_assets_checksum_sha256",
         ),
         CheckConstraint(
