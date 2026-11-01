@@ -77,6 +77,8 @@ from sqlalchemy import (
     Integer,
     Text,
     UniqueConstraint,
+    Boolean,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -161,13 +163,9 @@ class TMAAssignment(BaseModel):
         server_default=TMAAssignmentStatus.DRAFT.value,
     )
 
-    activated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    closed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # ==========================#
     # Revision Management
@@ -187,9 +185,7 @@ class TMAAssignment(BaseModel):
         nullable=False,
     )
 
-    created_by_actor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
-    )
+    created_by_actor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     # ==========================================
     # Database Constraints and Indexes
@@ -239,13 +235,9 @@ class TMAAssignmentRevision(BaseModel):
 
     revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    published_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    invalidated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     invalidated_by_actor_type: Mapped[TMAActorType | None] = mapped_column(
         SQLEnum(
@@ -357,15 +349,11 @@ class TMAQuestion(BaseModel):
 
     question_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    image_asset_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
+    image_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     position: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    version: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=1, server_default="1"
-    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
     author_actor_type: Mapped[TMAActorType] = mapped_column(
         SQLEnum(
@@ -377,9 +365,7 @@ class TMAQuestion(BaseModel):
         nullable=False,
     )
 
-    author_actor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
-    )
+    author_actor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     __table_args__ = (
         # Ensure the revision belongs to the same tenant.
@@ -436,5 +422,97 @@ class TMAQuestion(BaseModel):
         CheckConstraint(
             "version >= 1",
             name="ck_tma_questions_version_positive",
+        ),
+    )
+
+
+class TMAQuestionOption(BaseModel):
+    """
+    Represents an answer option for a TMA question.
+
+    Each question must contain at least four answer options
+    and exactly one correct answer before publication
+
+    Options may contain text, an image or both
+    Image binaries are stored in Cloudflare R2
+
+    The position field maintains the original ordering of options.
+    Student-facing option randomization is handled separately
+
+    Question-level versioning manages concurrent modifications
+    to questions and their associated options
+    """
+
+    __tablename__ = "tma_question_options"
+
+    question_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    option_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    image_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+    is_correct: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (
+        # Ensure the question belongs to the same tenant.
+        ForeignKeyConstraint(
+            ["tenant_id", "question_id"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_questions.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_questions.id",
+            ],
+            name="fk_tma_question_options_tenant_question",
+            ondelete="RESTRICT",
+        ),
+        # Ensure the referenced image belongs to the same tenant.
+        ForeignKeyConstraint(
+            ["tenant_id", "image_asset_id"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_media_assets.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_media_assets.id",
+            ],
+            name="fk_tma_question_options_tenant_media",
+            ondelete="RESTRICT",
+        ),
+        # Prevent duplicate positions within a question.
+        UniqueConstraint(
+            "tenant_id",
+            "question_id",
+            "position",
+            name="uq_tma_question_options_position",
+        ),
+        # Support tenant-safe references from student answers.
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            name="uq_tma_question_options_tenant_id",
+        ),
+        # Allow at most one correct answer per question.
+        Index(
+            "uq_tma_question_options_one_correct",
+            "tenant_id",
+            "question_id",
+            unique=True,
+            postgresql_where=text("is_correct = true"),
+        ),
+        # Every option must contain text or an image.
+        CheckConstraint(
+            """
+            (
+                option_text IS NOT NULL
+                AND LENGTH(BTRIM(option_text)) > 0
+            )
+            OR image_asset_id IS NOT NULL
+            """,
+            name="ck_tma_question_options_content_required",
+        ),
+        # Positions must start from 1.
+        CheckConstraint(
+            "position >= 1",
+            name="ck_tma_question_options_position_positive",
         ),
     )
