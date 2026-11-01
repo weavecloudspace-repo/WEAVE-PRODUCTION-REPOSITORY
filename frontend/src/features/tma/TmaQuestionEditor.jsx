@@ -259,7 +259,13 @@ export default function TmaQuestionEditor({
   );
   return (
     <fieldset className="tma-question-builder min-w-0" disabled={busy}>
-      <h1 className="sr-only">{draft.id ? "Edit question" : "Add question"}</h1>
+      <div className="tma-builder-intro">
+        <span className="tma-eyebrow">TMA · Question authoring</span>
+        <h1 className="text-lg font-semibold">{draft.id ? "Edit question" : "Create a question"}</h1>
+        <p className="text-xs text-text-muted">
+          Single choice · Four or more options · Select one correct answer.
+        </p>
+      </div>
       <header className="tma-builder-toolbar">
         <Button variant="ghost" disabled={busy || uploading} onClick={onClose}>
           <ArrowLeft size={16} />

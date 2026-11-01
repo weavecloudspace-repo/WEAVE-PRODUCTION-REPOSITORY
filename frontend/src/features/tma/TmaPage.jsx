@@ -656,6 +656,9 @@ export default function TmaPage({ role }) {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" disabled={busy} onClick={() => setAiOpen(true)}>
+                          Generate with AI
+                        </Button>
                         <Button
                           disabled={busy}
                           onClick={() => {

@@ -1121,3 +1121,40 @@
     opacity: 0.3;
   }
 }
+
+/* Question audit workspace follows CBT's bank-and-preview model, preserving TMA editing. */
+.tma-audit-workspace{display:grid;grid-template-columns:minmax(230px,320px) minmax(0,1fr);gap:16px;align-items:start;min-width:0}
+.tma-audit-sidebar,.tma-audit-detail{background:rgb(var(--color-surface));border:1px solid rgb(var(--color-border));border-radius:18px;min-width:0;overflow:hidden}
+.tma-audit-sidebar-header{display:flex;align-items:center;justify-content:space-between;padding:20px;border-bottom:1px solid rgb(var(--color-border));color:rgb(var(--color-primary))}
+.tma-audit-sidebar-header h2{font-size:16px;font-weight:750;color:rgb(var(--color-text))}
+.tma-audit-sidebar-header p{font-size:12px;color:rgb(var(--color-text-muted));margin-top:4px}
+.tma-audit-question-nav{max-height:640px;overflow-y:auto;overscroll-behavior:contain;padding:7px;display:grid;align-content:start;gap:4px}
+.tma-audit-nav-item{width:100%;display:flex;align-items:center;gap:10px;text-align:left;padding:12px 9px;border-radius:11px;border:1px solid transparent;color:rgb(var(--color-text-soft));min-width:0}
+.tma-audit-nav-item:hover{background:rgb(var(--color-surface-muted))}
+.tma-audit-nav-item.is-selected{border-color:rgb(var(--color-primary) / .25);background:rgb(var(--color-primary) / .06)}
+.tma-audit-nav-number{font-size:11px;font-weight:750;color:rgb(var(--color-primary));background:rgb(var(--color-primary) / .08);border-radius:8px;min-width:34px;padding:9px 4px;text-align:center}
+.tma-audit-nav-copy{display:grid;gap:4px;min-width:0;flex:1}
+.tma-audit-nav-copy strong{font-size:12px;font-weight:650;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.tma-audit-nav-copy small{font-size:11px;color:rgb(var(--color-text-muted))}
+.tma-audit-detail-toolbar,.tma-audit-detail-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:17px 22px;border-bottom:1px solid rgb(var(--color-border))}
+.tma-audit-detail-toolbar h2{font-size:20px;font-weight:750;margin-top:4px}
+.tma-audit-detail-toolbar h2 span{font-weight:400;font-size:13px;color:rgb(var(--color-text-muted))}
+.tma-audit-toolbar-actions{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.tma-audit-open-preview{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:650;color:rgb(var(--color-primary));padding:7px}
+.tma-audit-body{padding:24px;min-height:320px}
+.tma-audit-prompt{font-size:16px;font-weight:600;line-height:1.8;margin-bottom:24px;overflow-wrap:anywhere}
+.tma-audit-answer-heading{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.tma-audit-answer-heading h3{font-size:13px;font-weight:750}.tma-audit-answer-heading span{font-size:11px;color:rgb(var(--color-text-muted))}
+.tma-audit-options{display:grid;gap:10px}
+.tma-audit-option{display:flex;gap:12px;align-items:start;border-radius:12px;border:1px solid rgb(var(--color-border));padding:13px;line-height:1.7;font-size:13px;overflow-wrap:anywhere}
+.tma-audit-option.is-correct{background:rgb(var(--color-success) / .055);border-color:rgb(var(--color-success) / .3)}
+.tma-audit-correct-label{color:rgb(var(--color-success));font-size:11px;font-weight:750;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.tma-audit-answer-note{margin-top:18px;font-size:12px;color:rgb(var(--color-text-muted))}
+.tma-audit-answer-note strong{color:rgb(var(--color-success))}
+.tma-audit-detail-footer{border-bottom:0;border-top:1px solid rgb(var(--color-border));padding:14px 22px}
+.tma-builder-toolbar{position:sticky;top:0;z-index:4;background:rgb(var(--color-surface));border:1px solid rgb(var(--color-border));padding:12px 14px;border-radius:14px;box-shadow:0 2px 12px rgb(0 0 0 / .035)}
+.tma-builder-grid{gap:14px}
+.tma-builder-section{border-radius:14px;padding:18px}
+.tma-answer-row{transition:background .15s,border-color .15s}
+@media(max-width:950px){.tma-audit-workspace{grid-template-columns:minmax(0,1fr)}.tma-audit-question-nav{display:flex;overflow-x:auto;max-height:none;padding:8px}.tma-audit-nav-item{min-width:200px;max-width:240px}.tma-audit-body{padding:18px}}
+@media(max-width:550px){.tma-audit-detail-toolbar,.tma-audit-detail-footer{padding:13px}.tma-audit-detail-toolbar h2{font-size:17px}.tma-audit-body{padding:14px}.tma-audit-correct-label{font-size:0;gap:0}.tma-audit-correct-label svg{width:17px}.tma-audit-option{padding:10px}.tma-builder-section{padding:14px}}
