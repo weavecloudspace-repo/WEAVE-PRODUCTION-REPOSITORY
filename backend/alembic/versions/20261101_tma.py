@@ -50,8 +50,8 @@ PARENT_KEYS = (
     ("students", "uq_students_tenant_id", ("tenant_id", "id")),
     (
         "student_enrollments",
-        "uq_student_enrollments_tenant_id_student",
-        ("tenant_id", "id", "student_id"),
+        "uq_student_enrollments_tenant_id_student_class",
+        ("tenant_id", "id", "student_id", "class_id"),
     ),
 )
 
@@ -191,6 +191,10 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "tenant_id", "id", name="uq_tma_revisions_tenant_id",
         ),
+        sa.UniqueConstraint(
+            "tenant_id", "id", "assignment_id",
+            name="uq_tma_revisions_tenant_id_assignment",
+        ),
         sa.CheckConstraint(
             "revision_number >= 1", name="ck_tma_revisions_number_positive",
         ),
@@ -235,6 +239,10 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "tenant_id", "id", name="uq_tma_media_assets_tenant_id",
         ),
+        sa.UniqueConstraint(
+            "tenant_id", "assignment_id", "id",
+            name="uq_tma_media_tenant_assignment_id",
+        ),
         sa.CheckConstraint(
             "size_bytes > 0", name="ck_tma_media_assets_size_positive",
         ),
@@ -260,6 +268,7 @@ def upgrade() -> None:
     _create(
         "tma_questions",
         sa.Column("revision_id", sa.UUID(), nullable=False),
+        sa.Column("assignment_id", sa.UUID(), nullable=False),
         sa.Column("question_text", sa.Text(), nullable=True),
         sa.Column("image_asset_id", sa.UUID(), nullable=True),
         sa.Column("position", sa.Integer(), nullable=False),
@@ -269,16 +278,21 @@ def upgrade() -> None:
         sa.Column("author_actor_type", actor_type, nullable=False),
         sa.Column("author_actor_id", sa.UUID(), nullable=False),
         sa.ForeignKeyConstraint(
-            ["tenant_id", "revision_id"],
+            ["tenant_id", "revision_id", "assignment_id"],
             [
                 "public.tma_assignment_revisions.tenant_id",
                 "public.tma_assignment_revisions.id",
+                "public.tma_assignment_revisions.assignment_id",
             ],
             name="fk_tma_questions_tenant_revision", ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
-            ["tenant_id", "image_asset_id"],
-            ["public.tma_media_assets.tenant_id", "public.tma_media_assets.id"],
+            ["tenant_id", "assignment_id", "image_asset_id"],
+            [
+                "public.tma_media_assets.tenant_id",
+                "public.tma_media_assets.assignment_id",
+                "public.tma_media_assets.id",
+            ],
             name="fk_tma_questions_tenant_media", ondelete="RESTRICT",
         ),
         sa.UniqueConstraint(
@@ -291,6 +305,10 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "tenant_id", "id", "revision_id",
             name="uq_tma_questions_tenant_id_revision",
+        ),
+        sa.UniqueConstraint(
+            "tenant_id", "id", "assignment_id",
+            name="uq_tma_questions_tenant_id_assignment",
         ),
         sa.CheckConstraint(
             """
@@ -310,6 +328,7 @@ def upgrade() -> None:
     _create(
         "tma_question_options",
         sa.Column("question_id", sa.UUID(), nullable=False),
+        sa.Column("assignment_id", sa.UUID(), nullable=False),
         sa.Column("option_text", sa.Text(), nullable=True),
         sa.Column("image_asset_id", sa.UUID(), nullable=True),
         sa.Column(
@@ -318,13 +337,21 @@ def upgrade() -> None:
         ),
         sa.Column("position", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
-            ["tenant_id", "question_id"],
-            ["public.tma_questions.tenant_id", "public.tma_questions.id"],
+            ["tenant_id", "question_id", "assignment_id"],
+            [
+                "public.tma_questions.tenant_id",
+                "public.tma_questions.id",
+                "public.tma_questions.assignment_id",
+            ],
             name="fk_tma_question_options_tenant_question", ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
-            ["tenant_id", "image_asset_id"],
-            ["public.tma_media_assets.tenant_id", "public.tma_media_assets.id"],
+            ["tenant_id", "assignment_id", "image_asset_id"],
+            [
+                "public.tma_media_assets.tenant_id",
+                "public.tma_media_assets.assignment_id",
+                "public.tma_media_assets.id",
+            ],
             name="fk_tma_question_options_tenant_media", ondelete="RESTRICT",
         ),
         sa.UniqueConstraint(
@@ -376,11 +403,12 @@ def upgrade() -> None:
             name="fk_tma_participants_tenant_student", ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
-            ["tenant_id", "student_enrollment_id", "student_id"],
+            ["tenant_id", "student_enrollment_id", "student_id", "class_id"],
             [
                 "public.student_enrollments.tenant_id",
                 "public.student_enrollments.id",
                 "public.student_enrollments.student_id",
+                "public.student_enrollments.class_id",
             ],
             name="fk_tma_participants_student_enrollment", ondelete="RESTRICT",
         ),

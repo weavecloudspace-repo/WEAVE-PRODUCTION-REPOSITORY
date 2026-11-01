@@ -352,7 +352,8 @@ class StudentEnrollment(BaseModel):
             "tenant_id",
             "id",
             "student_id",
-            name="uq_student_enrollments_tenant_id_student",
+            "class_id",
+            name="uq_student_enrollments_tenant_id_student_class",
         ),
         CheckConstraint(
             "ended_on IS NULL OR ended_on >= started_on", name="ck_student_enrollment_date_order"

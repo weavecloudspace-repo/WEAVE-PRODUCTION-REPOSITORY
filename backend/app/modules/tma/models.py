@@ -351,6 +351,12 @@ class TMAAssignmentRevision(BaseModel):
             "revision_number",
             name="uq_tma_revisions_assignment_number",
         ),
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            "assignment_id",
+            name="uq_tma_revisions_tenant_id_assignment",
+        ),
         # Support tenant-scoped references from child tables.
         UniqueConstraint(
             "tenant_id",
@@ -417,6 +423,11 @@ class TMAQuestion(BaseModel):
 
     revision_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
+    # Enforce asset ownership within the assignment of this revision.
+    assignment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+
     question_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     image_asset_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -446,19 +457,21 @@ class TMAQuestion(BaseModel):
     __table_args__ = (
         # Ensure the revision belongs to the same tenant.
         ForeignKeyConstraint(
-            ["tenant_id", "revision_id"],
+            ["tenant_id", "revision_id", "assignment_id"],
             [
                 f"{PUBLIC_SCHEMA}.tma_assignment_revisions.tenant_id",
                 f"{PUBLIC_SCHEMA}.tma_assignment_revisions.id",
+                f"{PUBLIC_SCHEMA}.tma_assignment_revisions.assignment_id",
             ],
             name="fk_tma_questions_tenant_revision",
             ondelete="RESTRICT",
         ),
         # Ensure the referenced image belongs to the same tenant.
         ForeignKeyConstraint(
-            ["tenant_id", "image_asset_id"],
+            ["tenant_id", "assignment_id", "image_asset_id"],
             [
                 f"{PUBLIC_SCHEMA}.tma_media_assets.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_media_assets.assignment_id",
                 f"{PUBLIC_SCHEMA}.tma_media_assets.id",
             ],
             name="fk_tma_questions_tenant_media",
@@ -477,6 +490,12 @@ class TMAQuestion(BaseModel):
             "id",
             "revision_id",
             name="uq_tma_questions_tenant_id_revision",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            "assignment_id",
+            name="uq_tma_questions_tenant_id_assignment",
         ),
         # Support tenant-safe references from question options.
         UniqueConstraint(
@@ -529,6 +548,10 @@ class TMAQuestionOption(BaseModel):
 
     question_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
+    assignment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+
     option_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     image_asset_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -544,19 +567,21 @@ class TMAQuestionOption(BaseModel):
     __table_args__ = (
         # Ensure the question belongs to the same tenant.
         ForeignKeyConstraint(
-            ["tenant_id", "question_id"],
+            ["tenant_id", "question_id", "assignment_id"],
             [
                 f"{PUBLIC_SCHEMA}.tma_questions.tenant_id",
                 f"{PUBLIC_SCHEMA}.tma_questions.id",
+                f"{PUBLIC_SCHEMA}.tma_questions.assignment_id",
             ],
             name="fk_tma_question_options_tenant_question",
             ondelete="RESTRICT",
         ),
         # Ensure the referenced image belongs to the same tenant.
         ForeignKeyConstraint(
-            ["tenant_id", "image_asset_id"],
+            ["tenant_id", "assignment_id", "image_asset_id"],
             [
                 f"{PUBLIC_SCHEMA}.tma_media_assets.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_media_assets.assignment_id",
                 f"{PUBLIC_SCHEMA}.tma_media_assets.id",
             ],
             name="fk_tma_question_options_tenant_media",
@@ -691,6 +716,12 @@ class TMAMediaAsset(BaseModel):
             name="uq_tma_media_assets_tenant_object_key",
         ),
 
+        UniqueConstraint(
+            "tenant_id",
+            "assignment_id",
+            "id",
+            name="uq_tma_media_tenant_assignment_id",
+        ),
         # Support tenant-safe foreign keys from
         # questions and answer options.
         UniqueConstraint(
@@ -816,11 +847,12 @@ class TMAParticipant(BaseModel):
             ondelete="RESTRICT",
         ),
         ForeignKeyConstraint(
-            ["tenant_id", "student_enrollment_id", "student_id"],
+            ["tenant_id", "student_enrollment_id", "student_id", "class_id"],
             [
                 f"{PUBLIC_SCHEMA}.student_enrollments.tenant_id",
                 f"{PUBLIC_SCHEMA}.student_enrollments.id",
                 f"{PUBLIC_SCHEMA}.student_enrollments.student_id",
+                f"{PUBLIC_SCHEMA}.student_enrollments.class_id",
             ],
             name="fk_tma_participants_student_enrollment",
             ondelete="RESTRICT",
