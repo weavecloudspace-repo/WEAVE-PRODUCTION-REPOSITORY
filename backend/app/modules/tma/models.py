@@ -79,6 +79,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Enum as SQLEnum,
     Numeric,
+    ForeignKeyConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from app.shared.base_model import BaseModel, PUBLIC_SCHEMA
@@ -223,5 +224,141 @@ class TMAAssignment(BaseModel):
             "tenant_id",
             "academic_level_id",
             "curriculum_subject_id",
+        ),
+    )
+
+
+
+
+class TMAAssignmentRevision(BaseModel):
+   """
+    Represents a specific revision of a Tutor-Marked Assignment.
+
+    Each revision preserver its associated questions , student attempts
+    and historical records
+
+    Revisions are created when an existing assignment is cancelled and revised.
+    Previous revisions remain immutable for auditing.
+
+    The parent TMAAssignment controls the assignment lifecycle
+   """
+
+
+   __tablename__ = "tma_assignment_revisions"
+
+
+   assignment_id : Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable = False
+    )
+
+   revision_number : Mapped[int] = mapped_column(
+      Integer,
+      nullable = False
+    )
+
+
+   published_at : Mapped[datetime | None] = mapped_column(
+      DateTime(timezone = True),
+      nullable = True
+   )
+
+
+
+   invalidated_at : Mapped[datetime | None] = mapped_column(
+      DateTime(timezone = True),
+      nullable = True
+   )
+
+
+
+
+   invalidated_by_actor_type: Mapped[TMAActorType | None] = mapped_column(
+        SQLEnum(
+            TMAActorType,
+            name="tma_actor_type",
+            schema=PUBLIC_SCHEMA,
+            values_callable=lambda enum_cls: [
+                member.value for member in enum_cls
+            ],
+        ),
+        nullable=True,
+    )
+
+   invalidated_by_actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+
+   invalidation_reason: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    # ==========================================
+    # Database Constraints
+    # ==========================================
+
+   __table_args__ = (
+        # Enforce tenant-safe assignment references.
+        ForeignKeyConstraint(
+            ["tenant_id", "assignment_id"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_assignments.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_assignments.id",
+            ],
+            name="fk_tma_revisions_tenant_assignment",
+            ondelete="RESTRICT",
+        ),
+
+        # Prevent duplicate revision numbers.
+        UniqueConstraint(
+            "tenant_id",
+            "assignment_id",
+            "revision_number",
+            name="uq_tma_revisions_assignment_number",
+        ),
+
+        # Support tenant-scoped references from child tables.
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            name="uq_tma_revisions_tenant_id",
+        ),
+
+        # Revision numbers must be positive.
+        CheckConstraint(
+            "revision_number >= 1",
+            name="ck_tma_revisions_number_positive",
+        ),
+
+        # Invalidation must contain actor information.
+        CheckConstraint(
+            """
+            (
+                invalidated_at IS NULL
+                AND invalidated_by_actor_type IS NULL
+                AND invalidated_by_actor_id IS NULL
+            )
+            OR
+            (
+                invalidated_at IS NOT NULL
+                AND invalidated_by_actor_type IS NOT NULL
+                AND invalidated_by_actor_id IS NOT NULL
+            )
+            """,
+            name="ck_tma_revisions_invalidation_metadata",
+        ),
+
+        # A revision cannot be invalidated before publication.
+        CheckConstraint(
+            """
+            invalidated_at IS NULL
+            OR (
+                published_at IS NOT NULL
+                AND invalidated_at >= published_at
+            )
+            """,
+            name="ck_tma_revisions_invalidation_chronology",
         ),
     )
