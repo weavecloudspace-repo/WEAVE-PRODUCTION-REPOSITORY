@@ -118,12 +118,14 @@ class TMAAuthorizationService:
             raise NotFoundException("Assignment not found.")
         if isinstance(actor, TenantAdmin):
             return
-        if not (
-            assignment.created_by_actor_type == TMAActorType.TEACHER
-            and assignment.created_by_actor_id == actor.id
-        ):
+        lead_id = getattr(assignment, "lead_teacher_membership_id", None)
+        if lead_id is None and assignment.created_by_actor_type == TMAActorType.TEACHER:
+            # Backward compatibility for teacher-authored assignments created
+            # before the lead-teacher migration.
+            lead_id = assignment.created_by_actor_id
+        if not isinstance(actor, TeacherMembership) or actor.id != lead_id:
             raise ForbiddenException(
-                "Only the lead teacher or an administrator may manage this TMA."
+                "Only the assigned lead teacher or an administrator may manage this TMA."
             )
 
     @staticmethod

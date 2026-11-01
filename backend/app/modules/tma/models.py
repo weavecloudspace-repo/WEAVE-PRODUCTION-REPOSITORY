@@ -199,11 +199,26 @@ class TMAAssignment(BaseModel):
 
     created_by_actor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
+    # Explicit administrator-assigned lead. Legacy teacher-created TMAs with
+    # no lead continue to use their creator until an administrator reassigns.
+    lead_teacher_membership_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+
     # ==========================================
     # Database Constraints and Indexes
     # ==========================================
 
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "lead_teacher_membership_id"],
+            [
+                f"{PUBLIC_SCHEMA}.teacher_memberships.tenant_id",
+                f"{PUBLIC_SCHEMA}.teacher_memberships.id",
+            ],
+            name="fk_tma_assignment_tenant_lead_teacher",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint(
             "tenant_id",
             "academic_level_id",

@@ -48,6 +48,13 @@ class TMAAuthoringClass(TMAOutput):
     academic_level_id: uuid.UUID
 
 
+class TMALeadTeacherChoice(TMAOutput):
+    teacher_membership_id: uuid.UUID
+    academic_level_id: uuid.UUID
+    curriculum_subject_id: uuid.UUID
+    display_name: str
+
+
 class TMAAuthoringConfiguration(TMAOutput):
     academic_session_id: uuid.UUID | None
     academic_term_id: uuid.UUID | None
@@ -56,6 +63,7 @@ class TMAAuthoringConfiguration(TMAOutput):
     scopes: list[TMAAuthoringScope]
     components: list[TMAAuthoringComponent]
     classes: list[TMAAuthoringClass] = Field(default_factory=list)
+    lead_teachers: list[TMALeadTeacherChoice] = Field(default_factory=list)
 
 
 # ---------- Assignment and lifecycle ----------
@@ -68,6 +76,7 @@ class TMAAssignmentCreate(TMAInput):
     academic_term_id: uuid.UUID
     assessment_component_id: uuid.UUID
     closes_at: AwareDatetime | None = None
+    lead_teacher_membership_id: uuid.UUID | None = None
 
 
 class TMAAssignmentUpdate(TMAInput):
@@ -79,6 +88,7 @@ class TMAAssignmentUpdate(TMAInput):
     academic_term_id: uuid.UUID | None = None
     assessment_component_id: uuid.UUID | None = None
     closes_at: AwareDatetime | None = None
+    lead_teacher_membership_id: uuid.UUID | None = None
 
 
 class TMAAssignmentResponse(TMAOutput):
@@ -92,6 +102,7 @@ class TMAAssignmentResponse(TMAOutput):
     current_revision_number: int
     created_by_actor_type: TMAActorType
     created_by_actor_id: uuid.UUID
+    lead_teacher_membership_id: uuid.UUID | None = None
     activated_at: datetime | None
     closes_at: datetime | None
     closed_at: datetime | None

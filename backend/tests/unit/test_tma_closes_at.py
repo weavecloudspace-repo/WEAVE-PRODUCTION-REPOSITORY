@@ -263,7 +263,7 @@ async def test_null_academic_scope_remains_invalid(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_authorized_collaborator_can_change_closing_estimate(monkeypatch) -> None:
+async def test_collaborator_cannot_change_closing_estimate(monkeypatch) -> None:
     from app.modules.tma import assignment_service as mod
 
     author = _actor()
@@ -277,14 +277,15 @@ async def test_authorized_collaborator_can_change_closing_estimate(monkeypatch) 
         mod.TMAAuthorizationService, "require_assignment_management", deny_management
     )
     date = _date()
-    changed = await mod.TMAAssignmentService.update_draft_assignment(
-        AsyncMock(),
-        actor=current,
-        assignment_id=assignment.id,
-        payload=TMAAssignmentUpdate(closes_at=date),
-    )
-    assert changed.closes_at == date
-    save.assert_awaited_once()
+    with pytest.raises(ForbiddenException, match="Not lead"):
+        await mod.TMAAssignmentService.update_draft_assignment(
+            AsyncMock(),
+            actor=current,
+            assignment_id=assignment.id,
+            payload=TMAAssignmentUpdate(closes_at=date),
+        )
+    assert assignment.closes_at is None
+    save.assert_not_awaited()
 
 
 @pytest.mark.asyncio

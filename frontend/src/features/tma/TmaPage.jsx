@@ -55,6 +55,7 @@ function Configuration({
   onSave,
   busy,
   scopeEditable = false,
+  isAdmin = false,
 }) {
   const [level, setLevel] = useState(assignment?.academic_level_id || "");
   const [subject, setSubject] = useState(
@@ -64,6 +65,7 @@ function Configuration({
     assignment?.assessment_component_id || "",
   );
   const [closing, setClosing] = useState(dateInput(assignment?.closes_at));
+  const [lead, setLead] = useState(assignment?.lead_teacher_membership_id || "");
   const locked = Boolean(assignment) && !scopeEditable;
   const levels = [
     ...new Map(
@@ -71,6 +73,10 @@ function Configuration({
     ).entries(),
   ];
   const subjects = config.scopes.filter((s) => s.academic_level_id === level);
+  const eligibleLeads = (config.lead_teachers || []).filter(
+    (item) => item.academic_level_id === level && item.curriculum_subject_id === subject,
+  );
+  const leadIsEligible = eligibleLeads.some((item) => item.teacher_membership_id === lead);
   const validScope = Boolean(
     level && subjects.some((s) => s.curriculum_subject_id === subject),
   );
@@ -87,6 +93,7 @@ function Configuration({
           return;
         const closingPayload = {
           closes_at: closing ? new Date(closing).toISOString() : null,
+          ...(isAdmin ? { lead_teacher_membership_id: lead || null } : {}),
         };
         onSave(
           locked
@@ -114,6 +121,7 @@ function Configuration({
           onChange={(value) => {
             setLevel(value);
             setSubject("");
+            setLead("");
           }}
           disabled={locked}
         >
@@ -126,7 +134,10 @@ function Configuration({
         <Select
           label="Subject"
           value={subject}
-          onChange={setSubject}
+          onChange={(value) => {
+            setSubject(value);
+            setLead("");
+          }}
           disabled={locked || !level}
         >
           {subjects.map((s) => (
@@ -159,11 +170,37 @@ function Configuration({
       <p className="text-xs leading-5 text-text-muted">
         Only non-examinable, non-hybrid assessment components are available.
       </p>
+      {isAdmin && (
+        <div className="rounded-xl border border-border bg-surface-muted/40 p-4 space-y-2">
+          <Select
+            label="Lead teacher"
+            value={lead}
+            onChange={setLead}
+            placeholder="Admin manages assignment"
+            clearable
+            disabled={!validScope}
+          >
+            {lead && !leadIsEligible && (
+              <option value={lead}>Previously assigned teacher (no longer eligible)</option>
+            )}
+            {eligibleLeads.map((teacher) => (
+              <option key={teacher.teacher_membership_id} value={teacher.teacher_membership_id}>
+                {teacher.display_name}
+              </option>
+            ))}
+          </Select>
+          <p className="text-xs leading-5 text-text-muted">
+            Choose a teacher assigned to this level and subject. The lead can publish,
+            close, cancel and revise the TMA, while other eligible teachers can contribute
+            questions. Administrators always retain full management control.
+            {!eligibleLeads.length && " No eligible teachers are currently assigned."}
+          </p>
+        </div>
+      )}
       {locked && (
         <p className="text-xs text-text-muted">
-          Only the lead teacher or admin may change academic scope, before any
-          questions exist. Collaborators can adjust the closing estimate while
-          draft or active.
+          Academic scope cannot be changed after questions have been added or published.
+          Only the lead teacher or administrator can update these settings.
         </p>
       )}
       <label className="grid gap-1.5 text-sm font-medium">
@@ -356,10 +393,15 @@ export default function TmaPage({ role }) {
     return s ? `${s.subject_name} · ${s.level_name}` : "Assignment";
   };
   const actor = authSession.getUser();
+  const actorId = actor?.membership_id || actor?.id;
   const canManage =
     role === "admin" ||
-    (assignment?.created_by_actor_type === "teacher" &&
-      assignment.created_by_actor_id === (actor?.membership_id || actor?.id));
+    (Boolean(assignment) && Boolean(actorId) && (
+      assignment.lead_teacher_membership_id
+        ? assignment.lead_teacher_membership_id === actorId
+        : assignment.created_by_actor_type === "teacher" &&
+          assignment.created_by_actor_id === actorId
+    ));
   const editable = assignment?.status === "draft";
   const canEditQuestion = (q) =>
     canManage ||
@@ -460,7 +502,7 @@ export default function TmaPage({ role }) {
                 {
                   label: "Settings",
                   icon: Settings,
-                  visible: ["draft", "active"].includes(assignment?.status),
+                  visible: canManage && ["draft", "active"].includes(assignment?.status),
                   onClick: () => setDialog("settings"),
                 },
                 {
@@ -945,6 +987,7 @@ export default function TmaPage({ role }) {
                 !assignmentId ||
                 (canManage && editable && questions.length === 0)
               }
+              isAdmin={role === "admin"}
               config={config}
               assignment={dialog === "settings" ? assignment : null}
               busy={busy}

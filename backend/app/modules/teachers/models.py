@@ -190,6 +190,7 @@ class TeacherMembership(BaseModel):
     )
 
     __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_teacher_memberships_tenant_id"),
         UniqueConstraint(
             "teacher_account_id",
             "tenant_id",
