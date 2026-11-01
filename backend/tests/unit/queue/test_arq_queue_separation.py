@@ -39,6 +39,7 @@ def test_heavy_worker_serializes_heavy_jobs() -> None:
     assert function_names == {
         "process_bulk_import_job",
         "process_session_progression_job",
+        "process_cbt_result_rollback_job",
         "process_tma_cancellation_job",
     }
     assert HeavyWorkerSettings.max_jobs == 1

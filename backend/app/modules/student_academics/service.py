@@ -2990,6 +2990,23 @@ class StudentAcademicService:
             raise ForbiddenException("Parent membership cannot access this student.")
 
     @staticmethod
+    async def list_result_subject_options(
+        db: AsyncSession,
+        actor: TenantAdmin,
+        *,
+        class_id: uuid.UUID,
+        academic_session_id: uuid.UUID,
+        academic_term_id: uuid.UUID,
+    ) -> list[dict]:
+        return await StudentAcademicRepository.list_result_subject_options(
+            db,
+            actor.tenant_id,
+            class_id=class_id,
+            academic_session_id=academic_session_id,
+            academic_term_id=academic_term_id,
+        )
+
+    @staticmethod
     async def list_results(
         db: AsyncSession,
         actor: TenantAdmin | TeacherMembership | Student | ParentMembership,

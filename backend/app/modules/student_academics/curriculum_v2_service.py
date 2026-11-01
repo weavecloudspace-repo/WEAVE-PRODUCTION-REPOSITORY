@@ -1483,6 +1483,52 @@ class AcademicCurriculumService:
         return result
 
     @staticmethod
+    async def resolved_student_subject_responses(
+        db: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        student_id: uuid.UUID,
+        academic_term_id: uuid.UUID,
+    ) -> list[ResolvedClassSubjectResponse]:
+        """Resolve actual student electives as well as class curriculum scope."""
+        resolved = await CurriculumResolutionService.resolve_student_subjects(
+            db,
+            tenant_id=tenant_id,
+            student_id=student_id,
+            academic_term_id=academic_term_id,
+        )
+        if not resolved:
+            return []
+        subjects = {
+            row.id: row
+            for row in (
+                await db.execute(
+                    select(Subject).where(
+                        Subject.tenant_id == tenant_id,
+                        Subject.id.in_({item.subject_id for item in resolved}),
+                    )
+                )
+            ).scalars()
+        }
+        return [
+            ResolvedClassSubjectResponse(
+                curriculum_subject_id=item.curriculum_subject_id,
+                subject_id=item.subject_id,
+                subject_name=subjects[item.subject_id].name
+                if item.subject_id in subjects
+                else None,
+                subject_code=subjects[item.subject_id].code
+                if item.subject_id in subjects
+                else None,
+                is_elective=item.is_elective,
+                elective_group_id=item.elective_group_id,
+                is_general=item.is_general,
+                matched_academic_level_department_id=item.academic_level_department_id,
+            )
+            for item in resolved
+        ]
+
+    @staticmethod
     async def resolved_class_subject_responses(
         db: AsyncSession,
         *,
