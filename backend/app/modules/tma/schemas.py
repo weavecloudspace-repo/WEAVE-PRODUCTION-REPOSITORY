@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -225,6 +226,36 @@ class TMAMediaDeleteResponse(TMAOutput):
     media_asset_id: uuid.UUID
     deleted: bool
     storage_cleaned: bool
+
+
+
+# ---------- Basic staff submissions roster ----------
+
+
+class TMAParticipationStatus(str, Enum):
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    SUBMITTED = "submitted"
+
+
+class TMASubmissionStudentResponse(TMAOutput):
+    student_id: uuid.UUID
+    admission_number: str
+    student_name: str
+    class_id: uuid.UUID | None
+    class_name: str | None
+    participation_status: TMAParticipationStatus
+    score: Decimal | None = None
+    submitted_at: datetime | None = None
+    is_currently_eligible: bool
+
+
+class TMASubmissionListResponse(TMAOutput):
+    assignment_id: uuid.UUID
+    items: list[TMASubmissionStudentResponse] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
 
 
 # ---------- Roster and participation ----------

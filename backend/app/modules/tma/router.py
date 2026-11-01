@@ -21,6 +21,7 @@ from app.modules.tma.attempt_service import TMAAttemptService
 from app.modules.tma.lifecycle_service import TMALifecycleService
 from app.modules.tma.media_service import TMAMediaService
 from app.modules.tma.question_service import TMAQuestionService
+from app.modules.tma.reporting_service import TMAReportingService
 from app.modules.tma.schemas import (
     TMAAnswerSaveRequest,
     TMAAnswerSaveResponse,
@@ -38,6 +39,8 @@ from app.modules.tma.schemas import (
     TMAStartResponse,
     TMAStudentAssignmentResponse,
     TMASubmitResponse,
+    TMAParticipationStatus,
+    TMASubmissionListResponse,
 )
 
 
@@ -426,4 +429,33 @@ async def get_student_tma_image_url(
         student=student,
         attempt_id=attempt_id,
         asset_id=asset_id,
+    )
+
+
+@author_router.get(
+    "/assignments/{assignment_id}/submissions",
+    response_model=TMASubmissionListResponse,
+)
+async def list_assignment_submissions(
+    assignment_id: uuid.UUID,
+    db: DbSession,
+    actor: Author,
+    search: str | None = Query(default=None, max_length=200),
+    class_id: uuid.UUID | None = None,
+    participation_status: TMAParticipationStatus | None = Query(
+        default=None, alias="status",
+    ),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> TMASubmissionListResponse:
+    """List eligible and historically participating students, without analytics."""
+    return await TMAReportingService.list_assignment_participation(
+        db,
+        actor=actor,
+        assignment_id=assignment_id,
+        search=search,
+        class_id=class_id,
+        participation_status=participation_status,
+        offset=offset,
+        limit=limit,
     )
