@@ -254,15 +254,23 @@ async def test_invalid_lead_is_rejected_by_scope_validation(monkeypatch):
     monkeypatch.setattr(mod.TMAAuthorizationService, "require_authoring_access", access)
     with pytest.raises(ForbiddenException):
         await mod.TMAAssignmentService._validate_lead_teacher(
-            db, tenant_id=owner.tenant_id, teacher_id=assigned.id,
-            academic_level_id=uid(), curriculum_subject_id=uid(), academic_term_id=uid()
+            db,
+            tenant_id=owner.tenant_id,
+            teacher_id=assigned.id,
+            academic_level_id=uid(),
+            curriculum_subject_id=uid(),
+            academic_term_id=uid()
         )
     access.assert_awaited_once()
     db.execute.return_value.scalar_one_or_none.return_value = None
     with pytest.raises(BadRequestException, match="active teacher"):
         await mod.TMAAssignmentService._validate_lead_teacher(
-            db, tenant_id=owner.tenant_id, teacher_id=uid(),
-            academic_level_id=uid(), curriculum_subject_id=uid(), academic_term_id=uid()
+            db,
+            tenant_id=owner.tenant_id,
+            teacher_id=uid(),
+            academic_level_id=uid(),
+            curriculum_subject_id=uid(),
+            academic_term_id=uid()
         )
 
 
@@ -270,16 +278,17 @@ def test_lead_teacher_uses_composite_tenant_foreign_key() -> None:
     table = TMAAssignment.__table__
     assert table.c.lead_teacher_membership_id.nullable
     foreign = next(
-        constraint for constraint in table.constraints
+        constraint
+        for constraint in table.constraints
         if isinstance(constraint, ForeignKeyConstraint)
         and constraint.name == "fk_tma_assignment_tenant_lead_teacher"
     )
     assert tuple(column.name for column in foreign.columns) == (
-        "tenant_id", "lead_teacher_membership_id"
+        "tenant_id",
+        "lead_teacher_membership_id",
     )
     membership = TeacherMembership.__table__
     assert any(
-        isinstance(c, UniqueConstraint)
-        and c.name == "uq_teacher_memberships_tenant_id"
+        isinstance(c, UniqueConstraint) and c.name == "uq_teacher_memberships_tenant_id"
         for c in membership.constraints
     )

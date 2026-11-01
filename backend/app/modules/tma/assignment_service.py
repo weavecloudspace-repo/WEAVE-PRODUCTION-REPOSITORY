@@ -118,12 +118,13 @@ class TMAAssignmentService:
                 curriculum_subject_id=payload.curriculum_subject_id,
                 academic_term_id=payload.academic_term_id,
             )
-            if not isinstance(actor, TenantAdmin) and payload.lead_teacher_membership_id is not None:
+            if (
+                not isinstance(actor, TenantAdmin)
+                and payload.lead_teacher_membership_id is not None
+            ):
                 raise ForbiddenException("Only an administrator can designate the TMA lead.")
             lead_id = (
-                payload.lead_teacher_membership_id
-                if isinstance(actor, TenantAdmin)
-                else actor.id
+                payload.lead_teacher_membership_id if isinstance(actor, TenantAdmin) else actor.id
             )
             if isinstance(actor, TenantAdmin) and lead_id is not None:
                 await TMAAssignmentService._validate_lead_teacher(
@@ -264,7 +265,8 @@ class TMAAssignmentService:
             raise ConflictException("Only draft or active assignments can be updated.")
 
         scope_changes = {
-            key: value for key, value in changes.items()
+            key: value
+            for key, value in changes.items()
             if key not in {"closes_at", "lead_teacher_membership_id"}
         }
         if any(value is None for value in scope_changes.values()):
@@ -309,14 +311,14 @@ class TMAAssignmentService:
         lead_id = changes.get(
             "lead_teacher_membership_id", getattr(assignment, "lead_teacher_membership_id", None)
         )
-        if lead_id is not None and (
-            "lead_teacher_membership_id" in changes or scope_changes
-        ):
+        if lead_id is not None and ("lead_teacher_membership_id" in changes or scope_changes):
             await TMAAssignmentService._validate_lead_teacher(
                 db,
                 tenant_id=actor.tenant_id,
                 teacher_id=lead_id,
-                academic_level_id=scope_changes.get("academic_level_id", assignment.academic_level_id),
+                academic_level_id=scope_changes.get(
+                    "academic_level_id", assignment.academic_level_id
+                ),
                 curriculum_subject_id=scope_changes.get(
                     "curriculum_subject_id", assignment.curriculum_subject_id
                 ),

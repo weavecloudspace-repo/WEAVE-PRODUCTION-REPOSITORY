@@ -133,11 +133,14 @@ async def get_authoring_configuration(db: AsyncSession, actor: TMAAuthor) -> dic
                 skip_unresolvable=True,
             )
             eligible_classes = {
-                class_id for class_id, subjects in resolved.items()
+                class_id
+                for class_id, subjects in resolved.items()
                 if any(row.curriculum_subject_id == subject_id for row in subjects)
             }
-            assignments = await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
-                db, actor.tenant_id, eligible_classes, subject_id, date.today()
+            assignments = (
+                await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
+                    db, actor.tenant_id, eligible_classes, subject_id, date.today()
+                )
             )
             teacher_ids = {row.teacher_membership_id for row in assignments.values()}
             eligible_by_scope[(level_id, subject_id)] = teacher_ids
@@ -156,20 +159,26 @@ async def get_authoring_configuration(db: AsyncSession, actor: TMAAuthor) -> dic
             ).all()
             teachers = {
                 membership.id: (
-                    " ".join(part for part in (account.first_name, account.last_name) if part).strip()
+                    " ".join(
+                        part for part in (account.first_name, account.last_name) if part
+                    ).strip()
                     or account.email
                 )
                 for membership, account in memberships
             }
             for (level_id, subject_id), teacher_ids in eligible_by_scope.items():
-                for teacher_id in sorted(teacher_ids, key=lambda value: (teachers.get(value, "").casefold(), str(value))):
+                for teacher_id in sorted(
+                    teacher_ids, key=lambda value: (teachers.get(value, "").casefold(), str(value))
+                ):
                     if teacher_id in teachers:
-                        lead_teachers.append({
-                            "teacher_membership_id": teacher_id,
-                            "academic_level_id": level_id,
-                            "curriculum_subject_id": subject_id,
-                            "display_name": teachers[teacher_id],
-                        })
+                        lead_teachers.append(
+                            {
+                                "teacher_membership_id": teacher_id,
+                                "academic_level_id": level_id,
+                                "curriculum_subject_id": subject_id,
+                                "display_name": teachers[teacher_id],
+                            }
+                        )
     return {
         "academic_session_id": term.academic_session_id if term else None,
         "academic_term_id": term.id if term else None,

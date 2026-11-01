@@ -16,8 +16,10 @@ depends_on = None
 
 def upgrade() -> None:
     op.create_unique_constraint(
-        "uq_teacher_memberships_tenant_id", "teacher_memberships",
-        ["tenant_id", "id"], schema="public",
+        "uq_teacher_memberships_tenant_id",
+        "teacher_memberships",
+        ["tenant_id", "id"],
+        schema="public",
     )
     op.add_column(
         "tma_assignments",
@@ -26,9 +28,13 @@ def upgrade() -> None:
     )
     op.create_foreign_key(
         "fk_tma_assignment_tenant_lead_teacher",
-        "tma_assignments", "teacher_memberships",
-        ["tenant_id", "lead_teacher_membership_id"], ["tenant_id", "id"],
-        source_schema="public", referent_schema="public", ondelete="RESTRICT",
+        "tma_assignments",
+        "teacher_memberships",
+        ["tenant_id", "lead_teacher_membership_id"],
+        ["tenant_id", "id"],
+        source_schema="public",
+        referent_schema="public",
+        ondelete="RESTRICT",
     )
     # Existing teacher-authored assignments keep their original lead.
     op.execute("""
@@ -43,11 +49,15 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint(
-        "fk_tma_assignment_tenant_lead_teacher", "tma_assignments",
-        type_="foreignkey", schema="public",
+        "fk_tma_assignment_tenant_lead_teacher",
+        "tma_assignments",
+        type_="foreignkey",
+        schema="public",
     )
     op.drop_column("tma_assignments", "lead_teacher_membership_id", schema="public")
     op.drop_constraint(
-        "uq_teacher_memberships_tenant_id", "teacher_memberships",
-        type_="unique", schema="public",
+        "uq_teacher_memberships_tenant_id",
+        "teacher_memberships",
+        type_="unique",
+        schema="public",
     )
