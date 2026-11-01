@@ -302,3 +302,130 @@ def test_student_result_does_not_alias_cancelled_revision():
         "invalidated_at"
         in attempt_service.TMAAttemptService.get_submission_result.__code__.co_names
     )
+
+
+@pytest.mark.asyncio
+async def test_verified_tma_score_is_reversed_without_touching_other_components(monkeypatch):
+    from app.modules.tma import cancellation_service as mod
+    from app.modules.student_academics.models import AcademicResultStatus
+
+    assignment, _ = fake(TMAAssignmentStatus.CANCELLING)
+    revision = SimpleNamespace(
+        id=uid(), assignment_id=assignment.id,
+        revision_number=1, invalidated_at=None,
+    )
+    run = SimpleNamespace(
+        id=uid(), tenant_id=assignment.tenant_id,
+        assignment_id=assignment.id, revision_id=revision.id,
+        status="pending", reversed_scores=0,
+        requested_by_actor_type=TMAActorType.TENANT_ADMIN,
+        requested_by_actor_id=uid(),
+        reason="Incorrect key", error_message=None,
+        completed_at=None,
+    )
+    student_id = uid()
+    score_id = uid()
+    attempt = SimpleNamespace(
+        id=uid(), score_id=score_id,
+        score_snapshot=Decimal("15.00"), score_reversed_at=None,
+    )
+    participant = SimpleNamespace(student_id=student_id)
+    score = SimpleNamespace(
+        id=score_id, score=Decimal("15.00"), cbt_score=None,
+        theory_score=None, source_exam_id=None,
+    )
+    result = SimpleNamespace(
+        id=uid(), status=AcademicResultStatus.DRAFT,
+        total_score=Decimal("24.00"), grade="A",
+        remark="Good", grading_scale_id=uid(),
+    )
+    db = AsyncMock()
+    db.execute.side_effect = [
+        SimpleNamespace(scalar_one_or_none=lambda: run),
+        SimpleNamespace(all=lambda: [(attempt, participant)]),
+        SimpleNamespace(one_or_none=lambda: (score, result)),
+    ]
+    monkeypatch.setattr(
+        mod.TMAAssignmentRepository, "get_by_id",
+        AsyncMock(return_value=assignment),
+    )
+    monkeypatch.setattr(
+        mod.TMARevisionRepository, "get_by_id",
+        AsyncMock(return_value=revision),
+    )
+    monkeypatch.setattr(mod, "ensure_academic_write_window", AsyncMock())
+    other_score = SimpleNamespace(score=Decimal("9.00"))
+    monkeypatch.setattr(
+        mod.StudentAcademicRepository, "list_result_component_scores",
+        AsyncMock(return_value=[
+            (SimpleNamespace(), None),
+            (SimpleNamespace(), other_score),
+        ]),
+    )
+    response = await TMACancellationService.process(
+        db, tenant_id=assignment.tenant_id, run_id=run.id,
+    )
+    assert response == {"status": "completed", "reversed_scores": 1}
+    db.delete.assert_awaited_once_with(score)
+    assert result.total_score == Decimal("9.00")
+    assert result.grade is None
+    assert attempt.score_reversed_at is not None
+    assert revision.invalidated_at is not None
+    assert revision.invalidation_reason == "Incorrect key"
+    assert assignment.status == TMAAssignmentStatus.CANCELLED
+    assert run.status == "completed"
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_reversal_never_deletes_modified_or_submitted_academic_result(monkeypatch):
+    from app.modules.tma import cancellation_service as mod
+    from app.modules.student_academics.models import AcademicResultStatus
+
+    assignment, _ = fake(TMAAssignmentStatus.CANCELLING)
+    revision = SimpleNamespace(
+        id=uid(), assignment_id=assignment.id,
+        revision_number=1, invalidated_at=None,
+    )
+    run = SimpleNamespace(
+        id=uid(), tenant_id=assignment.tenant_id,
+        assignment_id=assignment.id, revision_id=revision.id,
+        status="pending", reversed_scores=0,
+    )
+    score_id, student_id = uid(), uid()
+    attempt = SimpleNamespace(
+        score_id=score_id, score_snapshot=Decimal("14.00"),
+        score_reversed_at=None,
+    )
+    score = SimpleNamespace(
+        score=Decimal("14.00"), source_exam_id=None,
+        cbt_score=None, theory_score=None,
+    )
+    result = SimpleNamespace(
+        status=AcademicResultStatus.SUBMITTED,
+    )
+    db = AsyncMock()
+    db.execute.side_effect = [
+        SimpleNamespace(scalar_one_or_none=lambda: run),
+        SimpleNamespace(all=lambda: [
+            (attempt, SimpleNamespace(student_id=student_id))
+        ]),
+        SimpleNamespace(one_or_none=lambda: (score, result)),
+    ]
+    monkeypatch.setattr(
+        mod.TMAAssignmentRepository, "get_by_id",
+        AsyncMock(return_value=assignment),
+    )
+    monkeypatch.setattr(
+        mod.TMARevisionRepository, "get_by_id",
+        AsyncMock(return_value=revision),
+    )
+    monkeypatch.setattr(mod, "ensure_academic_write_window", AsyncMock())
+    with pytest.raises(ConflictException, match="submitted|locked|edited"):
+        await TMACancellationService.process(
+            db, tenant_id=assignment.tenant_id, run_id=run.id,
+        )
+    db.delete.assert_not_awaited()
+    db.commit.assert_not_awaited()
+    assert run.status == "pending"
+    assert assignment.status == TMAAssignmentStatus.CANCELLING
