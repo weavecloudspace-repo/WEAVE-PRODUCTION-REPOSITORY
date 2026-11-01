@@ -30,6 +30,7 @@ import app.modules.superadmin.models
 import app.modules.teachers.models
 import app.modules.tenant_admins.models
 import app.modules.tenant_branding.models
+import app.modules.tma.models
 import app.modules.user_guides.models
 
 # Install canonical academic-level dependency accounting before request services execute.

@@ -129,31 +129,26 @@ class TMAAssignment(BaseModel):
 
     academic_level_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("academic_levels.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
     curriculum_subject_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("curriculum_subjects.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
     academic_session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("academic_sessions.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
     academic_term_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("academic_terms.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
     assessment_component_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("assessment_components.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
@@ -208,6 +203,61 @@ class TMAAssignment(BaseModel):
     # ==========================================
 
     __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "academic_level_id",
+            "curriculum_subject_id",
+            "academic_session_id",
+            "academic_term_id",
+            "assessment_component_id",
+            name="uq_tma_assignment_component_scope",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "academic_level_id"],
+            [
+                f"{PUBLIC_SCHEMA}.academic_levels.tenant_id",
+                f"{PUBLIC_SCHEMA}.academic_levels.id",
+            ],
+            name="fk_tma_assignment_tenant_level",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "curriculum_subject_id"],
+            [
+                f"{PUBLIC_SCHEMA}.curriculum_subjects.tenant_id",
+                f"{PUBLIC_SCHEMA}.curriculum_subjects.id",
+            ],
+            name="fk_tma_assignment_tenant_subject",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "academic_session_id"],
+            [
+                f"{PUBLIC_SCHEMA}.academic_sessions.tenant_id",
+                f"{PUBLIC_SCHEMA}.academic_sessions.id",
+            ],
+            name="fk_tma_assignment_tenant_session",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "academic_term_id", "academic_session_id"],
+            [
+                f"{PUBLIC_SCHEMA}.academic_terms.tenant_id",
+                f"{PUBLIC_SCHEMA}.academic_terms.id",
+                f"{PUBLIC_SCHEMA}.academic_terms.academic_session_id",
+            ],
+            name="fk_tma_assignment_term_session",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "assessment_component_id"],
+            [
+                f"{PUBLIC_SCHEMA}.assessment_components.tenant_id",
+                f"{PUBLIC_SCHEMA}.assessment_components.id",
+            ],
+            name="fk_tma_assignment_tenant_component",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint(
             "tenant_id",
             "id",
@@ -421,6 +471,12 @@ class TMAQuestion(BaseModel):
             "revision_id",
             "position",
             name="uq_tma_questions_revision_position",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            "revision_id",
+            name="uq_tma_questions_tenant_id_revision",
         ),
         # Support tenant-safe references from question options.
         UniqueConstraint(
@@ -643,6 +699,35 @@ class TMAMediaAsset(BaseModel):
             name="uq_tma_media_assets_tenant_id",
         ),
 
+        # Ensure the object metadata cannot be blank or malformed.
+        CheckConstraint(
+            "LENGTH(BTRIM(content_type)) > 0",
+            name="ck_tma_media_assets_content_type_required",
+        ),
+        CheckConstraint(
+            "checksum_sha256 IS NULL OR checksum_sha256 ~ '^[0-9a-fA-F]{64}        CheckConstraint(
+            "size_bytes > 0",
+            name="ck_tma_media_assets_size_positive",
+        ),
+
+        # Ensure the R2 object key is not empty.
+        CheckConstraint(
+            "LENGTH(BTRIM(object_key)) > 0",
+            name="ck_tma_media_assets_object_key_required",
+        ),
+
+        # Optimize media lookups for an assignment.
+        Index(
+            "ix_tma_media_assets_tenant_assignment",
+            "tenant_id",
+            "assignment_id",
+        ),
+    )
+
+",
+            name="ck_tma_media_assets_checksum_sha256",
+        ),
+
         # Ensure uploaded images have a valid size.
         CheckConstraint(
             "size_bytes > 0",
@@ -699,7 +784,6 @@ class TMAParticipant(BaseModel):
 
     student_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("students.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
@@ -709,13 +793,11 @@ class TMAParticipant(BaseModel):
 
     student_enrollment_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("student_enrollments.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
     class_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("classes.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
@@ -724,6 +806,40 @@ class TMAParticipant(BaseModel):
     # ==========================================
 
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "student_id"],
+            [
+                f"{PUBLIC_SCHEMA}.students.tenant_id",
+                f"{PUBLIC_SCHEMA}.students.id",
+            ],
+            name="fk_tma_participants_tenant_student",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "student_enrollment_id", "student_id"],
+            [
+                f"{PUBLIC_SCHEMA}.student_enrollments.tenant_id",
+                f"{PUBLIC_SCHEMA}.student_enrollments.id",
+                f"{PUBLIC_SCHEMA}.student_enrollments.student_id",
+            ],
+            name="fk_tma_participants_student_enrollment",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "class_id"],
+            [
+                f"{PUBLIC_SCHEMA}.classes.tenant_id",
+                f"{PUBLIC_SCHEMA}.classes.id",
+            ],
+            name="fk_tma_participants_tenant_class",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            "revision_id",
+            name="uq_tma_participants_tenant_id_revision",
+        ),
 
         # Ensure the revision belongs to the same tenant.
         ForeignKeyConstraint(
@@ -787,6 +903,12 @@ class TMAAttempt(BaseModel):
         nullable=False,
     )
 
+    # Redundant revision key makes attempt/question consistency enforceable.
+    revision_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+
     status: Mapped[TMAAttemptStatus] = mapped_column(
         SQLEnum(
             TMAAttemptStatus,
@@ -825,10 +947,11 @@ class TMAAttempt(BaseModel):
     __table_args__ = (
         # Ensure the participant belongs to the same tenant.
         ForeignKeyConstraint(
-            ["tenant_id", "participant_id"],
+            ["tenant_id", "participant_id", "revision_id"],
             [
                 f"{PUBLIC_SCHEMA}.tma_participants.tenant_id",
                 f"{PUBLIC_SCHEMA}.tma_participants.id",
+                f"{PUBLIC_SCHEMA}.tma_participants.revision_id",
             ],
             name="fk_tma_attempts_tenant_participant",
             ondelete="RESTRICT",
@@ -841,6 +964,12 @@ class TMAAttempt(BaseModel):
             name="uq_tma_attempts_tenant_participant",
         ),
 
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            "revision_id",
+            name="uq_tma_attempts_tenant_id_revision",
+        ),
         # Support tenant-safe references from student answers.
         UniqueConstraint(
             "tenant_id",
@@ -912,6 +1041,12 @@ class TMAAnswer(BaseModel):
         nullable=False,
     )
 
+    # Matches both the attempt's and question's assignment revision.
+    revision_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+
     question_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
@@ -925,10 +1060,11 @@ class TMAAnswer(BaseModel):
     __table_args__ = (
         # An answer must belong to an attempt in the same school.
         ForeignKeyConstraint(
-            ["tenant_id", "attempt_id"],
+            ["tenant_id", "attempt_id", "revision_id"],
             [
                 f"{PUBLIC_SCHEMA}.tma_attempts.tenant_id",
                 f"{PUBLIC_SCHEMA}.tma_attempts.id",
+                f"{PUBLIC_SCHEMA}.tma_attempts.revision_id",
             ],
             name="fk_tma_answers_tenant_attempt",
             ondelete="RESTRICT",
@@ -936,10 +1072,11 @@ class TMAAnswer(BaseModel):
 
         # Ensure the question belongs to the same school.
         ForeignKeyConstraint(
-            ["tenant_id", "question_id"],
+            ["tenant_id", "question_id", "revision_id"],
             [
                 f"{PUBLIC_SCHEMA}.tma_questions.tenant_id",
                 f"{PUBLIC_SCHEMA}.tma_questions.id",
+                f"{PUBLIC_SCHEMA}.tma_questions.revision_id",
             ],
             name="fk_tma_answers_tenant_question",
             ondelete="RESTRICT",

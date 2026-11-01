@@ -243,6 +243,11 @@ class Student(BaseModel):
 
     __table_args__ = (
         UniqueConstraint(
+            "tenant_id",
+            "id",
+            name="uq_students_tenant_id",
+        ),
+        UniqueConstraint(
             "tenant_id", "admission_number", name="uq_students_tenant_admission_number"
         ),
         CheckConstraint(
@@ -343,6 +348,12 @@ class StudentEnrollment(BaseModel):
         return (cls.started_on <= today) & (cls.ended_on.is_(None) | (cls.ended_on >= today))
 
     __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            "student_id",
+            name="uq_student_enrollments_tenant_id_student",
+        ),
         CheckConstraint(
             "ended_on IS NULL OR ended_on >= started_on", name="ck_student_enrollment_date_order"
         ),
