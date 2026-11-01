@@ -292,36 +292,36 @@ function Review({ role, assignmentId, draftId }) {
             ) : (
               <article className="tma-question-record">
                 <header className="flex-wrap">
-                  <h2 className="mr-auto font-semibold">
-                    Question {currentIndex + 1}
-                  </h2>
-                  <Button
-                    variant="outline"
-                    disabled={locked}
-                    onClick={() => setEditing(true)}
-                  >
-                    <Pencil size={15} /> Edit
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={locked}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          "Remove this question from the browser draft?",
+                  <h2 className="font-semibold">Question {currentIndex + 1}</h2>
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      disabled={locked}
+                      onClick={() => setEditing(true)}
+                    >
+                      <Pencil size={15} /> Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={locked}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            "Remove this question from the browser draft?",
+                          )
                         )
-                      )
-                        run(() =>
-                          update(
-                            draft.questions.filter(
-                              (_, i) => i !== currentIndex,
+                          run(() =>
+                            update(
+                              draft.questions.filter(
+                                (_, i) => i !== currentIndex,
+                              ),
                             ),
-                          ),
-                        );
-                    }}
-                  >
-                    <Trash2 size={15} /> Remove
-                  </Button>
+                          );
+                      }}
+                    >
+                      <Trash2 size={15} /> Remove
+                    </Button>
+                  </div>
                 </header>
                 <div className="tma-question-prompt">
                   {question.instruction && (

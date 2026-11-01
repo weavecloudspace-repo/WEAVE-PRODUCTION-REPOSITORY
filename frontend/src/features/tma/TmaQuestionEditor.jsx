@@ -81,7 +81,14 @@ export function TmaAssetImage({ assignmentId, assetId, alt, autoLoad = false }) 
   );
 }
 
-export function TextField({ label, value, onChange, rows = 6, compact = false }) {
+export function TextField({
+  label,
+  value,
+  onChange,
+  rows = 6,
+  compact = false,
+  trailingControls = null,
+}) {
   const input = useRef(null);
   const apply = (kind) => {
     const el = input.current;
@@ -97,78 +104,90 @@ export function TextField({ label, value, onChange, rows = 6, compact = false })
       el.setSelectionRange(next.start, next.end);
     });
   };
-  return (
-    <div className="tma-text-field">
-      <div
-        className="tma-format-toolbar"
-        aria-label={`${label} formatting`}
-        role="toolbar"
-      >
-        {!compact &&
-          tools.map(([kind, Icon, name]) => (
+  const toolbar = (
+    <div
+      className="tma-format-toolbar"
+      aria-label={`${label} formatting`}
+      role="toolbar"
+    >
+      {!compact &&
+        tools.map(([kind, Icon, name]) => (
+          <button
+            key={kind}
+            type="button"
+            title={name}
+            aria-label={`${name} in ${label}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => apply(kind)}
+          >
+            <Icon size={16} />
+          </button>
+        ))}
+      <details className="tma-math-picker">
+        <summary aria-label={`Insert maths in ${label}`}>Maths</summary>
+        <div>
+          {[
+            "²",
+            "³",
+            "√",
+            "π",
+            "θ",
+            "±",
+            "×",
+            "÷",
+            "≤",
+            "≥",
+            "≠",
+            "∞",
+            "\\(\\frac{a}{b}\\)",
+            "\\(x^{2}\\)",
+            "\\(\\begin{pmatrix}a & b \\\\ c & d\\end{pmatrix}\\)",
+            "\\(\\begin{bmatrix}a & b & c \\\\ d & e & f \\\\ g & h & i\\end{bmatrix}\\)",
+            "\\(\\begin{vmatrix}a & b \\\\ c & d\\end{vmatrix}\\)",
+          ].map((s) => (
             <button
-              key={kind}
+              key={s}
               type="button"
-              title={name}
-              aria-label={`${name} in ${label}`}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => apply(kind)}
+              onClick={(e) => {
+                apply(s);
+                e.currentTarget.closest("details").open = false;
+              }}
             >
-              <Icon size={16} />
+              {s.includes("pmatrix")
+                ? "Matrix 2 × 2"
+                : s.includes("bmatrix")
+                  ? "Matrix 3 × 3"
+                  : s.includes("vmatrix")
+                    ? "Determinant"
+                    : s.includes("frac")
+                      ? "Fraction"
+                      : s.includes("x^")
+                        ? "Power"
+                        : s}
             </button>
           ))}
-        <details className="tma-math-picker">
-          <summary aria-label={`Insert maths in ${label}`}>Maths</summary>
-          <div>
-            {[
-              "²",
-              "³",
-              "√",
-              "π",
-              "θ",
-              "±",
-              "×",
-              "÷",
-              "≤",
-              "≥",
-              "≠",
-              "∞",
-              "\\(\\frac{a}{b}\\)",
-              "\\(x^{2}\\)",
-              "\\(\\begin{pmatrix}a & b \\\\ c & d\\end{pmatrix}\\)",
-              "\\(\\begin{bmatrix}a & b & c \\\\ d & e & f \\\\ g & h & i\\end{bmatrix}\\)",
-              "\\(\\begin{vmatrix}a & b \\\\ c & d\\end{vmatrix}\\)",
-            ].map((s) => (
-              <button
-                key={s}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={(e) => {
-                  apply(s);
-                  e.currentTarget.closest("details").open = false;
-                }}
-              >
-                {s.includes("pmatrix") ? "Matrix 2 × 2"
-                  : s.includes("bmatrix") ? "Matrix 3 × 3"
-                  : s.includes("vmatrix") ? "Determinant"
-                  : s.includes("frac")
-                  ? "Fraction"
-                  : s.includes("x^")
-                    ? "Power"
-                    : s}
-              </button>
-            ))}
-          </div>
-        </details>
-      </div>
-      <textarea
-        ref={input}
-        aria-label={label}
-        rows={rows}
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={compact ? "Enter answer…" : "Type your question here…"}
-      />
+        </div>
+      </details>
+      {trailingControls}
+    </div>
+  );
+  const textarea = (
+    <textarea
+      ref={input}
+      aria-label={label}
+      rows={rows}
+      value={value || ""}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={compact ? "Enter answer…" : "Type your question here…"}
+    />
+  );
+  return (
+    <div
+      className={`tma-text-field ${compact ? "tma-text-field--compact" : ""}`}
+    >
+      {compact ? textarea : toolbar}
+      {compact ? toolbar : textarea}
     </div>
   );
 }
@@ -363,6 +382,7 @@ export default function TmaQuestionEditor({
             </div>
             <TextField
               label="Question prompt"
+              rows={4}
               value={draft.question_text}
               onChange={(v) => setDraft({ ...draft, question_text: v })}
             />
@@ -373,7 +393,7 @@ export default function TmaQuestionEditor({
               "Question image",
             )}
           </section>
-          <section className="tma-builder-section">
+          <section className="tma-builder-section tma-manual-options">
             <div className="tma-section-heading">
               <span>02</span>
               <div>
@@ -388,27 +408,29 @@ export default function TmaQuestionEditor({
                   className={`tma-answer-row ${o.is_correct ? "is-correct" : ""}`}
                 >
                   <div className="tma-answer-heading">
-                    <input
-                      type="radio"
-                      name="correct-answer"
-                      aria-label={`Mark option ${String.fromCharCode(65 + i)} correct`}
-                      checked={o.is_correct}
-                      onChange={() =>
-                        setDraft({
-                          ...draft,
-                          options: draft.options.map((item, j) => ({
-                            ...item,
-                            is_correct: j === i,
-                          })),
-                        })
-                      }
-                    />
                     <span className="tma-option-letter">
                       {String.fromCharCode(65 + i)}
                     </span>
-                    <span className="text-xs text-text-muted">
-                      {o.is_correct ? "Correct answer" : "Answer option"}
-                    </span>
+                    <label className="tma-answer-choice">
+                      <input
+                        type="radio"
+                        name="correct-answer"
+                        aria-label={`Mark option ${String.fromCharCode(65 + i)} correct`}
+                        checked={o.is_correct}
+                        onChange={() =>
+                          setDraft({
+                            ...draft,
+                            options: draft.options.map((item, j) => ({
+                              ...item,
+                              is_correct: j === i,
+                            })),
+                          })
+                        }
+                      />
+                      <span>
+                        {o.is_correct ? "Correct answer" : "Mark correct"}
+                      </span>
+                    </label>
                     <button
                       type="button"
                       aria-label={`Remove option ${String.fromCharCode(65 + i)}`}
@@ -429,39 +451,43 @@ export default function TmaQuestionEditor({
                     rows={2}
                     value={o.option_text}
                     onChange={(v) => patchOption(i, { option_text: v })}
+                    trailingControls={imageField(
+                      o.image_asset_id,
+                      (id) => patchOption(i, { image_asset_id: id }),
+                      `Option ${String.fromCharCode(65 + i)} image`,
+                    )}
                   />
-                  {imageField(
-                    o.image_asset_id,
-                    (id) => patchOption(i, { image_asset_id: id }),
-                    `Option ${String.fromCharCode(65 + i)} image`,
-                  )}
                 </article>
               ))}
             </div>
-            <button
-              type="button"
-              className="tma-add-option"
-              onClick={() =>
-                setDraft({
-                  ...draft,
-                  options: [
-                    ...draft.options,
-                    {
-                      option_text: "",
-                      is_correct: false,
-                      image_asset_id: null,
-                    },
-                  ],
-                })
-              }
-            >
-              <Plus size={17} />
-              Add option
-            </button>
-            <p className="text-xs text-text-muted">
-              {draft.options.filter((o) => o.is_correct).length} correct answer
-              · {draft.options.length} options
-            </p>
+            <div className="tma-options-footer">
+              <p className="text-xs text-text-muted">
+                {draft.options.filter((o) => o.option_text?.trim() || o.image_asset_id).length} of {draft.options.length} options filled
+                {" · "}{draft.options.some((o) => o.is_correct)
+                  ? `Correct answer: ${String.fromCharCode(65 + draft.options.findIndex((o) => o.is_correct))}`
+                  : "Select a correct answer"}
+              </p>
+              <button
+                type="button"
+                className="tma-add-option"
+                onClick={() =>
+                  setDraft({
+                    ...draft,
+                    options: [
+                      ...draft.options,
+                      {
+                        option_text: "",
+                        is_correct: false,
+                        image_asset_id: null,
+                      },
+                    ],
+                  })
+                }
+              >
+                <Plus size={17} />
+                Add option
+              </button>
+            </div>
           </section>
         </div>
       )}
