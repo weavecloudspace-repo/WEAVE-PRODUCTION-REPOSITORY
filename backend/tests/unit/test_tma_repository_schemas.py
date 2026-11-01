@@ -111,9 +111,7 @@ async def test_repository_rejects_cross_tenant_batch_participation() -> None:
 @pytest.mark.asyncio
 async def test_question_and_attempt_empty_batch_reads_skip_database() -> None:
     db = AsyncMock()
-    db.execute.return_value = SimpleNamespace(
-        scalars=lambda: SimpleNamespace(all=lambda: [])
-    )
+    db.execute.return_value = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: []))
     await TMAParticipantRepository.insert_missing(db, uuid.uuid4(), [])
     assert (
         await TMAQuestionRepository.list_for_revision_with_options(db, uuid.uuid4(), uuid.uuid4())
