@@ -503,6 +503,12 @@ export default function TmaPage({ role }) {
                   onClick: () => setDialog("close"),
                 },
                 {
+                  label: "Reopen assignment",
+                  icon: RefreshCw,
+                  visible: canManage && assignment?.status === "closed",
+                  onClick: () => setDialog("reopen"),
+                },
+                {
                   label: "Cancel and reverse scores",
                   icon: Trash2,
                   danger: true,
@@ -977,10 +983,11 @@ export default function TmaPage({ role }) {
           </div>
         </Modal>
         <Modal
-          open={["activate", "close", "cancel", "delete"].includes(dialog)}
+          open={["activate", "reopen", "close", "cancel", "delete"].includes(dialog)}
           title={
             {
               activate: "Publish assignment?",
+              reopen: "Reopen assignment?",
               close: "Close assignment?",
               cancel: "Cancel assignment?",
               delete: "Delete question?",
@@ -994,6 +1001,8 @@ export default function TmaPage({ role }) {
                 {
                   activate:
                     "Publishing locks question editing and allows eligible students to start. The assignment has passed the publication checks.",
+                  reopen:
+                    "Reopening lets eligible students start or resume unfinished attempts. Existing submissions and scores are preserved, and questions remain locked.",
                   close:
                     "Closing immediately prevents students from starting, saving or submitting, including attempts already in progress.",
                   cancel:
@@ -1022,6 +1031,7 @@ export default function TmaPage({ role }) {
                 run(async () => {
                   if (dialog === "activate")
                     await service.activate(assignmentId);
+                  if (dialog === "reopen") await service.reopen(assignmentId);
                   if (dialog === "close") await service.close(assignmentId);
                   if (dialog === "cancel")
                     await service.cancel(assignmentId, reason);

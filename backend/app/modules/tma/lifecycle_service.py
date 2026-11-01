@@ -1,4 +1,4 @@
-"""Small, explicit TMA activation workflow (closure deliberately deferred)."""
+"""Explicit TMA publication and reopening workflows."""
 
 from __future__ import annotations
 
@@ -23,6 +23,39 @@ from app.modules.tma.repository import (
 
 
 class TMALifecycleService:
+    @staticmethod
+    async def reopen_assignment(
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
+    ) -> TMAAssignment:
+        assignment = await TMAAssignmentRepository.get_by_id(
+            db, actor.tenant_id, assignment_id, lock=True
+        )
+        if assignment is None:
+            raise NotFoundException("Assignment not found.")
+        await TMAAuthorizationService.require_assignment_access(
+            db, actor=actor, assignment=assignment
+        )
+        TMAAuthorizationService.require_assignment_management(actor, assignment)
+        if assignment.status != TMAAssignmentStatus.CLOSED:
+            raise ConflictException("Only a closed TMA can be reopened.")
+        errors = await TMALifecycleService._readiness_errors(db, assignment)
+        if errors:
+            raise ConflictException("TMA cannot be reopened: " + "; ".join(errors))
+        revision = await TMARevisionRepository.get_by_number(
+            db, actor.tenant_id, assignment.id, assignment.current_revision_number
+        )
+        if revision is None or revision.published_at is None:
+            raise ConflictException("A published revision is required to reopen TMA.")
+        assignment.status = TMAAssignmentStatus.ACTIVE
+        assignment.closed_at = None
+        await TMAAssignmentRepository.save(db, assignment)
+        await db.commit()
+        await flush_cache_invalidation_events(db)
+        return assignment
+
     @staticmethod
     async def _readiness_errors(db: AsyncSession, assignment: TMAAssignment) -> list[str]:
         errors: list[str] = []

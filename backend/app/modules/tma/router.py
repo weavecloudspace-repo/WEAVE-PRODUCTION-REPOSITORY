@@ -239,6 +239,18 @@ async def activate_assignment(
     return TMAAssignmentStatusResponse.model_validate(item)
 
 
+@author_router.post(
+    "/assignments/{assignment_id}/reopen", response_model=TMAAssignmentStatusResponse
+)
+async def reopen_assignment(
+    assignment_id: uuid.UUID,
+    db: DbSession,
+    actor: Author,
+) -> TMAAssignmentStatusResponse:
+    item = await TMALifecycleService.reopen_assignment(db, actor=actor, assignment_id=assignment_id)
+    return TMAAssignmentStatusResponse.model_validate(item)
+
+
 @author_router.get(
     "/assignments/{assignment_id}/questions", response_model=list[TMAQuestionAdminResponse]
 )
