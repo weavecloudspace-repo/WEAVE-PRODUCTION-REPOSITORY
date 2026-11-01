@@ -22,7 +22,7 @@ test("current-term subject cards omit historical TMAs while preserving closed cu
 
 test("closed TMA cards remain visible but unsubmitted students get no start link", () => {
   assert.match(subjectCard, /item\.status === "closed"/);
-  assert.match(subjectCard, /Closed · the submission deadline has passed/);
+  assert.match(subjectCard, /Closed · submissions are no longer accepted/);
   assert.match(subjectCard, /item\.attempt_status === "submitted"/);
   assert.match(subjectCard, /item\.can_start_or_resume/);
   assert.match(view, /assignment\.status === "closed"/);
