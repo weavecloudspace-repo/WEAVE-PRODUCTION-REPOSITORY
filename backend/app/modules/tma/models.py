@@ -80,7 +80,8 @@ from sqlalchemy import (
     Boolean,
     text,
     BigInteger,
-    String
+    String,
+    func
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -101,6 +102,12 @@ class TMAActorType(str, PyEnum):
 
     TEACHER = "teacher"
     TENANT_ADMIN = "tenant_admin"
+
+class TMAAttemptStatus(str, PyEnum):
+    """Lifecycle states of a student's TMA attempt."""
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    SUBMITTED = "submitted"
 
 
 class TMAAssignment(BaseModel):
@@ -745,5 +752,144 @@ class TMAParticipant(BaseModel):
             "ix_tma_participants_tenant_student",
             "tenant_id",
             "student_id",
+        ),
+    )
+
+
+
+class TMAAttempt(BaseModel):
+    """
+    Represents a student's attempt at a TMA assignment revision.
+
+    Each participant can have only one attempt per revision
+
+    Attempts remain  IN_PROGRESS until explicitly submitted
+    Closing an assignment does not modify unfinished attempts
+
+    When an assignment is reopened, unfinished attempts can resume using their previously saved answers
+
+    Submitted attempts are final and cannot be retaken
+
+    Each question contributes exactly one raw mark
+    Official assessment-component scores are calculated and
+    persisted through WEAVE'S existing academic result system
+    """
+
+    __tablename__ = "tma_attempts"
+
+
+    participant_id : Mapped[uuid.UUID] = mapped_column(
+      UUId(as_uuid = True),
+      nullable = False
+    )
+
+
+    status : Mapped[TMAAttemptStatus] = mapped_column(
+      SQLEnum(
+         TMAAttemptStatus,
+         name = "tma_attempt_status",
+         schema = PUBLIC_SCHEMA,
+         values_callable = lamda enum_cls : [
+            member.value for member in enum_cls
+         ],
+      ),
+      nullable = False,
+      default = TMAAttemptStatus.NOT_STARTED,
+      server_defaut = TMAAttemptStatus.NOT_STARTED.value
+    )
+
+
+
+
+    started_at: Mapped[datetime | None] = mapped_column(
+      DateTime(timezone = True),
+      nullable = True
+    )
+
+
+    submitted_at : Mapped[datetime | None] = mapped_column(
+      DateTime(timezone = True),
+      nullable = True
+    )
+
+
+
+    correct_answers : Mapped[int | None] = mapped_column(
+      Integer,
+      nullable = True
+    )
+
+
+    total_questions : Mapped[int | None] = mapped_column(
+      Integer,
+      nullable = True
+    )
+
+
+
+     __table_args__ = (
+
+        # Ensure the participant belongs to the same tenant.
+        ForeignKeyConstraint(
+            ["tenant_id", "participant_id"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_participants.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_participants.id",
+            ],
+            name="fk_tma_attempts_tenant_participant",
+            ondelete="RESTRICT",
+        ),
+
+        # Enforce exactly one attempt per participant.
+        UniqueConstraint(
+            "tenant_id",
+            "participant_id",
+            name="uq_tma_attempts_tenant_participant",
+        ),
+
+        # Support tenant-safe references from student answers.
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            name="uq_tma_attempts_tenant_id",
+        ),
+
+        # Validate attempt lifecycle and grading fields.
+        CheckConstraint(
+            """
+            (
+                status = 'in_progress'
+                AND submitted_at IS NULL
+                AND correct_answers IS NULL
+                AND total_questions IS NULL
+            )
+            OR
+            (
+                status = 'submitted'
+                AND submitted_at IS NOT NULL
+                AND correct_answers IS NOT NULL
+                AND total_questions IS NOT NULL
+                AND total_questions > 0
+                AND correct_answers >= 0
+                AND correct_answers <= total_questions
+            )
+            """,
+            name="ck_tma_attempts_submission_consistency",
+        ),
+
+        # Prevent submission timestamps preceding attempt start.
+        CheckConstraint(
+            """
+            submitted_at IS NULL
+            OR submitted_at >= started_at
+            """,
+            name="ck_tma_attempts_submission_chronology",
+        ),
+
+        # Optimize attempt lookups by status.
+        Index(
+            "ix_tma_attempts_tenant_status",
+            "tenant_id",
+            "status",
         ),
     )
