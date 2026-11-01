@@ -12,7 +12,7 @@ from app.modules.student_academics.assessment_repository import AssessmentReposi
 from app.modules.student_academics.models import AcademicSessionStatus, AssessmentSchemeStatus
 from app.modules.student_academics.repository import StudentAcademicRepository
 from app.modules.tma.authorization import TMAAuthor, TMAAuthorizationService
-from app.modules.tma.models import TMAAssignment, TMAAssignmentRevision
+from app.modules.tma.models import TMAAssignment, TMAAssignmentRevision, TMAAssignmentStatus
 from app.modules.tma.repository import (
     TMAAssignmentRepository,
     TMAQuestionRepository,
@@ -83,7 +83,7 @@ class TMAAssignmentService:
             existing = await TMAAssignmentRepository.get_by_component_scope(
                 db,
                 actor.tenant_id,
-                **payload.model_dump(),
+                **payload.model_dump(exclude={"closes_at"}),
             )
             if existing is not None:
                 raise ConflictException(
@@ -196,11 +196,19 @@ class TMAAssignmentService:
             assignment=assignment,
         )
         TMAAuthorizationService.require_assignment_management(actor, assignment)
-        TMAAuthorizationService.require_draft_assignment(assignment)
         changes = payload.model_dump(exclude_unset=True)
-        if any(value is None for value in changes.values()):
+        if not changes:
+            return assignment
+
+        # Only staff action changes availability; this estimate is display-only.
+        if assignment.status not in (TMAAssignmentStatus.DRAFT, TMAAssignmentStatus.ACTIVE):
+            raise ConflictException("Only draft or active assignments can be updated.")
+
+        scope_changes = {key: value for key, value in changes.items() if key != "closes_at"}
+        if any(value is None for value in scope_changes.values()):
             raise BadRequestException("Academic configuration fields cannot be null.")
-        if changes:
+        if scope_changes:
+            TMAAuthorizationService.require_draft_assignment(assignment)
             revision = await TMARevisionRepository.get_by_number(
                 db,
                 actor.tenant_id,
@@ -218,8 +226,9 @@ class TMAAssignmentService:
                 raise ConflictException("Cannot change academic scope after questions exist.")
             effective = TMAAssignmentCreate.model_validate(
                 {
-                    field: changes.get(field, getattr(assignment, field))
+                    field: scope_changes.get(field, getattr(assignment, field))
                     for field in TMAAssignmentCreate.model_fields
+                    if field != "closes_at"
                 }
             )
             await TMAAssignmentService._validate_scope(
@@ -234,12 +243,13 @@ class TMAAssignmentService:
                 curriculum_subject_id=effective.curriculum_subject_id,
                 academic_term_id=effective.academic_term_id,
             )
-            for name, value in changes.items():
-                setattr(assignment, name, value)
-            try:
-                await TMAAssignmentRepository.save(db, assignment)
-                await db.commit()
-            except IntegrityError as exc:
-                await db.rollback()
-                raise ConflictException("This TMA academic scope already exists.") from exc
+
+        for name, value in changes.items():
+            setattr(assignment, name, value)
+        try:
+            await TMAAssignmentRepository.save(db, assignment)
+            await db.commit()
+        except IntegrityError as exc:
+            await db.rollback()
+            raise ConflictException("This TMA academic scope already exists.") from exc
         return assignment

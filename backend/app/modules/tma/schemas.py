@@ -12,7 +12,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.tma.models import (
     TMAActorType,
@@ -38,16 +38,18 @@ class TMAAssignmentCreate(TMAInput):
     academic_session_id: uuid.UUID
     academic_term_id: uuid.UUID
     assessment_component_id: uuid.UUID
+    closes_at: AwareDatetime | None = None
 
 
 class TMAAssignmentUpdate(TMAInput):
-    """Partial updates are allowed only while DRAFT (enforced by service)."""
+    """Academic scope is draft-only; closing estimate is editable while active."""
 
     academic_level_id: uuid.UUID | None = None
     curriculum_subject_id: uuid.UUID | None = None
     academic_session_id: uuid.UUID | None = None
     academic_term_id: uuid.UUID | None = None
     assessment_component_id: uuid.UUID | None = None
+    closes_at: AwareDatetime | None = None
 
 
 class TMAAssignmentResponse(TMAOutput):
@@ -62,6 +64,7 @@ class TMAAssignmentResponse(TMAOutput):
     created_by_actor_type: TMAActorType
     created_by_actor_id: uuid.UUID
     activated_at: datetime | None
+    closes_at: datetime | None
     closed_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -79,6 +82,7 @@ class TMAAssignmentStatusResponse(TMAOutput):
     status: TMAAssignmentStatus
     current_revision_number: int
     activated_at: datetime | None
+    closes_at: datetime | None
     closed_at: datetime | None
 
 
@@ -333,5 +337,6 @@ class TMAStudentAssignmentResponse(TMAOutput):
     assessment_component_id: uuid.UUID
     status: TMAAssignmentStatus
     attempt_status: TMAAttemptStatus | None
+    closes_at: datetime | None
     can_start_or_resume: bool
     component_maximum_score: Decimal = Field(gt=0, max_digits=5, decimal_places=2)
