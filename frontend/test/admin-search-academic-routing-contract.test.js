@@ -58,5 +58,7 @@ test("tenant-admin search covers the refactored academic entity set", () => {
 
 test("admin search preview opens the owning workspace", () => {
   assert.match(detailPageSource, /Open in workspace/);
+  assert.match(detailPageSource, /avatarSrc=\{getAvatarSrcFromRecord\(item\)\}/);
+  assert.match(detailPageSource, /size="large"/);
   assert.doesNotMatch(detailPageSource, /Open source page/);
 });
