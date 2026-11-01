@@ -38,7 +38,9 @@ class TMAAIService:
     @staticmethod
     async def _context(db: AsyncSession, *, actor: TMAAuthor, assignment_id: uuid.UUID):
         assignment, revision = await TMAQuestionService._draft_context(
-            db, actor=actor, assignment_id=assignment_id,
+            db,
+            actor=actor,
+            assignment_id=assignment_id,
         )
         subject_name = await db.scalar(
             select(Subject.name)
@@ -67,12 +69,17 @@ class TMAAIService:
 
     @staticmethod
     async def generate(
-        db: AsyncSession, *, actor: TMAAuthor,
-        assignment_id: uuid.UUID, payload: TMAAIGenerateRequest,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
+        payload: TMAAIGenerateRequest,
         idempotency_key: str,
     ) -> AIGenerateQuestionsResponse:
         _, _, subject, level = await TMAAIService._context(
-            db, actor=actor, assignment_id=assignment_id,
+            db,
+            actor=actor,
+            assignment_id=assignment_id,
         )
         # TMA supports one correct answer, unlike CBT's optional multi-answer types.
         request = AIGenerateQuestionsRequest(
@@ -96,12 +103,17 @@ class TMAAIService:
 
     @staticmethod
     async def regenerate(
-        db: AsyncSession, *, actor: TMAAuthor,
-        assignment_id: uuid.UUID, payload: TMAAIRegenerateRequest,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
+        payload: TMAAIRegenerateRequest,
         idempotency_key: str,
     ) -> AIRegenerateQuestionResponse:
         _, _, subject, level = await TMAAIService._context(
-            db, actor=actor, assignment_id=assignment_id,
+            db,
+            actor=actor,
+            assignment_id=assignment_id,
         )
         if payload.existing_question.question_type != "single_choice":
             raise BadRequestException("TMA only supports single-correct-answer questions.")
@@ -137,8 +149,11 @@ class TMAAIService:
 
     @staticmethod
     async def import_question(
-        db: AsyncSession, *, actor: TMAAuthor,
-        assignment_id: uuid.UUID, question: AIQuestionResponse,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
+        question: AIQuestionResponse,
     ):
         """Review/accept one generated question; persist its images in R2.
 
@@ -146,7 +161,9 @@ class TMAAIService:
         """
         TMAAIService._validate_preview(question)
         assignment, revision, _, _ = await TMAAIService._context(
-            db, actor=actor, assignment_id=assignment_id,
+            db,
+            actor=actor,
+            assignment_id=assignment_id,
         )
 
         # Validate every image before writing anything to storage.
@@ -154,7 +171,14 @@ class TMAAIService:
         validated = [
             AIImageTransportPayload.model_validate(
                 image.model_dump(
-                    include={"content_type", "data_base64", "sha256", "width", "height", "alt_text"}
+                    include={
+                        "content_type",
+                        "data_base64",
+                        "sha256",
+                        "width",
+                        "height",
+                        "alt_text",
+                    }
                 )
             )
             if image is not None else None
@@ -166,15 +190,19 @@ class TMAAIService:
             if image is None:
                 return None
             raw = base64.b64decode(image.data_base64, validate=True)
-            extension = {"image/png": "png", "image/jpeg": "jpg",
-                         "image/webp": "webp"}[image.content_type]
+            extension = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}[
+                image.content_type
+            ]
             file = UploadFile(
                 filename=f"ai-question.{extension}",
                 file=io.BytesIO(raw),
                 headers=Headers({"content-type": image.content_type}),
             )
             asset = await TMAMediaService.upload_image(
-                db, actor=actor, assignment_id=assignment.id, file=file,
+                db,
+                actor=actor,
+                assignment_id=assignment.id,
+                file=file,
             )
             created_assets.append(asset.id)
             return asset.id
@@ -191,7 +219,9 @@ class TMAAIService:
                 for i, option in enumerate(question.options, start=1)
             ]
             existing = await TMAQuestionRepository.list_for_revision_with_options(
-                db, actor.tenant_id, revision.id,
+                db,
+                actor.tenant_id,
+                revision.id,
             )
             next_position = max((item.position for item, _ in existing), default=0) + 1
             payload = TMAQuestionCreate(
@@ -201,7 +231,10 @@ class TMAAIService:
                 options=options,
             )
             return await TMAQuestionService.add_question(
-                db, actor=actor, assignment_id=assignment_id, payload=payload,
+                db,
+                actor=actor,
+                assignment_id=assignment_id,
+                payload=payload,
             )
         except Exception:
             await db.rollback()
@@ -210,7 +243,10 @@ class TMAAIService:
             for asset_id in created_assets:
                 try:
                     await TMAMediaService.delete_unused_image(
-                        db, actor=actor, assignment_id=assignment_id, asset_id=asset_id,
+                        db,
+                        actor=actor,
+                        assignment_id=assignment_id,
+                        asset_id=asset_id,
                     )
                 except Exception:
                     pass

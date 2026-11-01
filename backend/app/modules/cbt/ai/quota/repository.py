@@ -753,13 +753,15 @@ class AIQuotaPurchaseRepository:
         )
         return [tuple(row) for row in result.all()], total
 
-
     @staticmethod
     async def list_for_teacher(
         db: AsyncSession,
-        *, tenant_id: uuid.UUID, membership_id: uuid.UUID,
+        *,
+        tenant_id: uuid.UUID,
+        membership_id: uuid.UUID,
         status: AIQuotaPurchaseStatus | None = None,
-        offset: int = 0, limit: int = 50,
+        offset: int = 0,
+        limit: int = 50,
     ) -> tuple[list[AIQuotaPurchase], int]:
         filters = [
             AIQuotaPurchase.tenant_id == tenant_id,
@@ -767,16 +769,26 @@ class AIQuotaPurchaseRepository:
         ]
         if status is not None:
             filters.append(AIQuotaPurchase.status == status)
-        total = int((await db.execute(
-            select(func.count()).select_from(AIQuotaPurchase).where(*filters)
-        )).scalar_one())
-        rows = (await db.execute(
-            select(AIQuotaPurchase)
-            .where(*filters)
-            .order_by(AIQuotaPurchase.created_at.desc(), AIQuotaPurchase.id.desc())
-            .offset(offset).limit(limit)
-        )).scalars().all()
+        total = int(
+            (
+                await db.execute(select(func.count()).select_from(AIQuotaPurchase).where(*filters))
+            ).scalar_one()
+        )
+        rows = (
+            (
+                await db.execute(
+                    select(AIQuotaPurchase)
+                    .where(*filters)
+                    .order_by(AIQuotaPurchase.created_at.desc(), AIQuotaPurchase.id.desc())
+                    .offset(offset)
+                    .limit(limit)
+                )
+            )
+            .scalars()
+            .all()
+        )
         return list(rows), total
+
 
 class AICreditLedgerRepository:
     """Append-only database operations for AI credit movements."""

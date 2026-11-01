@@ -34,10 +34,7 @@ def _preview(*, question_type="single_choice", image=None):
         question_type=question_type,
         prompt="Which answer is correct?",
         image=image,
-        options=[
-            AIQuestionOptionResponse(text=str(i), is_correct=i == 2)
-            for i in range(1, 5)
-        ],
+        options=[AIQuestionOptionResponse(text=str(i), is_correct=i == 2) for i in range(1, 5)],
     )
 
 
@@ -50,7 +47,9 @@ def test_cloud_staff_maps_to_existing_quota_actor_without_server_credentials() -
     assert adapted.membership_id is None
 
     teacher = TeacherMembership(
-        id=_id(), tenant_id=_id(), teacher_account_id=_id(),
+        id=_id(),
+        tenant_id=_id(),
+        teacher_account_id=_id(),
     )
     adapted = to_existing_ai_actor(teacher)
     assert adapted.role == "teacher"
@@ -65,23 +64,34 @@ async def test_tma_generation_reuses_cbt_idempotent_authoring(monkeypatch) -> No
     actor = _admin()
     assignment_id = _id()
     monkeypatch.setattr(
-        mod.TMAAIService, "_context",
-        AsyncMock(return_value=(
-            SimpleNamespace(id=assignment_id),
-            SimpleNamespace(id=_id()), "Mathematics", "JSS3",
-        )),
+        mod.TMAAIService,
+        "_context",
+        AsyncMock(
+            return_value=(
+                SimpleNamespace(id=assignment_id),
+                SimpleNamespace(id=_id()),
+                "Mathematics",
+                "JSS3",
+            )
+        ),
     )
     run = AsyncMock(return_value=object())
     monkeypatch.setattr(
-        mod.CBTAIIdempotentAuthoringService, "generate_questions", run,
+        mod.CBTAIIdempotentAuthoringService,
+        "generate_questions",
+        run,
     )
     payload = TMAAIGenerateRequest(
-        generation_prompt="Algebra", question_count=10,
+        generation_prompt="Algebra",
+        question_count=10,
         visual_mode="text_only",
     )
     response = await TMAAIService.generate(
-        AsyncMock(), actor=actor, assignment_id=assignment_id,
-        payload=payload, idempotency_key="request-123",
+        AsyncMock(),
+        actor=actor,
+        assignment_id=assignment_id,
+        payload=payload,
+        idempotency_key="request-123",
     )
     assert response is run.return_value
     args = run.await_args.kwargs
@@ -92,8 +102,11 @@ async def test_tma_generation_reuses_cbt_idempotent_authoring(monkeypatch) -> No
     assert len(args["idempotency_key"]) == 64
 
     await TMAAIService.generate(
-        AsyncMock(), actor=actor, assignment_id=_id(),
-        payload=payload, idempotency_key="request-123",
+        AsyncMock(),
+        actor=actor,
+        assignment_id=_id(),
+        payload=payload,
+        idempotency_key="request-123",
     )
     assert run.await_args.kwargs["idempotency_key"] != args["idempotency_key"]
 
@@ -105,17 +118,22 @@ async def test_question_import_saves_into_existing_tma_question_service(monkeypa
     actor = _admin()
     assignment, revision = SimpleNamespace(id=_id()), SimpleNamespace(id=_id())
     monkeypatch.setattr(
-        mod.TMAAIService, "_context",
+        mod.TMAAIService,
+        "_context",
         AsyncMock(return_value=(assignment, revision, "Biology", "JSS2")),
     )
     monkeypatch.setattr(
-        mod.TMAQuestionRepository, "list_for_revision_with_options",
+        mod.TMAQuestionRepository,
+        "list_for_revision_with_options",
         AsyncMock(return_value=[(SimpleNamespace(position=3), [])]),
     )
     save = AsyncMock(return_value=SimpleNamespace(id=_id()))
     monkeypatch.setattr(mod.TMAQuestionService, "add_question", save)
     await TMAAIService.import_question(
-        AsyncMock(), actor=actor, assignment_id=assignment.id, question=_preview(),
+        AsyncMock(),
+        actor=actor,
+        assignment_id=assignment.id,
+        question=_preview(),
     )
     payload = save.await_args.kwargs["payload"]
     assert payload.position == 4
@@ -142,26 +160,31 @@ async def test_import_persists_generated_image_via_existing_tma_r2_service(monke
     Image.new("RGB", (24, 24)).save(raw_buffer, "PNG")
     data = raw_buffer.getvalue()
     image = AIResolvedImageResponse(
-        source="generated", content_type="image/png",
+        source="generated",
+        content_type="image/png",
         data_base64=base64.b64encode(data).decode(),
         sha256=hashlib.sha256(data).hexdigest(),
     )
     actor = _admin()
     assignment, revision = SimpleNamespace(id=_id()), SimpleNamespace(id=_id())
     monkeypatch.setattr(
-        mod.TMAAIService, "_context",
+        mod.TMAAIService,
+        "_context",
         AsyncMock(return_value=(assignment, revision, "Math", "JSS3")),
     )
     upload = AsyncMock(return_value=SimpleNamespace(id=_id()))
     monkeypatch.setattr(mod.TMAMediaService, "upload_image", upload)
     monkeypatch.setattr(
-        mod.TMAQuestionRepository, "list_for_revision_with_options",
+        mod.TMAQuestionRepository,
+        "list_for_revision_with_options",
         AsyncMock(return_value=[]),
     )
     save = AsyncMock(return_value=SimpleNamespace(id=_id()))
     monkeypatch.setattr(mod.TMAQuestionService, "add_question", save)
     await TMAAIService.import_question(
-        AsyncMock(), actor=actor, assignment_id=assignment.id,
+        AsyncMock(),
+        actor=actor,
+        assignment_id=assignment.id,
         question=_preview(image=image),
     )
     assert upload.await_count == 1

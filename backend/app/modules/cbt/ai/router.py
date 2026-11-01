@@ -355,50 +355,66 @@ async def get_credit_purchase(
 # Additive teacher checkout routes; existing admin and generation routes are unchanged.
 @router.post("/teacher/purchases/quote", response_model=AIQuotaPurchaseQuote)
 async def quote_teacher_credit_purchase(
-    payload: AIQuotaTopUpRequest, current_actor: CurrentCBTActor,
+    payload: AIQuotaTopUpRequest,
+    current_actor: CurrentCBTActor,
 ) -> AIQuotaPurchaseQuote:
     CBTAIService._require_teacher(current_actor)
     return AITeacherPurchaseService.quote(payload.credits)
 
 
 @router.post(
-    "/teacher/purchases/checkout", response_model=AIQuotaPurchaseCheckoutResponse,
+    "/teacher/purchases/checkout",
+    response_model=AIQuotaPurchaseCheckoutResponse,
 )
 async def checkout_teacher_credits(
-    payload: AIQuotaTopUpRequest, db: DbSession, current_actor: CurrentCBTActor,
+    payload: AIQuotaTopUpRequest,
+    db: DbSession,
+    current_actor: CurrentCBTActor,
 ) -> AIQuotaPurchaseCheckoutResponse:
     membership_id = CBTAIService._require_teacher(current_actor)
     return await AITeacherPurchaseService.checkout(
-        db, tenant_id=current_actor.tenant_id,
-        membership_id=membership_id, credits=payload.credits,
+        db,
+        tenant_id=current_actor.tenant_id,
+        membership_id=membership_id,
+        credits=payload.credits,
     )
 
 
 @router.post(
-    "/teacher/purchases/{reference}/verify", response_model=AIQuotaPurchaseResponse,
+    "/teacher/purchases/{reference}/verify",
+    response_model=AIQuotaPurchaseResponse,
 )
 async def verify_teacher_credits(
-    reference: str, db: DbSession, current_actor: CurrentCBTActor,
+    reference: str,
+    db: DbSession,
+    current_actor: CurrentCBTActor,
 ) -> AIQuotaPurchaseResponse:
     membership_id = CBTAIService._require_teacher(current_actor)
     return await AITeacherPurchaseService.verify(
-        db, tenant_id=current_actor.tenant_id,
-        membership_id=membership_id, reference=reference,
+        db,
+        tenant_id=current_actor.tenant_id,
+        membership_id=membership_id,
+        reference=reference,
     )
 
 
 @router.get(
-    "/teacher/purchases", response_model=AIQuotaPurchaseListResponse,
+    "/teacher/purchases",
+    response_model=AIQuotaPurchaseListResponse,
 )
 async def list_teacher_credit_purchases(
-    db: DbSession, current_actor: CurrentCBTActor,
+    db: DbSession,
+    current_actor: CurrentCBTActor,
     purchase_status: AIQuotaPurchaseStatus | None = Query(default=None, alias="status"),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
 ) -> AIQuotaPurchaseListResponse:
     membership_id = CBTAIService._require_teacher(current_actor)
     return await AITeacherPurchaseService.list_purchases(
-        db, tenant_id=current_actor.tenant_id,
-        membership_id=membership_id, status=purchase_status,
-        offset=offset, limit=limit,
+        db,
+        tenant_id=current_actor.tenant_id,
+        membership_id=membership_id,
+        status=purchase_status,
+        offset=offset,
+        limit=limit,
     )

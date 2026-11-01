@@ -103,8 +103,13 @@ class AIQuotaPaymentService:
 
     @classmethod
     async def initialize_teacher_checkout(
-        cls, db: AsyncSession, *, tenant_id: uuid.UUID,
-        teacher_membership_id: uuid.UUID, email: str, credits: int,
+        cls,
+        db: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        teacher_membership_id: uuid.UUID,
+        email: str,
+        credits: int,
     ) -> AIQuotaPurchaseCheckoutResponse:
         quote = cls.quote_purchase(credits)
         callback_url = str(settings.PAYSTACK_AI_CREDIT_CALLBACK_URL or "").strip()
@@ -114,8 +119,12 @@ class AIQuotaPaymentService:
             )
         reference = f"ai-credit-teacher-{tenant_id.hex[:12]}-{uuid.uuid4().hex[:16]}"
         purchase = await AIQuotaService.create_pending_teacher_purchase(
-            db, tenant_id=tenant_id, teacher_membership_id=teacher_membership_id,
-            credits=quote.credits, amount_kobo=quote.amount_kobo, reference=reference,
+            db,
+            tenant_id=tenant_id,
+            teacher_membership_id=teacher_membership_id,
+            credits=quote.credits,
+            amount_kobo=quote.amount_kobo,
+            reference=reference,
         )
         metadata: dict[str, Any] = {
             "payment_purpose": PaymentPurpose.AI_CREDIT_PURCHASE.value,
@@ -127,26 +136,38 @@ class AIQuotaPaymentService:
         }
         try:
             checkout = await PaymentEngine.initialize_checkout(
-                email=email, amount_kobo=quote.amount_kobo,
-                reference=reference, callback_url=callback_url, metadata=metadata,
+                email=email,
+                amount_kobo=quote.amount_kobo,
+                reference=reference,
+                callback_url=callback_url,
+                metadata=metadata,
             )
         except Exception:
             await AIQuotaService.mark_purchase_failed(
-                db, tenant_id=tenant_id, reference=reference,
+                db,
+                tenant_id=tenant_id,
+                reference=reference,
             )
             raise
         return AIQuotaPurchaseCheckoutResponse(
-            purchase=purchase, quote=quote,
-            authorization_url=checkout.authorization_url, access_code=checkout.access_code,
+            purchase=purchase,
+            quote=quote,
+            authorization_url=checkout.authorization_url,
+            access_code=checkout.access_code,
         )
 
     @classmethod
     async def verify_teacher_checkout(
-        cls, db: AsyncSession, *, tenant_id: uuid.UUID,
-        teacher_membership_id: uuid.UUID, reference: str,
+        cls,
+        db: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        teacher_membership_id: uuid.UUID,
+        reference: str,
     ) -> AIQuotaPurchaseResponse:
         purchase = await AIQuotaPurchaseRepository.get_by_reference(
-            db, reference=reference.strip(),
+            db,
+            reference=reference.strip(),
         )
         if (
             purchase is None
@@ -168,7 +189,9 @@ class AIQuotaPaymentService:
             },
         )
         return await AIQuotaService.credit_verified_purchase(
-            db, tenant_id=tenant_id, reference=purchase.reference,
+            db,
+            tenant_id=tenant_id,
+            reference=purchase.reference,
         )
 
     @classmethod

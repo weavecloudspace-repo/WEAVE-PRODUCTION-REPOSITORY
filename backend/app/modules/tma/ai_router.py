@@ -38,8 +38,11 @@ async def generate_tma_questions(
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
 ) -> AIGenerateQuestionsResponse:
     return await TMAAIService.generate(
-        db, actor=actor, assignment_id=assignment_id,
-        payload=payload, idempotency_key=idempotency_key,
+        db,
+        actor=actor,
+        assignment_id=assignment_id,
+        payload=payload,
+        idempotency_key=idempotency_key,
     )
 
 
@@ -55,8 +58,11 @@ async def regenerate_tma_question(
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=120)],
 ) -> AIRegenerateQuestionResponse:
     return await TMAAIService.regenerate(
-        db, actor=actor, assignment_id=assignment_id,
-        payload=payload, idempotency_key=idempotency_key,
+        db,
+        actor=actor,
+        assignment_id=assignment_id,
+        payload=payload,
+        idempotency_key=idempotency_key,
     )
 
 
@@ -72,11 +78,16 @@ async def import_tma_ai_question(
     actor: Author,
 ) -> TMAQuestionAdminResponse:
     saved = await TMAAIService.import_question(
-        db, actor=actor, assignment_id=assignment_id,
+        db,
+        actor=actor,
+        assignment_id=assignment_id,
         question=payload.question,
     )
     row, options = await TMAQuestionService.get_question(
-        db, actor=actor, assignment_id=assignment_id, question_id=saved.id,
+        db,
+        actor=actor,
+        assignment_id=assignment_id,
+        question_id=saved.id,
     )
     return TMAQuestionAdminResponse(
         id=row.id,
