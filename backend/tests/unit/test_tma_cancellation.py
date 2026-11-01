@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -295,13 +296,23 @@ async def test_corrected_revision_preserves_previous_questions(monkeypatch):
     db.commit.assert_awaited_once()
 
 
-def test_student_result_does_not_alias_cancelled_revision():
-    from app.modules.tma import attempt_service
+@pytest.mark.asyncio
+async def test_student_cannot_read_cancelled_revision_result(monkeypatch):
+    from app.modules.tma import attempt_service as mod
 
-    assert (
-        "invalidated_at"
-        in attempt_service.TMAAttemptService.get_submission_result.__code__.co_names
+    attempt = SimpleNamespace(score_reversed_at=None)
+    revision = SimpleNamespace(invalidated_at=datetime.now(timezone.utc))
+    monkeypatch.setattr(
+        mod.TMAAttemptService,
+        "_load_owned_attempt",
+        AsyncMock(return_value=(attempt, None, revision)),
     )
+    with pytest.raises(ConflictException, match="cancelled"):
+        await mod.TMAAttemptService.get_submission_result(
+            AsyncMock(),
+            student=SimpleNamespace(id=uid(), tenant_id=uid()),
+            attempt_id=uid(),
+        )
 
 
 @pytest.mark.asyncio
