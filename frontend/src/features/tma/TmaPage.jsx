@@ -78,22 +78,35 @@ function Configuration({
   busy,
   scopeEditable = false,
 }) {
-  const [scope, setScope] = useState(
-    assignment
-      ? `${assignment.academic_level_id}:${assignment.curriculum_subject_id}`
-      : "",
+  const [level, setLevel] = useState(assignment?.academic_level_id || "");
+  const [subject, setSubject] = useState(
+    assignment?.curriculum_subject_id || "",
   );
   const [component, setComponent] = useState(
     assignment?.assessment_component_id || "",
   );
   const [closing, setClosing] = useState(dateInput(assignment?.closes_at));
   const locked = Boolean(assignment) && !scopeEditable;
+  const levels = [
+    ...new Map(
+      config.scopes.map((s) => [s.academic_level_id, s.level_name]),
+    ).entries(),
+  ];
+  const subjects = config.scopes.filter((s) => s.academic_level_id === level);
+  const validScope = Boolean(
+    level && subjects.some((s) => s.curriculum_subject_id === subject),
+  );
   return (
     <form
       className="space-y-5"
       onSubmit={(e) => {
         e.preventDefault();
-        const [level, subject] = scope.split(":");
+        if (
+          busy ||
+          (!locked &&
+            (!validScope || !component || (!assignment && !config.term_open)))
+        )
+          return;
         const closingPayload = {
           closes_at: closing ? new Date(closing).toISOString() : null,
         };
@@ -117,20 +130,37 @@ function Configuration({
         assignment covers all eligible classes at the selected level.
       </p>
       <Select
-        label="Level and subject"
-        value={scope}
-        onChange={setScope}
+        label="Academic level"
+        value={level}
+        onChange={(value) => {
+          setLevel(value);
+          setSubject("");
+        }}
         disabled={locked}
       >
-        {config.scopes.map((s) => (
-          <option
-            key={s.curriculum_subject_id}
-            value={`${s.academic_level_id}:${s.curriculum_subject_id}`}
-          >
-            {s.level_name} · {s.subject_name}
+        {levels.map(([id, name]) => (
+          <option key={id} value={id}>
+            {name}
           </option>
         ))}
       </Select>
+      <Select
+        label="Subject"
+        value={subject}
+        onChange={setSubject}
+        disabled={locked || !level}
+      >
+        {subjects.map((s) => (
+          <option key={s.curriculum_subject_id} value={s.curriculum_subject_id}>
+            {s.subject_name}
+          </option>
+        ))}
+      </Select>
+      {!level && (
+        <p className="text-xs text-text-muted">
+          Choose an academic level to see its available subjects.
+        </p>
+      )}
       <Select
         label="Assessment component"
         value={component}
@@ -166,7 +196,9 @@ function Configuration({
       <Button
         type="submit"
         disabled={
-          busy || (!assignment && (!scope || !component || !config.term_open))
+          busy ||
+          (!locked &&
+            (!validScope || !component || (!assignment && !config.term_open)))
         }
       >
         Save assignment
@@ -243,6 +275,7 @@ export default function TmaPage({ role }) {
   const [assignment, setAssignment] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -271,6 +304,7 @@ export default function TmaPage({ role }) {
   const load = useCallback(async () => {
     const version = ++loadVersion.current;
     setLoading(true);
+    setLoadFailed(false);
     setError("");
     try {
       const c = await service.configuration();
@@ -297,7 +331,10 @@ export default function TmaPage({ role }) {
         if (version === loadVersion.current) setList(rows(page));
       }
     } catch (e) {
-      if (version === loadVersion.current) setError(e.message);
+      if (version === loadVersion.current) {
+        setError(e.message);
+        setLoadFailed(true);
+      }
     } finally {
       if (version === loadVersion.current) setLoading(false);
     }
@@ -494,7 +531,7 @@ export default function TmaPage({ role }) {
       )}
       {loading ? (
         <p role="status">Loading assignments…</p>
-      ) : !assignmentId ? (
+      ) : loadFailed ? null : !assignmentId ? (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {list.map((a) => (
