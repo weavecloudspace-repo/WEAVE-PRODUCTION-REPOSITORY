@@ -154,3 +154,23 @@ test("a submitted result displays the server score and removes question input", 
   assert.match(html, /View subject assessments/);
   assert.doesNotMatch(html, /type="radio"|Start TMA|Continue TMA/);
 });
+
+test("saving feedback appears only for pending or failed saves", () => {
+  const attempt = {
+    delivery: { attempt: { id: "attempt" } },
+    questions: [],
+    current: null,
+  };
+  assert.doesNotMatch(render(attempt), /All answers saved|student-tma-topline/);
+  assert.match(
+    render({ ...attempt, saveState: { pending: ["q1"], error: null } }),
+    /Saving/,
+  );
+  assert.match(
+    render({
+      ...attempt,
+      saveState: { pending: ["q1"], error: new Error("Offline") },
+    }),
+    /Some answers are not saved/,
+  );
+});

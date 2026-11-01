@@ -25,7 +25,8 @@ plain unanswered-count text without a colored warning strip.
 Answers are saved immediately through a serial, coalescing queue. A slow earlier
 request cannot finish after a newer save and overwrite it. Failed choices remain
 pending in memory with a retry action. They are never reported as saved until the
-server acknowledges them. Save & leave and submission flush the queue first;
+server acknowledges them. Saving and failure feedback appears only when needed;
+there is no persistent success label. Leave and submission flush the queue first;
 internal links wait for pending saves, and closing/reloading warns while answers
 remain unsaved. Browser history navigation can leave the page; already queued
 writes continue, but only acknowledged answers are guaranteed on return.

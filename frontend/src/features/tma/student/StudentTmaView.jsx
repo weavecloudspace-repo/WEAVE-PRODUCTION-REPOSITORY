@@ -124,37 +124,38 @@ export default function StudentTmaView({
   }, [loading, delivery, result, assignment]);
   return (
     <div className="student-tma">
-      <div
-        className={`student-tma-topline ${delivery && !result ? "student-tma-topline--quiz" : ""}`}
-      >
-        {(!delivery || result) && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={leave}
-            className="student-tma-back"
-          >
-            <ArrowLeft size={16} />
-            Back to subject
-          </button>
-        )}
-        {delivery && !result && (
-          <span className="student-tma-save" role="status" aria-live="polite">
-            {saveState.error ? (
-              "Some answers are not saved"
-            ) : saveState.pending.length ? (
-              <>
-                <LoaderCircle className="animate-spin" size={15} /> Saving
-                answers…
-              </>
-            ) : (
-              <>
-                <Cloud size={15} /> All answers saved
-              </>
-            )}
-          </span>
-        )}
-      </div>
+      {(!delivery ||
+        result ||
+        saveState.error ||
+        saveState.pending.length > 0) && (
+        <div
+          className={`student-tma-topline ${delivery && !result ? "student-tma-topline--quiz" : ""}`}
+        >
+          {(!delivery || result) && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={leave}
+              className="student-tma-back"
+            >
+              <ArrowLeft size={16} />
+              Back to subject
+            </button>
+          )}
+          {delivery && !result && (
+            <span className="student-tma-save" role="status" aria-live="polite">
+              {saveState.error ? (
+                "Some answers are not saved"
+              ) : (
+                <>
+                  <LoaderCircle className="animate-spin" size={15} /> Saving
+                  answers…
+                </>
+              )}
+            </span>
+          )}
+        </div>
+      )}
       {error && (
         <div role="alert" className="student-tma-alert">
           {error}
@@ -201,14 +202,24 @@ export default function StudentTmaView({
         <div className="student-tma-workspace">
           <div className="student-tma-main">
             <section className="student-tma-progress">
-              <div>
-                <p className="student-tma-eyebrow">
-                  {component?.name || "Your assignment"}
-                </p>
-                <h2>
-                  {answered} of {questions.length} answered
-                </h2>
+              <div className="student-tma-context">
+                <span className="student-tma-context-icon">
+                  <BookOpen size={20} aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="student-tma-eyebrow">
+                    {component?.name || "Tutor Marked Assignment"}
+                  </p>
+                  <h2>{subject?.subject_name || "Your assignment"}</h2>
+                </div>
               </div>
+              <p className="student-tma-count">
+                <strong>
+                  {answered}
+                  <span> / {questions.length}</span>
+                </strong>
+                <span>answered</span>
+              </p>
               <progress
                 max={questions.length || 1}
                 value={answered}
@@ -242,6 +253,12 @@ export default function StudentTmaView({
                   tabIndex={-1}
                 >
                   <h2 id="student-tma-question-heading">
+                    <span
+                      className="student-tma-question-index"
+                      aria-hidden="true"
+                    >
+                      {String(position + 1).padStart(2, "0")}
+                    </span>
                     Question {position + 1}
                     <span> / {questions.length}</span>
                   </h2>
@@ -472,9 +489,9 @@ export default function StudentTmaView({
             <div>
               <h3>Your progress is saved</h3>
               <p>
-                Choose an answer and it saves automatically. Wait for “All
-                answers saved” before leaving. If your connection drops, keep
-                the page open and retry.
+                Choose an answer and it saves automatically. Wait until “Saving
+                answers…” disappears before leaving. If your connection drops,
+                keep the page open and retry.
               </p>
             </div>
           </div>
