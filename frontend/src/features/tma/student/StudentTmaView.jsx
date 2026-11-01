@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   Pause,
   BookOpen,
+  ListChecks,
   ArrowUpRight,
 } from "lucide-react";
 import Button from "../../../components/ui/Button";
@@ -200,26 +201,36 @@ export default function StudentTmaView({
         </Card>
       ) : delivery ? (
         <div className="student-tma-workspace">
-          <div className="student-tma-main">
-            <section className="student-tma-progress">
-              <div className="student-tma-context">
-                <span className="student-tma-context-icon">
-                  <BookOpen size={20} aria-hidden="true" />
-                </span>
-                <div>
-                  <p className="student-tma-eyebrow">
-                    {component?.name || "Tutor Marked Assignment"}
-                  </p>
-                  <h2>{subject?.subject_name || "Your assignment"}</h2>
-                </div>
-              </div>
-              <p className="student-tma-count">
-                <strong>
-                  {answered}
-                  <span> / {questions.length}</span>
-                </strong>
-                <span>answered</span>
+          <header className="student-tma-quiz-heading">
+            <span className="student-tma-context-icon">
+              <BookOpen size={26} aria-hidden="true" />
+            </span>
+            <div>
+              <h2>{subject?.subject_name || "Your assignment"}</h2>
+              <p>
+                {component?.name || "Tutor Marked Assignment"}{" "}
+                <span aria-hidden="true">·</span> {questions.length} questions{" "}
+                <span aria-hidden="true">·</span> Single choice
               </p>
+            </div>
+          </header>
+          <div className="student-tma-main">
+            <section
+              className="student-tma-progress"
+              ref={questionHeading}
+              tabIndex={-1}
+            >
+              <div className="student-tma-progress-labels">
+                <h2 id="student-tma-question-heading">
+                  Question {position + 1} of {questions.length}
+                </h2>
+                <p className="student-tma-count">
+                  <strong>
+                    {answered} / {questions.length}
+                  </strong>{" "}
+                  answered
+                </p>
+              </div>
               <progress
                 max={questions.length || 1}
                 value={answered}
@@ -243,100 +254,78 @@ export default function StudentTmaView({
               </p>
             )}
             {current ? (
-              <section
-                className="student-tma-question"
-                aria-labelledby="student-tma-question-heading"
-              >
-                <div
-                  className="student-tma-question-heading"
-                  ref={questionHeading}
-                  tabIndex={-1}
+              <>
+                <section
+                  className="student-tma-question"
+                  aria-labelledby="student-tma-question-heading"
                 >
-                  <h2 id="student-tma-question-heading">
-                    <span
-                      className="student-tma-question-index"
-                      aria-hidden="true"
-                    >
-                      {String(position + 1).padStart(2, "0")}
-                    </span>
-                    Question {position + 1}
-                    <span> / {questions.length}</span>
-                  </h2>
-                  <span>Choose one answer</span>
-                </div>
-                <div className="student-tma-prompt">
-                  <MathText>{current.question_text}</MathText>
-                  {current.image_asset_id && (
-                    <StudentImage
-                      key={current.image_asset_id}
-                      attemptId={delivery.attempt.id}
-                      assetId={current.image_asset_id}
-                      alt={`Question ${position + 1} illustration`}
-                    />
-                  )}
-                </div>
-                <fieldset
-                  className="student-tma-options"
-                  disabled={busy || confirmation || submissionStarted}
-                >
-                  <legend className="sr-only">
-                    Answer for question {position + 1}
-                  </legend>
-                  {current.options.map((option, index) => (
-                    <div
-                      key={option.id}
-                      className={`student-tma-option ${answers[current.id] === option.id ? "is-selected" : ""}`}
-                    >
-                      <label className="student-tma-option-control">
-                        <input
-                          type="radio"
-                          name={current.id}
-                          checked={answers[current.id] === option.id}
-                          onChange={() => choose(current.id, option.id)}
-                          aria-label={`Option ${String.fromCharCode(65 + index)}`}
-                          aria-describedby={`tma-option-${option.id}`}
-                        />
-                        <span className="student-tma-letter">
-                          {String.fromCharCode(65 + index)}
-                        </span>
-                        <span
-                          className="student-tma-option-content"
-                          id={`tma-option-${option.id}`}
-                        >
-                          <MathText>{option.option_text}</MathText>
-                        </span>
-                        <CheckCircle2
-                          size={19}
-                          className="student-tma-selected-icon"
-                          aria-hidden="true"
-                        />
-                      </label>
-                      {option.image_asset_id && (
-                        <div className="student-tma-option-image">
-                          <StudentImage
-                            key={option.image_asset_id}
-                            attemptId={delivery.attempt.id}
-                            assetId={option.image_asset_id}
-                            alt={`Option ${String.fromCharCode(65 + index)} illustration`}
+                  <div className="student-tma-prompt">
+                    <MathText>{current.question_text}</MathText>
+                    {current.image_asset_id && (
+                      <StudentImage
+                        key={current.image_asset_id}
+                        attemptId={delivery.attempt.id}
+                        assetId={current.image_asset_id}
+                        alt={`Question ${position + 1} illustration`}
+                      />
+                    )}
+                  </div>
+                  <fieldset
+                    className="student-tma-options"
+                    disabled={busy || confirmation || submissionStarted}
+                  >
+                    <legend className="sr-only">
+                      Answer for question {position + 1}
+                    </legend>
+                    {current.options.map((option, index) => (
+                      <div
+                        key={option.id}
+                        className={`student-tma-option ${answers[current.id] === option.id ? "is-selected" : ""}`}
+                      >
+                        <label className="student-tma-option-control">
+                          <input
+                            type="radio"
+                            name={current.id}
+                            checked={answers[current.id] === option.id}
+                            onChange={() => choose(current.id, option.id)}
+                            aria-label={`Option ${String.fromCharCode(65 + index)}`}
+                            aria-describedby={`tma-option-${option.id}`}
                           />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </fieldset>
-                <button
-                  type="button"
-                  className="student-tma-clear"
-                  disabled={
-                    !answers[current.id] ||
-                    busy ||
-                    confirmation ||
-                    submissionStarted
-                  }
-                  onClick={() => choose(current.id, null)}
-                >
-                  Clear selection
-                </button>
+
+                          <span
+                            className="student-tma-option-content"
+                            id={`tma-option-${option.id}`}
+                          >
+                            <MathText>{option.option_text}</MathText>
+                          </span>
+                        </label>
+                        {option.image_asset_id && (
+                          <div className="student-tma-option-image">
+                            <StudentImage
+                              key={option.image_asset_id}
+                              attemptId={delivery.attempt.id}
+                              assetId={option.image_asset_id}
+                              alt={`Option ${String.fromCharCode(65 + index)} illustration`}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </fieldset>
+                  <button
+                    type="button"
+                    className="student-tma-clear"
+                    disabled={
+                      !answers[current.id] ||
+                      busy ||
+                      confirmation ||
+                      submissionStarted
+                    }
+                    onClick={() => choose(current.id, null)}
+                  >
+                    Clear selection
+                  </button>
+                </section>
                 <div className="student-tma-question-nav">
                   <Button
                     variant="outline"
@@ -362,7 +351,7 @@ export default function StudentTmaView({
                     <ArrowRight size={16} />
                   </Button>
                 </div>
-              </section>
+              </>
             ) : (
               <Card className="p-6">
                 No questions were returned.{" "}
@@ -377,8 +366,10 @@ export default function StudentTmaView({
             )}
           </div>
           <aside className="student-tma-map">
-            <h2>Your questions</h2>
-            <p>Jump to any question to review your answer.</p>
+            <h2>
+              <ListChecks size={20} aria-hidden="true" />
+              Your questions
+            </h2>
             <nav aria-label="Question navigator">
               {questions.map((q, i) => (
                 <button
@@ -394,16 +385,6 @@ export default function StudentTmaView({
                 </button>
               ))}
             </nav>
-            <div className="student-tma-map-key">
-              <span>
-                <i />
-                Unanswered
-              </span>
-              <span>
-                <i />
-                Answered
-              </span>
-            </div>
             <div className="student-tma-map-actions">
               <Button
                 variant="outline"

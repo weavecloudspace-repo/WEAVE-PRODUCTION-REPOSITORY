@@ -22,6 +22,11 @@ navigator. Leave and Submit TMA sit beneath the question grid; Submit TMA is
 shown only at the last question. The confirmation uses
 plain unanswered-count text without a colored warning strip.
 
+The quiz uses an unboxed subject heading and slim progress row above one main
+question panel. Answer choices use native radio controls, and Previous/Next sit
+outside the panel. The navigator highlights current and answered questions
+without a color legend. Presentation uses existing tenant/theme colors.
+
 Answers are saved immediately through a serial, coalescing queue. A slow earlier
 request cannot finish after a newer save and overwrite it. Failed choices remain
 pending in memory with a retry action. They are never reported as saved until the
