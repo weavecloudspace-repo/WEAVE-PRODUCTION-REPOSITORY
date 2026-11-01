@@ -216,6 +216,7 @@ export default function TmaPage({ role }) {
   const [aiOpen, setAiOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [levelFilter, setLevelFilter] = useState("");
   const [readiness, setReadiness] = useState(null);
   const [assets, setAssets] = useState([]);
   const [report, setReport] = useState(null);
@@ -395,6 +396,7 @@ export default function TmaPage({ role }) {
   const visibleList = list.filter(
     (a) =>
       (!statusFilter || a.status === statusFilter) &&
+      (!levelFilter || a.academic_level_id === levelFilter) &&
       scopeLabel(a).toLowerCase().includes(query.toLowerCase()),
   );
   return (
@@ -545,8 +547,8 @@ export default function TmaPage({ role }) {
           <p role="status">Loading assignments…</p>
         ) : loadFailed ? null : !assignmentId ? (
           <>
-            <div className="flex flex-wrap items-end justify-between gap-3 rounded-2xl border border-border bg-surface p-4">
-              <label className="grid flex-1 min-w-[160px] gap-1.5 text-xs text-text-muted">
+            <div className="grid items-end gap-3 rounded-2xl border border-border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_190px_190px]">
+              <label className="grid min-w-0 gap-1.5 text-xs text-text-muted sm:col-span-2 lg:col-span-1">
                 Find an assignment
                 <input
                   className={field}
@@ -555,7 +557,22 @@ export default function TmaPage({ role }) {
                   onChange={(e) => setQuery(e.target.value)}
                 />
               </label>
-              <div className="w-full sm:w-52">
+              <div className="min-w-0">
+                <Select
+                  label="Level"
+                  value={levelFilter}
+                  onChange={setLevelFilter}
+                  placeholder="All levels"
+                  clearable
+                >
+                  {[...new Map((config?.scopes || []).map((scope) => [
+                    scope.academic_level_id, scope.level_name,
+                  ])).entries()].map(([id, name]) => (
+                    <option key={id} value={id}>{name}</option>
+                  ))}
+                </Select>
+              </div>
+              <div className="min-w-0">
                 <Select
                   label="Status"
                   value={statusFilter}
