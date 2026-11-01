@@ -231,49 +231,49 @@ class TMAAssignment(BaseModel):
 
 
 class TMAAssignmentRevision(BaseModel):
-   """
+    """
     Represents a specific revision of a Tutor-Marked Assignment.
 
-    Each revision preserver its associated questions , student attempts
-    and historical records
+    Each revision preserves its associated questions, student attempts
+    and historical records.
 
     Revisions are created when an existing assignment is cancelled and revised.
     Previous revisions remain immutable for auditing.
 
     The parent TMAAssignment controls the assignment lifecycle
-   """
+    """
 
 
-   __tablename__ = "tma_assignment_revisions"
+    __tablename__ = "tma_assignment_revisions"
 
 
-   assignment_id : Mapped[uuid.UUID] = mapped_column(
+    assignment_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        nullable = False
+        nullable=False
     )
 
-   revision_number : Mapped[int] = mapped_column(
-      Integer,
-      nullable = False
+    revision_number: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False
     )
 
 
-   published_at : Mapped[datetime | None] = mapped_column(
-      DateTime(timezone = True),
-      nullable = True
-   )
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True
+    )
 
 
 
-   invalidated_at : Mapped[datetime | None] = mapped_column(
-      DateTime(timezone = True),
-      nullable = True
-   )
+    invalidated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True
+    )
 
 
 
 
-   invalidated_by_actor_type: Mapped[TMAActorType | None] = mapped_column(
+    invalidated_by_actor_type: Mapped[TMAActorType | None] = mapped_column(
         SQLEnum(
             TMAActorType,
             name="tma_actor_type",
@@ -285,12 +285,12 @@ class TMAAssignmentRevision(BaseModel):
         nullable=True,
     )
 
-   invalidated_by_actor_id: Mapped[uuid.UUID | None] = mapped_column(
+    invalidated_by_actor_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
-   invalidation_reason: Mapped[str | None] = mapped_column(
+    invalidation_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -299,7 +299,7 @@ class TMAAssignmentRevision(BaseModel):
     # Database Constraints
     # ==========================================
 
-   __table_args__ = (
+    __table_args__ = (
         # Enforce tenant-safe assignment references.
         ForeignKeyConstraint(
             ["tenant_id", "assignment_id"],
