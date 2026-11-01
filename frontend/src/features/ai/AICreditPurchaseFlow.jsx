@@ -40,8 +40,8 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
       setBusy(false);
     }
   };
-  const reset = () => {
-    if (busy) return;
+  const reset = (force = false) => {
+    if (busy && !force) return;
     setStep("quota");
     setQuote(null);
     setPurchase(null);
@@ -90,7 +90,7 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
     );
     if (result.status === "success") {
       await onVerified?.();
-      reset();
+      reset(true);
       return;
     }
     setError(`Payment is ${result.status}. Credits will appear only after verification.`);

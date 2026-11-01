@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import AnalyticsBarChart from "../../components/charts/AnalyticsBarChart";
+import AIUsageDashboardCard from "../../features/ai/AIUsageDashboardCard";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import LoadingState from "../../components/shared/LoadingState";
 import Card from "../../components/ui/Card";
@@ -374,6 +375,7 @@ function TeacherDashboardPage() {
             </div>
           </section>
 
+          <AIUsageDashboardCard role="teacher" />
           <DashboardQuickActions
             title="Quick actions"
             description="Assignment-scoped teacher workflows."

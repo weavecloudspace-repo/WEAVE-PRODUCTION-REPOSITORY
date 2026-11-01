@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   X,
@@ -10,7 +10,6 @@ import { Link } from "react-router-dom";
 import { createAIDraftController, createAIDraftStore, aiDraftScope } from "./aiDrafts";
 import { api, authSession } from "../../services/api";
 import { tmaService as service } from "../../services/tmaService";
-import TmaAICredits from "./TmaAICredits";
 
 // CBT composer interaction model, adapted to authenticated TMA generation APIs.
 export default function TmaAIComposer({
@@ -36,11 +35,6 @@ export default function TmaAIComposer({
   const controller = useMemo(() => store ? createAIDraftController({ store, service, assignmentId, revisionNumber }) : null, [store, assignmentId, revisionNumber]);
   const [quota, setQuota] = useState(null);
   const credits = quota?.total_available_credits ?? null;
-  const refreshQuota = useCallback(async () => {
-    const result = await api.get("/ai/quota");
-    setQuota(result);
-    return result;
-  }, []);
   const pending = useRef(false);
   const mounted = useRef(false);
   const composer = useRef(null);
@@ -300,7 +294,6 @@ export default function TmaAIComposer({
             Your AI credit balance is exhausted.
           </p>
         )}
-        <TmaAICredits quota={quota} onRefresh={refreshQuota} />
       </div>
     </aside>
   );

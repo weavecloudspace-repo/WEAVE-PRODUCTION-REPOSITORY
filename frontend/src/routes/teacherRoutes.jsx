@@ -9,6 +9,7 @@ import RoleGuard from "./RoleGuard";
 import RuntimeFeatureRoute from "./RuntimeFeatureRoute";
 import TeacherClassDutyRoute from "./TeacherClassDutyRoute";
 const TmaPage = lazy(() => import("../features/tma/TmaPage"));
+const AIUsagePage = lazy(() => import("../features/ai/AIUsagePage"));
 const TmaQuestionPreviewPage = lazy(() => import("../features/tma/TmaQuestionPreviewPage"));
 const TmaAIReviewPage = lazy(() => import("../features/tma/TmaAIReviewPage"));
 
@@ -58,6 +59,7 @@ export const teacherRoutes = (
       <Route element={<DashboardShell role="teacher" />}>
         <Route path="/teacher/dashboard" element={<TeacherDashboardPage />} />
         <Route path="/teacher/tma" element={<TmaPage role="teacher" />} />
+        <Route path="/teacher/ai-usage" element={<AIUsagePage role="teacher" />} />
         <Route path="/teacher/tma/:assignmentId" element={<TmaPage role="teacher" />} />
         <Route path="/teacher/tma/:assignmentId/questions/:questionId" element={<TmaQuestionPreviewPage role="teacher" />} />
         <Route path="/teacher/tma/:assignmentId/ai-drafts/:draftId" element={<TmaAIReviewPage role="teacher" />} />
