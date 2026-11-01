@@ -17,6 +17,8 @@ from app.modules.tma.ai_schemas import (
     TMAAIGenerateRequest,
     TMAAIImportRequest,
     TMAAIRegenerateRequest,
+    TMAAIBulkImportRequest,
+    TMAAIBulkImportResponse,
 )
 from app.modules.tma.ai_service import TMAAIService
 from app.modules.tma.router import Author
@@ -24,6 +26,23 @@ from app.modules.tma.schemas import TMAQuestionAdminResponse
 from app.modules.tma.question_service import TMAQuestionService
 
 router = APIRouter(prefix="/tma", tags=["TMA AI"], route_class=CBTGZipRoute)
+
+
+@router.post(
+    "/assignments/{assignment_id}/ai/questions/import-bulk",
+    response_model=TMAAIBulkImportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def import_tma_ai_questions(
+    assignment_id: uuid.UUID,
+    payload: TMAAIBulkImportRequest,
+    db: DbSession,
+    actor: Author,
+) -> TMAAIBulkImportResponse:
+    count = await TMAAIService.import_questions(
+        db, actor=actor, assignment_id=assignment_id, payload=payload
+    )
+    return TMAAIBulkImportResponse(imported_count=count)
 
 
 @router.post(

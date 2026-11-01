@@ -1,28 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   X,
   SlidersHorizontal,
   Sparkles,
   Wallet,
-  RotateCw,
-  Check,
 } from "lucide-react";
-import Button from "../../components/ui/Button";
-import MathText from "./MathText.jsx";
-import { api } from "../../services/api";
+import { Link } from "react-router-dom";
+import { createAIDraftController, createAIDraftStore, aiDraftScope } from "./aiDrafts";
+import { api, authSession } from "../../services/api";
 import { tmaService as service } from "../../services/tmaService";
-
-function Illustration({ image }) {
-  return image?.data_base64 &&
-    ["image/png", "image/jpeg", "image/webp"].includes(image.content_type) ? (
-    <img
-      className="max-h-56 max-w-full rounded-xl object-contain"
-      src={`data:${image.content_type};base64,${image.data_base64}`}
-      alt={image.alt_text || "Question illustration"}
-    />
-  ) : null;
-}
+import TmaAICredits from "./TmaAICredits";
 
 // CBT composer interaction model, adapted to authenticated TMA generation APIs.
 export default function TmaAIComposer({
@@ -30,7 +18,9 @@ export default function TmaAIComposer({
   assignmentId,
   label,
   onClose,
-  onImported,
+  role,
+  revisionNumber,
+  onReview,
 }) {
   const [prompt, setPrompt] = useState("");
   const [sent, setSent] = useState("");
@@ -39,14 +29,40 @@ export default function TmaAIComposer({
   const [visuals, setVisuals] = useState("text_only");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [questions, setQuestions] = useState([]);
-  const [credits, setCredits] = useState(null);
-  const [instruction, setInstruction] = useState("");
-  const request = useRef(null);
-  const regeneration = useRef(null);
+  const [drafts, setDrafts] = useState([]);
+  const user = authSession.getUser();
+  const scope = user ? aiDraftScope(user, role, assignmentId) : null;
+  const store = useMemo(() => scope ? createAIDraftStore(scope) : null, [scope]);
+  const controller = useMemo(() => store ? createAIDraftController({ store, service, assignmentId, revisionNumber }) : null, [store, assignmentId, revisionNumber]);
+  const [quota, setQuota] = useState(null);
+  const credits = quota?.total_available_credits ?? null;
+  const refreshQuota = useCallback(async () => {
+    const result = await api.get("/ai/quota");
+    setQuota(result);
+    return result;
+  }, []);
   const pending = useRef(false);
   const mounted = useRef(false);
   const composer = useRef(null);
+  const options = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event) => {
+      if (options.current && !options.current.contains(event.target)) options.current.open = false;
+    };
+    const escape = (event) => {
+      if (event.key === "Escape" && options.current?.open) {
+        options.current.open = false;
+        options.current.querySelector("summary")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -56,19 +72,20 @@ export default function TmaAIComposer({
   useEffect(() => {
     if (!open) return;
     composer.current?.focus();
+    store?.list().then(setDrafts).catch(() => setError("Browser draft storage is unavailable. Enable site storage to continue."));
     let active = true;
     api
       .get("/ai/quota")
       .then((r) => {
-        if (active) setCredits(r.total_available_credits);
+        if (active) setQuota(r);
       })
       .catch(() => {
-        if (active) setCredits(null);
+        if (active) setQuota(null);
       });
     return () => {
       active = false;
     };
-  }, [open]);
+  }, [open, store]);
   const act = async (fn) => {
     if (pending.current) return;
     pending.current = true;
@@ -88,7 +105,7 @@ export default function TmaAIComposer({
         api
           .get("/ai/quota")
           .then((r) => {
-            if (mounted.current) setCredits(r.total_available_credits);
+            if (mounted.current) setQuota(r);
           })
           .catch(() => {});
       }
@@ -104,30 +121,21 @@ export default function TmaAIComposer({
       credits === 0
     )
       return;
-    if (
-      questions.length &&
-      !window.confirm("Replace the unimported previews with a new generation?")
-    )
-      return;
     const body = {
       generation_prompt: prompt.trim(),
       question_count: count,
       difficulty,
       visual_mode: visuals,
     };
-    const fingerprint = JSON.stringify(body);
-    if (request.current?.fingerprint !== fingerprint)
-      request.current = { fingerprint, key: crypto.randomUUID() };
     setSent(prompt.trim());
+    setPrompt("");
     act(async () => {
-      const result = await service.generate(
-        assignmentId,
-        body,
-        request.current.key,
-      );
-      if (mounted.current) {
-        setQuestions(result.questions);
-        request.current = null;
+      if (!controller || !revisionNumber) throw new Error("Wait for the assignment to load before generating.");
+      try {
+        const draft = await controller.generate(body);
+        onReview(draft.draft_id);
+      } finally {
+        if (mounted.current) setDrafts(await store.list());
       }
     });
   };
@@ -146,7 +154,7 @@ export default function TmaAIComposer({
         </button>
       </header>
       <div className="tma-ai-conversation" aria-busy={busy}>
-        {!sent && !questions.length && (
+        {!sent && (
           <div className="tma-ai-welcome">
             <img src="/icons/weave-email-icon.png" alt="" />
             <h3>What are we teaching today?</h3>
@@ -171,102 +179,19 @@ export default function TmaAIComposer({
             {error}
           </p>
         )}
-        {questions.length > 0 && (
-          <>
-            <p className="text-xs font-semibold text-text-muted">
-              {questions.length} previews ready · review each answer before
-              importing
-            </p>
-            <label className="grid gap-2 text-xs text-text-muted">
-              Refinement instruction
-              <input
-                className="tma-ai-input"
-                value={instruction}
-                onChange={(e) => setInstruction(e.target.value)}
-                placeholder="For example: make it more practical"
-              />
-            </label>
-          </>
+        {drafts.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-text-muted">Saved on this browser</p>
+            {drafts.map((draft) => (
+              <Link key={draft.draft_id} className="block rounded-xl border border-border bg-surface p-3 text-sm hover:bg-surface-muted"
+                to={`/${role}/tma/${assignmentId}/ai-drafts/${draft.draft_id}`}
+                onClick={(e) => { e.preventDefault(); onReview(draft.draft_id); }}>
+                <strong>{draft.questions.length || draft.input.question_count} questions · {draft.status === "review" ? "Review draft" : "Recover draft"}</strong>
+                <span className="mt-1 block truncate text-xs text-text-muted">{draft.input.generation_prompt}</span>
+              </Link>
+            ))}
+          </div>
         )}
-        {questions.map((q, i) => (
-          <article className="tma-ai-preview" key={i}>
-            <div className="tma-eyebrow">Preview {i + 1}</div>
-            <MathText>{q.prompt}</MathText>
-            <Illustration image={q.image} />
-            <div className="space-y-2">
-              {q.options.map((o, j) => (
-                <div
-                  key={j}
-                  className={`tma-ai-option ${o.is_correct ? "is-correct" : ""}`}
-                >
-                  <span>
-                    {String.fromCharCode(65 + j)}
-                    {o.is_correct && <Check size={12} />}
-                  </span>
-                  <div className="min-w-0">
-                    <MathText>{o.text}</MathText>
-                    <Illustration image={o.image} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                disabled={busy}
-                onClick={() =>
-                  act(async () => {
-                    await service.importQuestion(assignmentId, q);
-                    if (mounted.current)
-                      setQuestions((list) =>
-                        list.filter((_, index) => index !== i),
-                      );
-                    await onImported();
-                  })
-                }
-              >
-                <Check size={14} />
-                Import
-              </Button>
-              <Button
-                variant="outline"
-                disabled={busy || !instruction.trim()}
-                onClick={() =>
-                  act(async () => {
-                    const body = {
-                      generation_prompt: sent,
-                      existing_question: q,
-                      instruction: instruction.trim(),
-                      difficulty,
-                      visual_mode: visuals,
-                    };
-                    const fingerprint = JSON.stringify(body);
-                    if (regeneration.current?.fingerprint !== fingerprint)
-                      regeneration.current = {
-                        fingerprint,
-                        key: crypto.randomUUID(),
-                      };
-                    const result = await service.regenerate(
-                      assignmentId,
-                      body,
-                      regeneration.current.key,
-                    );
-                    if (mounted.current) {
-                      setQuestions((list) =>
-                        list.map((old, index) =>
-                          index === i ? result.question : old,
-                        ),
-                      );
-                      regeneration.current = null;
-                    }
-                  })
-                }
-              >
-                <RotateCw size={14} />
-                Refine
-              </Button>
-            </div>
-          </article>
-        ))}
       </div>
       <div className="tma-ai-bottom">
         <form className="tma-ai-prompt" onSubmit={generate}>
@@ -291,7 +216,7 @@ export default function TmaAIComposer({
             }}
           />
           <div className="tma-ai-prompt-actions">
-            <details className="tma-ai-options">
+            <details ref={options} className="tma-ai-options">
               <summary>
                 <SlidersHorizontal size={15} />
                 {count} questions · {difficulty}
@@ -375,6 +300,7 @@ export default function TmaAIComposer({
             Your AI credit balance is exhausted.
           </p>
         )}
+        <TmaAICredits quota={quota} onRefresh={refreshQuota} />
       </div>
     </aside>
   );

@@ -15,10 +15,21 @@
 }
 .tma-workspace--ai {
   grid-template-columns: minmax(0, 1fr) 8px var(--tma-ai-width);
+  grid-template-rows: minmax(0, 1fr);
+  height: var(--tma-workspace-height);
+  min-height: 0;
+  align-items: stretch;
+  overflow: hidden;
+}
+.tma-workspace--ai .tma-workspace-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .tma-workspace-divider {
   align-self: stretch;
-  min-height: 600px;
+  min-height: 0;
   margin-inline: 2px;
   border-radius: 8px;
   background: rgb(var(--color-border));
@@ -30,10 +41,9 @@
   background: rgb(var(--color-primary));
 }
 .tma-workspace-panel {
-  position: sticky;
-  top: 12px;
   min-width: 0;
-  padding-left: 12px;
+  min-height: 0;
+  overflow: hidden;
 }
 .tma-eyebrow {
   font-size: 10px;
@@ -264,13 +274,13 @@
   background: rgb(var(--color-primary) / 0.035);
 }
 .tma-ai-composer {
-  height: min(820px, calc(100dvh - 130px));
-  min-height: 500px;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 20px;
+  border-radius: 0;
   background: rgb(var(--color-surface));
 }
 .tma-ai-heading {
@@ -517,7 +527,7 @@
 }
 .tma-builder-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 20px;
 }
@@ -638,17 +648,52 @@
   margin-top: 12px;
 }
 .tma-editor-media > label {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 40px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid rgb(var(--color-primary) / 0.2);
+  border-radius: 10px;
+  background: rgb(var(--color-primary) / 0.08);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
   color: rgb(var(--color-primary));
 }
 .tma-editor-media input[type="file"] {
-  max-width: 160px;
-  font-size: 10px;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.tma-editor-media > label:focus-within {
+  outline: 2px solid rgb(var(--color-primary));
+  outline-offset: 3px;
+}
+.tma-editor-media > label:has(input:disabled) { opacity: 0.5; }
+.tma-editor-media-panel { margin-top: 12px; }
+.tma-editor-media-panel > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgb(var(--color-primary));
+  cursor: pointer;
+}
+.tma-answer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+@container (max-width: 720px) {
+  .tma-answer-grid { grid-template-columns: minmax(0, 1fr); }
 }
 .tma-editor-media > div {
   flex: 1;
@@ -775,8 +820,8 @@
     padding: 0;
   }
   .tma-ai-composer {
-    height: calc(100dvh - 165px);
-    min-height: 420px;
+    height: 100%;
+    min-height: 0;
   }
 }
 @media (max-width: 600px) {
@@ -801,6 +846,159 @@
   .tma-ai-progress > span {
     animation: none;
   }
+}
+.tma-question-list {
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 16px;
+  background: rgb(var(--color-surface));
+  container-type: inline-size;
+}
+.tma-question-list-heading,
+.tma-question-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px 190px;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px;
+}
+.tma-question-list-heading {
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  font-weight: 600;
+  background: rgb(var(--color-surface-muted));
+  border-radius: 16px 16px 0 0;
+}
+.tma-question-row {
+  border-top: 1px solid rgb(var(--color-border));
+}
+.tma-question-row-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 60px;
+}
+.tma-question-row-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+}
+.tma-question-row {
+  position: relative;
+}
+.tma-question-row-link:focus-visible {
+  outline: 2px solid rgb(var(--color-primary));
+  outline-offset: 4px;
+}
+.tma-question-row:has(.tma-question-row-link:hover) {
+  background: rgb(var(--color-primary) / 0.03);
+}
+.tma-question-row .tma-question-number {
+  flex-shrink: 0;
+}
+.tma-question-excerpt {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  font-weight: 500;
+}
+.tma-question-media-label {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 11px;
+  color: rgb(var(--color-text-muted));
+  margin-top: 5px;
+}
+.tma-question-preview-arrow {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: rgb(var(--color-text-muted));
+}
+.tma-question-row-meta {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: rgb(var(--color-text-muted));
+}
+.tma-question-row-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tma-question-preview-page {
+  width: 100%;
+  min-width: 0;
+  max-width: 1100px;
+  margin-inline: auto;
+  padding: 4px 4px 32px;
+}
+.tma-preview-options {
+  display: grid;
+  gap: 12px;
+  padding: 0 22px 22px;
+}
+.tma-preview-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 12px;
+  padding: 14px;
+}
+@container (max-width: 720px) {
+  .tma-question-list-heading {
+    display: none;
+  }
+  .tma-question-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 14px;
+  }
+  .tma-question-row-link {
+    grid-column: 1 / -1;
+  }
+  .tma-question-row-meta {
+    font-size: 11px;
+  }
+  .tma-question-row:nth-child(2) {
+    border-top: 0;
+  }
+}
+@container (max-width: 380px) {
+  .tma-question-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tma-question-row-meta {
+    display: flex;
+    gap: 8px;
+  }
+}
+.tma-ai-review-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.tma-ai-review-tools,
+.tma-ai-draft-editor {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border-top: 1px solid rgb(var(--color-border));
+}
+.tma-ai-draft-editor {
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 16px;
+  background: rgb(var(--color-surface));
 }
 .tma-submissions {
   padding: 20px;

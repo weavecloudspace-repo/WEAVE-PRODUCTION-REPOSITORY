@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from pydantic import Field
 
 from app.modules.cbt.ai.authoring.schemas import AIQuestionDifficulty, AIVisualMode
@@ -33,3 +34,13 @@ class TMAAIImportRequest(CBTAISchemaBase):
     """A single previewed AI question; teachers can review before saving."""
 
     question: AIQuestionResponse
+
+
+class TMAAIBulkImportRequest(CBTAISchemaBase):
+    draft_id: uuid.UUID
+    revision_number: int = Field(ge=1)
+    questions: list[AIQuestionResponse] = Field(min_length=1, max_length=50)
+
+
+class TMAAIBulkImportResponse(CBTAISchemaBase):
+    imported_count: int

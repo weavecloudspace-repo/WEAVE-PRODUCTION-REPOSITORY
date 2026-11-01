@@ -5,6 +5,8 @@ import { Route } from "react-router-dom";
 import { DashboardShell } from "../components/layout/DashboardLayout";
 import PullRefreshBoundary from "../components/layout/PullRefreshBoundary";
 const TmaPage = lazy(() => import("../features/tma/TmaPage"));
+const TmaQuestionPreviewPage = lazy(() => import("../features/tma/TmaQuestionPreviewPage"));
+const TmaAIReviewPage = lazy(() => import("../features/tma/TmaAIReviewPage"));
 const AcademicHubOverviewPage = lazy(
   () => import("../pages/admin/AcademicHubOverviewPage"),
 );
@@ -98,6 +100,8 @@ export const adminRoutes = (
       <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
       <Route path="/admin/tma" element={<TmaPage role="admin" />} />
       <Route path="/admin/tma/:assignmentId" element={<TmaPage role="admin" />} />
+      <Route path="/admin/tma/:assignmentId/questions/:questionId" element={<TmaQuestionPreviewPage role="admin" />} />
+      <Route path="/admin/tma/:assignmentId/ai-drafts/:draftId" element={<TmaAIReviewPage role="admin" />} />
       <Route path="/admin/getting-started" element={<AdminGettingStartedRoute />} />
       <Route path="/admin/getting-started/:step" element={<AdminGettingStartedRoute />} />
       <Route path="/admin/search/:resultKey" element={<AdminSearchDetailPage />} />

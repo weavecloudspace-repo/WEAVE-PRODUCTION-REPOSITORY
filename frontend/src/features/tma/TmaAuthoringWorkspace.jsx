@@ -8,6 +8,7 @@ export default function TmaAuthoringWorkspace({ children, panel, open }) {
   const drag = useRef(null);
   const [width, setWidth] = useState(380);
   const [available, setAvailable] = useState(1100);
+  const [height, setHeight] = useState(600);
   const maximum = Math.max(300, Math.min(520, Math.floor(available * 0.45)));
   const actual = Math.min(width, maximum);
   useEffect(() => {
@@ -18,12 +19,26 @@ export default function TmaAuthoringWorkspace({ children, panel, open }) {
     observer.observe(root.current);
     return () => observer.disconnect();
   }, []);
+  useEffect(() => {
+    if (!open || !root.current) return;
+    const viewport = root.current.closest("#dashboard-scroll-viewport");
+    if (!viewport) return;
+    const measure = () => {
+      const top = root.current.getBoundingClientRect().top
+        - viewport.getBoundingClientRect().top + viewport.scrollTop;
+      setHeight(Math.max(240, viewport.clientHeight - top));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [open]);
   const resize = (next) => setWidth(Math.max(300, Math.min(maximum, next)));
   return (
     <div
       ref={root}
       className={`tma-workspace ${open ? "tma-workspace--ai" : ""}`}
-      style={{ "--tma-ai-width": `${actual}px` }}
+      style={{ "--tma-ai-width": `${actual}px`, "--tma-workspace-height": `${height}px` }}
     >
       <div className="tma-workspace-content">{children}</div>
       {open && (

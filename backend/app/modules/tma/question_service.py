@@ -75,6 +75,7 @@ class TMAQuestionService:
         actor: TMAAuthor,
         assignment_id: uuid.UUID,
         payload: TMAQuestionCreate,
+        commit: bool = True,
     ) -> TMAQuestion:
         assignment, revision = await TMAQuestionService._draft_context(
             db,
@@ -121,8 +122,9 @@ class TMAQuestionService:
                 ]
             )
             await db.flush()
-            await db.commit()
-            await flush_cache_invalidation_events(db)
+            if commit:
+                await db.commit()
+                await flush_cache_invalidation_events(db)
         except IntegrityError as exc:
             await db.rollback()
             raise ConflictException(

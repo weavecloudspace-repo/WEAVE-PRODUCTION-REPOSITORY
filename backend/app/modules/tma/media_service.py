@@ -65,6 +65,7 @@ class TMAMediaService:
         actor: TMAAuthor,
         assignment_id: uuid.UUID,
         file: UploadFile,
+        commit: bool = True,
     ) -> TMAMediaAsset:
         """Upload a private draft image, then create tenant-scoped metadata.
 
@@ -102,8 +103,9 @@ class TMAMediaService:
         )
         try:
             await TMAMediaAssetRepository.add(db, asset)
-            await db.commit()
-            await flush_cache_invalidation_events(db)
+            if commit:
+                await db.commit()
+                await flush_cache_invalidation_events(db)
         except Exception:
             await db.rollback()
             try:

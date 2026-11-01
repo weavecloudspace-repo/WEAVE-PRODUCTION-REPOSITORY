@@ -1,14 +1,15 @@
-import { BookOpen, Pencil } from "lucide-react";
+import { ArrowUpRight, BookOpen, Image, Pencil, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import Button from "../../components/ui/Button";
-import MathText from "./MathText.jsx";
-import { TmaAssetImage } from "./TmaQuestionEditor";
 
 export default function TmaQuestionList({
   questions,
-  assignmentId,
+  assignmentPath,
+  busy,
   editable,
   canEdit,
   onEdit,
+  onDelete,
 }) {
   if (!questions.length)
     return (
@@ -29,67 +30,69 @@ export default function TmaQuestionList({
       </section>
     );
   return (
-    <div className="space-y-4">
+    <section className="tma-question-list" aria-label="Assignment questions">
+      <div className="tma-question-list-heading" aria-hidden="true">
+        <span>Question</span>
+        <span>Type / options</span>
+        <span>Actions</span>
+      </div>
       {questions.map((q, i) => (
-        <article key={q.id} className="tma-question-record">
-          <header>
+        <article key={q.id} className="tma-question-row">
+          <Link
+            className="tma-question-row-link"
+            to={`${assignmentPath}/questions/${q.id}`}
+            aria-label={`Preview question ${i + 1}`}
+          >
             <span className="tma-question-number">
               {String(i + 1).padStart(2, "0")}
             </span>
-            <div>
-              <h3>Question {i + 1}</h3>
-              <p>Single choice · {q.options.length} options</p>
+            <div className="min-w-0">
+              <h3 className="tma-question-excerpt">
+                {q.question_text || "Image question"}
+              </h3>
+              {(q.image_asset_id ||
+                q.options.some((o) => o.image_asset_id)) && (
+                <span className="tma-question-media-label">
+                  <Image size={14} aria-hidden="true" /> Includes media
+                </span>
+              )}
             </div>
-            {editable && canEdit(q) && (
-              <Button variant="ghost" onClick={() => onEdit(q)}>
-                <Pencil size={14} />
-                Edit
-              </Button>
-            )}
-          </header>
-          <div className="tma-question-prompt">
-            <MathText>{q.question_text}</MathText>
-            {q.image_asset_id && (
-              <TmaAssetImage
-                key={q.image_asset_id}
-                assignmentId={assignmentId}
-                assetId={q.image_asset_id}
-                alt="Question illustration"
-              />
+            <ArrowUpRight
+              size={16}
+              className="tma-question-preview-arrow"
+              aria-hidden="true"
+            />
+          </Link>
+          <div className="tma-question-row-meta">
+            <span>Single choice</span>
+            <span>{q.options.length} options</span>
+          </div>
+          <div className="tma-question-row-actions">
+            {editable && canEdit(q) ? (
+              <>
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => onEdit(q)}
+                  aria-label={`Edit question ${i + 1}`}
+                >
+                  <Pencil size={15} /> Edit
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => onDelete(q)}
+                  aria-label={`Delete question ${i + 1}`}
+                >
+                  <Trash2 size={15} className="text-error" /> Delete
+                </Button>
+              </>
+            ) : (
+              <span className="text-xs text-text-muted">Read only</span>
             )}
           </div>
-          <details className="tma-question-answers">
-            <summary>
-              Answer options <span>1 correct answer</span>
-            </summary>
-            <div>
-              {q.options.map((o, j) => (
-                <div key={o.id} className={o.is_correct ? "is-correct" : ""}>
-                  <span className="tma-option-letter">
-                    {String.fromCharCode(65 + j)}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <MathText>{o.option_text}</MathText>
-                    {o.image_asset_id && (
-                      <TmaAssetImage
-                        key={o.image_asset_id}
-                        assignmentId={assignmentId}
-                        assetId={o.image_asset_id}
-                        alt={`Option ${j + 1}`}
-                      />
-                    )}
-                  </div>
-                  {o.is_correct && (
-                    <span className="text-[10px] font-semibold text-primary">
-                      Correct
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </details>
         </article>
       ))}
-    </div>
+    </section>
   );
 }

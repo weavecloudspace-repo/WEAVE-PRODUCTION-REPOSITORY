@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bold,
@@ -29,22 +29,32 @@ const tools = [
   ["number", ListOrdered, "Numbered list"],
   ["link", LinkIcon, "Link"],
 ];
-export function TmaAssetImage({ assignmentId, assetId, alt }) {
+export function TmaAssetImage({ assignmentId, assetId, alt, autoLoad = false }) {
   // Loading by button avoids issuing signed URLs for off-screen editor assets.
   const [url, setUrl] = useState(null);
   const [error, setError] = useState("");
+  useEffect(() => {
+    if (!autoLoad) return;
+    let active = true;
+    tmaService.imageUrl(assignmentId, assetId)
+      .then((result) => { if (active) setUrl(result.signed_url); })
+      .catch((e) => { if (active) setError(e.message); });
+    return () => { active = false; };
+  }, [assignmentId, assetId, autoLoad]);
   return (
     <div>
       {url ? (
         <img
           src={url}
           alt={alt}
-          className="max-h-48 max-w-full rounded-xl object-contain"
+          className={`${autoLoad ? "max-h-96" : "max-h-48"} max-w-full rounded-xl object-contain`}
           onError={() => {
             setUrl(null);
             setError("Image expired. Load it again.");
           }}
         />
+      ) : autoLoad && !error ? (
+        <p role="status" className="py-3 text-sm text-text-muted">Loading illustration…</p>
       ) : (
         <button
           type="button"
@@ -71,7 +81,7 @@ export function TmaAssetImage({ assignmentId, assetId, alt }) {
   );
 }
 
-function TextField({ label, value, onChange, rows = 6, compact = false }) {
+export function TextField({ label, value, onChange, rows = 6, compact = false }) {
   const input = useRef(null);
   const apply = (kind) => {
     const el = input.current;
@@ -125,14 +135,23 @@ function TextField({ label, value, onChange, rows = 6, compact = false }) {
               "∞",
               "\\(\\frac{a}{b}\\)",
               "\\(x^{2}\\)",
+              "\\(\\begin{pmatrix}a & b \\\\ c & d\\end{pmatrix}\\)",
+              "\\(\\begin{bmatrix}a & b & c \\\\ d & e & f \\\\ g & h & i\\end{bmatrix}\\)",
+              "\\(\\begin{vmatrix}a & b \\\\ c & d\\end{vmatrix}\\)",
             ].map((s) => (
               <button
                 key={s}
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => apply(s)}
+                onClick={(e) => {
+                  apply(s);
+                  e.currentTarget.closest("details").open = false;
+                }}
               >
-                {s.includes("frac")
+                {s.includes("pmatrix") ? "Matrix 2 × 2"
+                  : s.includes("bmatrix") ? "Matrix 3 × 3"
+                  : s.includes("vmatrix") ? "Determinant"
+                  : s.includes("frac")
                   ? "Fraction"
                   : s.includes("x^")
                     ? "Power"
@@ -183,12 +202,15 @@ export default function TmaQuestionEditor({
       ),
     }));
   const imageField = (value, change, label) => (
+    <details className="tma-editor-media-panel">
+      <summary><ImagePlus size={16} />{value ? "Manage attached image" : "Attach an image"}</summary>
     <div className="tma-editor-media">
       <label>
         <ImagePlus size={16} />
         Upload image
         <input
           type="file"
+          aria-label={`Upload ${label.toLowerCase()}`}
           accept="image/jpeg,image/png,image/webp"
           disabled={uploading || busy}
           onChange={async (e) => {
@@ -233,9 +255,11 @@ export default function TmaQuestionEditor({
         />
       )}
     </div>
+    </details>
   );
   return (
     <fieldset className="tma-question-builder min-w-0" disabled={busy}>
+      <h1 className="sr-only">{draft.id ? "Edit question" : "Add question"}</h1>
       <header className="tma-builder-toolbar">
         <Button variant="ghost" disabled={busy || uploading} onClick={onClose}>
           <ArrowLeft size={16} />
@@ -263,10 +287,12 @@ export default function TmaQuestionEditor({
           )}
           <Button
             variant="outline"
+            disabled={uploading}
             onClick={onAI}
             aria-label="Open AI assistant"
           >
             <Sparkles size={17} />
+            Generate with AI
           </Button>
         </div>
       </header>
@@ -349,7 +375,7 @@ export default function TmaQuestionEditor({
                 <p>Single choice · mark exactly one correct answer.</p>
               </div>
             </div>
-            <div className="space-y-3">
+            <div className="tma-answer-grid">
               {draft.options.map((o, i) => (
                 <article
                   key={i}

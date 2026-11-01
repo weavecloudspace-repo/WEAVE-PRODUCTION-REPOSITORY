@@ -45,4 +45,5 @@ export const tmaService = {
     }),
   importQuestion: (id, question) =>
     api.post(path(id, "/ai/questions/import"), { question }),
+  importQuestions: (id, body) => api.post(path(id, "/ai/questions/import-bulk"), body),
 };

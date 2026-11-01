@@ -4,8 +4,6 @@ import {
   Plus,
   Settings,
   ArrowLeft,
-  Sparkles,
-  ImagePlus,
   Trash2,
   Send,
   RefreshCw,
@@ -212,13 +210,14 @@ export default function TmaPage({ role }) {
   const [notice, setNotice] = useState("");
   const [dialog, setDialog] = useState(null);
   const [draft, setDraft] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [leaveTarget, setLeaveTarget] = useState(null);
   const [tab, setTab] = useState("questions");
   const [aiOpen, setAiOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [readiness, setReadiness] = useState(null);
   const [assets, setAssets] = useState([]);
-  const [urls, setUrls] = useState({});
   const [report, setReport] = useState(null);
   const [search, setSearch] = useState("");
   const [participation, setParticipation] = useState("");
@@ -277,13 +276,14 @@ export default function TmaPage({ role }) {
   }, [load]);
   useEffect(() => {
     setDraft(null);
+    setDeleteTarget(null);
+    setLeaveTarget(null);
     setDialog(null);
     setReadiness(null);
     setCancellation(null);
     setTab("questions");
     setAiOpen(false);
     setAssignment(null);
-    setUrls({});
     setSearch("");
     setParticipation("");
     setClassFilter("");
@@ -366,11 +366,6 @@ export default function TmaPage({ role }) {
     canManage ||
     (q.author_actor_type === "teacher" &&
       q.author_actor_id === (actor?.membership_id || actor?.id));
-  const previewImage = (id) =>
-    run(async () => {
-      const r = await service.imageUrl(assignmentId, id);
-      setUrls((old) => ({ ...old, [id]: r.signed_url }));
-    }, "Image loaded.");
   const saveQuestion = (createAnother = false) =>
     run(async () => {
       const payload = {
@@ -413,26 +408,31 @@ export default function TmaPage({ role }) {
             assignmentId={assignmentId}
             label={assignment ? scopeLabel(assignment) : "Assignment"}
             onClose={() => setAiOpen(false)}
-            onImported={() => load({ background: true })}
+            role={role}
+            revisionNumber={assignment?.current_revision_number}
+            onReview={(draftId) => {
+              const target = `${base}/${assignmentId}/ai-drafts/${draftId}`;
+              const unsaved = draft && (draft.question_text?.trim() || draft.image_asset_id
+                || draft.options.some((o) => o.option_text?.trim() || o.image_asset_id));
+              if (unsaved) setLeaveTarget(target);
+              else navigate(target);
+            }}
           />
         ) : null
       }
     >
       <div className="mx-auto w-full max-w-6xl space-y-5 px-1 pb-6 text-text">
-        <header className="flex flex-wrap items-start justify-between gap-3">
+        {!draft && <header className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             {assignmentId && (
               <Link
-                className="mb-3 inline-flex min-h-11 items-center gap-2 text-sm text-primary"
+                className="mb-3 inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium text-primary shadow-sm hover:bg-surface-muted"
                 to={base}
                 onClick={(e) => {
-                  if (
-                    draft &&
-                    !window.confirm(
-                      "Leave this question editor? Unsaved changes will be lost.",
-                    )
-                  )
+                  if (draft) {
                     e.preventDefault();
+                    setLeaveTarget("assignments");
+                  }
                 }}
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -444,9 +444,6 @@ export default function TmaPage({ role }) {
                 ? scopeLabel(assignment)
                 : "Tutor Marked Assignments"}
             </h1>
-            <p className="mt-1 text-sm text-text-muted">
-              Create, review and publish assignments for your students.
-            </p>
           </div>
           {!assignmentId ? (
             <Button
@@ -460,18 +457,6 @@ export default function TmaPage({ role }) {
             <TmaActions
               busy={busy || loading}
               items={[
-                {
-                  label: "AI assistant",
-                  icon: Sparkles,
-                  visible: editable,
-                  onClick: () => setAiOpen(true),
-                },
-                {
-                  label: "Assignment images",
-                  icon: ImagePlus,
-                  visible: editable,
-                  onClick: () => setDialog("media"),
-                },
                 {
                   label: "Settings",
                   icon: Settings,
@@ -536,15 +521,10 @@ export default function TmaPage({ role }) {
                       await load();
                     }),
                 },
-                {
-                  label: "Refresh assignment",
-                  icon: RefreshCw,
-                  onClick: () => run(load, "Assignment refreshed."),
-                },
               ]}
             />
           )}
-        </header>
+        </header>}
         {error && (
           <p
             role="alert"
@@ -638,6 +618,7 @@ export default function TmaPage({ role }) {
         ) : (
           assignment && (
             <>
+              {!draft && <>
               <div className="flex flex-wrap items-center gap-3">
                 <Badge>{assignment.status}</Badge>
                 <span className="text-sm text-text-muted">
@@ -662,6 +643,7 @@ export default function TmaPage({ role }) {
                   </Button>
                 ))}
               </nav>
+              </>}
               {tab === "questions" && (
                 <div className="space-y-5">
                   {!draft && editable && (
@@ -673,15 +655,17 @@ export default function TmaPage({ role }) {
                           then preview.
                         </p>
                       </div>
-                      <Button
-                        disabled={busy}
-                        onClick={() => {
-                          setReadiness(null);
-                          setDraft(blank());
-                        }}
-                      >
-                        <Plus size={16} /> Add question
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          disabled={busy}
+                          onClick={() => {
+                            setReadiness(null);
+                            setDraft(blank());
+                          }}
+                        >
+                          <Plus size={16} /> Add question
+                        </Button>
+                      </div>
                     </div>
                   )}
                   {readiness && (
@@ -713,15 +697,11 @@ export default function TmaPage({ role }) {
                       assignmentId={assignmentId}
                       busy={busy}
                       onSave={saveQuestion}
-                      onDelete={() => setDialog("delete")}
-                      onClose={() => {
-                        if (
-                          window.confirm(
-                            "Leave this question editor? Unsaved changes will be lost.",
-                          )
-                        )
-                          setDraft(null);
+                      onDelete={() => {
+                        setDeleteTarget(draft);
+                        setDialog("delete");
                       }}
+                      onClose={() => setLeaveTarget("questions")}
                       onAI={() => setAiOpen(true)}
                       onUpload={async (file) => {
                         const asset = await service.uploadImage(
@@ -735,9 +715,14 @@ export default function TmaPage({ role }) {
                   ) : (
                     <TmaQuestionList
                       questions={questions}
-                      assignmentId={assignmentId}
+                      assignmentPath={`${base}/${assignmentId}`}
+                      busy={busy}
                       editable={editable}
                       canEdit={canEditQuestion}
+                      onDelete={(q) => {
+                        setDeleteTarget(q);
+                        setDialog("delete");
+                      }}
                       onEdit={(q) =>
                         setDraft({
                           ...q,
@@ -977,64 +962,23 @@ export default function TmaPage({ role }) {
           )}
         </Modal>
         <Modal
-          open={dialog === "media"}
-          title="Assignment images"
-          onClose={() => !busy && setDialog(null)}
-        >
-          <div className="space-y-4">
-            <label className="grid gap-2 text-sm">
-              Upload JPEG, PNG or WebP (up to 5 MB)
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                disabled={busy}
-                onChange={(e) => {
-                  const file = e.target.files[0];
-                  if (file)
-                    run(async () => {
-                      await service.uploadImage(assignmentId, file);
-                      await load();
-                    });
-                  e.target.value = "";
-                }}
-              />
-            </label>
-            {assets.map((a, i) => (
-              <div
-                key={a.id}
-                className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-3"
-              >
-                <span>Image {i + 1}</span>
-                <Button variant="outline" onClick={() => previewImage(a.id)}>
-                  Preview
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() =>
-                    run(async () => {
-                      const r = await service.deleteImage(assignmentId, a.id);
-                      await load();
-                      if (!r.storage_cleaned)
-                        setNotice(
-                          "Image detached. Storage cleanup is pending.",
-                        );
-                    })
-                  }
-                >
-                  Delete unused image
-                </Button>
-                {urls[a.id] && (
-                  <img
-                    src={urls[a.id]}
-                    alt={`Assignment image ${i + 1}`}
-                    className="max-h-48 max-w-full object-contain"
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        </Modal>
+          open={Boolean(leaveTarget)}
+          title="Leave question editor?"
+          description="Your unsaved changes will be lost. Save the question first if you want to keep them."
+          onClose={() => setLeaveTarget(null)}
+          footer={
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="outline" onClick={() => setLeaveTarget(null)}>Keep editing</Button>
+              <Button variant="danger" onClick={() => {
+                const target = leaveTarget;
+                setLeaveTarget(null);
+                setDraft(null);
+                if (target === "assignments") navigate(base);
+                else if (target?.startsWith("/")) navigate(target);
+              }}>Leave without saving</Button>
+            </div>
+          }
+        />
         <Modal
           open={["activate", "reopen", "close", "cancel", "delete"].includes(dialog)}
           title={
@@ -1089,8 +1033,9 @@ export default function TmaPage({ role }) {
                   if (dialog === "cancel")
                     await service.cancel(assignmentId, reason);
                   if (dialog === "delete") {
-                    await service.deleteQuestion(assignmentId, draft.id);
-                    setDraft(null);
+                    await service.deleteQuestion(assignmentId, deleteTarget.id);
+                    if (draft?.id === deleteTarget.id) setDraft(null);
+                    setDeleteTarget(null);
                   }
                   setDialog(null);
                   await load();
