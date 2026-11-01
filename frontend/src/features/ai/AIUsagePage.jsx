@@ -54,6 +54,7 @@ export default function AIUsagePage({ role }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [action, setAction] = useState(null);
   const [credits, setCredits] = useState(20);
@@ -99,7 +100,7 @@ export default function AIUsagePage({ role }) {
     if (activeRequest.current) return;
     activeRequest.current = true;
     setBusy(true);
-    setError("");
+    setActionError("");
     setMessage("");
     try {
       await fn();
@@ -107,7 +108,7 @@ export default function AIUsagePage({ role }) {
       setMessage(success);
       await reload({ silent: true });
     } catch (failure) {
-      setError(errorText(failure));
+      setActionError(errorText(failure));
       await reload({ silent: true });
     } finally {
       setBusy(false);
@@ -118,7 +119,7 @@ export default function AIUsagePage({ role }) {
     setAction({ kind, item });
     setNote("");
     setCredits(kind === "approve" ? item?.requested_credits || 20 : 20);
-    setError("");
+    setActionError("");
   };
   const submitAction = () => {
     if (!action) return;
@@ -150,6 +151,8 @@ export default function AIUsagePage({ role }) {
   const actors = data.actors?.items || [];
   const pending = (data.requests?.items || []).filter((item) => item.status === "pending");
   const weekly = quota?.weekly;
+  const staffUsage = actors.reduce((sum, item) => sum + Number(item.weekly_used_credits || 0), 0);
+  const staffUsageLimited = Number(data.actors?.total || 0) > actors.length;
   const tabs = admin
     ? [{ id: "overview", label: "School usage" }, { id: "requests", label: `Requests${pending.length ? ` (${pending.length})` : ""}` }, { id: "transactions", label: "Transactions" }]
     : [{ id: "overview", label: "My credits" }, { id: "transactions", label: "Transactions" }];
@@ -168,20 +171,21 @@ export default function AIUsagePage({ role }) {
         <Button onClick={() => setPurchaseOpen(true)}><CreditCard size={16} /> Buy credits</Button>
       </div>
     </header>
-    {error && <p role="alert" className="ai-usage-alert">{error}</p>}
+    {(error || actionError) && <p role="alert" className="ai-usage-alert">{actionError || error}</p>}
     {message && <p role="status" className="ai-usage-message">{message}</p>}
     <section className="ai-usage-metrics" aria-label="AI credit summary">
       <Metric icon={Wallet} label={admin ? "School reserve" : "Available credits"}
         value={data.summary ? number(summary.tenant_reserve_credits) : admin ? "—" : quota ? number(quota.total_available_credits) : "—"}
         detail={admin ? "Credits ready to allocate" : "Weekly and personal credits combined"} />
-      <Metric icon={BarChart3} label={admin ? "School's staff accounts" : "Used this week"}
-        value={admin ? (summary ? number(summary.quota_actor_count) : "—") : weekly ? number(weekly.used_credits) : "—"}
-        detail={admin ? "AI-authorized members" : "Weekly free allocation spent"} />
+      <Metric icon={BarChart3} label={admin ? "Staff usage this week" : "Used this week"}
+        value={admin ? (data.actors ? number(staffUsage) : "—") : weekly ? number(weekly.used_credits) : "—"}
+        detail={admin ? (staffUsageLimited ? "Across the first 100 accounts shown" : "Weekly credits spent across staff") : "Weekly free allocation spent"} />
       <Metric icon={Users} label={admin ? "Pending requests" : "Personal top-ups"}
         value={admin ? (summary ? number(summary.pending_request_count) : "—") : quota ? number(quota.extra?.available_credits) : "—"}
         detail={admin ? "Awaiting administrator review" : "Purchased or allocated extra credits"} />
-      <Metric icon={History} label="Weekly credits available"
-        value={quota ? number(weekly?.available_credits) : "—"} detail="Your own weekly balance" />
+      <Metric icon={History} label={admin ? "AI staff accounts" : "Weekly credits available"}
+        value={admin ? (summary ? number(summary.quota_actor_count) : "—") : quota ? number(weekly?.available_credits) : "—"}
+        detail={admin ? "School members with AI accounts" : "Your own weekly balance"} />
     </section>
     <nav className="ai-usage-tabs" aria-label="AI Usage sections">
       {tabs.map((item) => <button key={item.id} type="button" aria-current={tab === item.id ? "page" : undefined}
