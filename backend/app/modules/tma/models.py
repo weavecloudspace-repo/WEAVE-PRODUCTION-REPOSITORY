@@ -81,7 +81,7 @@ from sqlalchemy import (
     text,
     BigInteger,
     String,
-    func
+    func,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -103,8 +103,10 @@ class TMAActorType(str, PyEnum):
     TEACHER = "teacher"
     TENANT_ADMIN = "tenant_admin"
 
+
 class TMAAttemptStatus(str, PyEnum):
     """Lifecycle states of a student's TMA attempt."""
+
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
     SUBMITTED = "submitted"
@@ -545,8 +547,6 @@ class TMAQuestionOption(BaseModel):
     )
 
 
-
-
 class TMAMediaAsset(BaseModel):
     """
     Represents an image asset associated with a TMA assignment.
@@ -658,7 +658,6 @@ class TMAMediaAsset(BaseModel):
     )
 
 
-
 class TMAParticipant(BaseModel):
     """
     Records a student's participation in a TMA assignment revision.
@@ -756,78 +755,67 @@ class TMAParticipant(BaseModel):
     )
 
 
-
 class TMAAttempt(BaseModel):
     """
     Represents a student's attempt at a TMA assignment revision.
 
-    Each participant can have only one attempt per revision
+    Each participant can have only one attempt per revision.
 
-    Attempts remain  IN_PROGRESS until explicitly submitted
-    Closing an assignment does not modify unfinished attempts
+    Attempts remain IN_PROGRESS until explicitly submitted.
+    Closing an assignment does not modify unfinished attempts.
 
-    When an assignment is reopened, unfinished attempts can resume using their previously saved answers
+    When an assignment is reopened, unfinished attempts can
+    resume using their previously saved answers.
 
-    Submitted attempts are final and cannot be retaken
+    Submitted attempts are final and cannot be retaken.
 
-    Each question contributes exactly one raw mark
+    Each question contributes exactly one raw mark.
     Official assessment-component scores are calculated and
-    persisted through WEAVE'S existing academic result system
+    persisted through WEAVE's existing academic results system.
     """
 
     __tablename__ = "tma_attempts"
 
-
-    participant_id : Mapped[uuid.UUID] = mapped_column(
-      UUId(as_uuid = True),
-      nullable = False
+    participant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False
     )
 
-
-    status : Mapped[TMAAttemptStatus] = mapped_column(
-      SQLEnum(
-         TMAAttemptStatus,
-         name = "tma_attempt_status",
-         schema = PUBLIC_SCHEMA,
-         values_callable = lamda enum_cls : [
+    status: Mapped[TMAAttemptStatus] = mapped_column(
+        SQLEnum(
+            TMAAttemptStatus,
+            name="tma_attempt_status",
+            schema=PUBLIC_SCHEMA,
+         values_callable = lambda enum_cls : [
             member.value for member in enum_cls
          ],
       ),
-      nullable = False,
-      default = TMAAttemptStatus.NOT_STARTED,
-      server_defaut = TMAAttemptStatus.NOT_STARTED.value
+        nullable=False,
+        default=TMAAttemptStatus.NOT_STARTED,
+        server_default=TMAAttemptStatus.NOT_STARTED.value
     )
-
-
-
 
     started_at: Mapped[datetime | None] = mapped_column(
-      DateTime(timezone = True),
-      nullable = True
+        DateTime(timezone=True),
+        nullable=True
     )
 
-
-    submitted_at : Mapped[datetime | None] = mapped_column(
-      DateTime(timezone = True),
-      nullable = True
+    submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True
     )
 
-
-
-    correct_answers : Mapped[int | None] = mapped_column(
-      Integer,
-      nullable = True
+    correct_answers: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True
     )
 
-
-    total_questions : Mapped[int | None] = mapped_column(
-      Integer,
-      nullable = True
+    total_questions: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True
     )
 
-
-
-     __table_args__ = (
+    __table_args__ = (
 
         # Ensure the participant belongs to the same tenant.
         ForeignKeyConstraint(
