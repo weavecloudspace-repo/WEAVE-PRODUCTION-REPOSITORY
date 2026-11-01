@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.cache.events import flush_cache_invalidation_events
 
 from app.core.exceptions import ConflictException, NotFoundException
 from app.modules.student_academics.assessment_repository import AssessmentRepository
@@ -52,8 +53,11 @@ class TMALifecycleService:
             or not component.is_active
             or component.assessment_scheme_id != scheme.id
             or component.is_hybrid
+            or component.is_examinable
         ):
-            errors.append("TMA requires an active, non-hybrid assessment component.")
+            errors.append(
+                "TMA requires an active, non-examinable, non-hybrid assessment component."
+            )
         revision = await TMARevisionRepository.get_by_number(
             db,
             assignment.tenant_id,
@@ -132,4 +136,5 @@ class TMALifecycleService:
         await TMARevisionRepository.save(db, revision)
         await TMAAssignmentRepository.save(db, assignment)
         await db.commit()
+        await flush_cache_invalidation_events(db)
         return assignment

@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.cache.events import flush_cache_invalidation_events
 from sqlalchemy.exc import IntegrityError
 
 from app.core.exceptions import BadRequestException, ConflictException, NotFoundException
@@ -57,8 +58,8 @@ class TMAAssignmentService:
             or component.assessment_scheme_id != scheme.id
         ):
             raise ConflictException("Select an active component in the current assessment scheme.")
-        if component.is_hybrid:
-            raise ConflictException("The initial TMA flow cannot own hybrid/CBT components.")
+        if component.is_hybrid or component.is_examinable:
+            raise ConflictException("TMA requires a non-examinable, non-hybrid component.")
 
     @staticmethod
     async def create_assignment(
@@ -106,6 +107,7 @@ class TMAAssignmentService:
                 ),
             )
             await db.commit()
+            await flush_cache_invalidation_events(db)
             await db.refresh(assignment)
             return assignment
         except IntegrityError as exc:
@@ -249,6 +251,7 @@ class TMAAssignmentService:
         try:
             await TMAAssignmentRepository.save(db, assignment)
             await db.commit()
+            await flush_cache_invalidation_events(db)
         except IntegrityError as exc:
             await db.rollback()
             raise ConflictException("This TMA academic scope already exists.") from exc

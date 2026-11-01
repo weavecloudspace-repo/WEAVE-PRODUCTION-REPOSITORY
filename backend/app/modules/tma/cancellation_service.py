@@ -14,6 +14,7 @@ from decimal import Decimal
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.cache.events import flush_cache_invalidation_events
 
 from app.core.exceptions import ConflictException, NotFoundException
 from app.modules.student_academics.hybrid_scores import component_is_complete
@@ -101,6 +102,7 @@ class TMACancellationService:
         assignment.status = TMAAssignmentStatus.CLOSED
         assignment.closed_at = datetime.now(timezone.utc)
         await db.commit()
+        await flush_cache_invalidation_events(db)
         return assignment
 
     @classmethod
@@ -147,6 +149,7 @@ class TMACancellationService:
         assignment.status = TMAAssignmentStatus.CANCELLING
         db.add(run)
         await db.commit()
+        await flush_cache_invalidation_events(db)
         await cls._enqueue(run)
         return run
 
@@ -197,6 +200,7 @@ class TMACancellationService:
         run.status = "pending"
         run.error_message = None
         await db.commit()
+        await flush_cache_invalidation_events(db)
         await cls._enqueue(run)
         return run
 
@@ -360,6 +364,7 @@ class TMACancellationService:
         run.error_message = None
         run.completed_at = now
         await db.commit()
+        await flush_cache_invalidation_events(db)
         return {"status": "completed", "reversed_scores": len(to_reverse)}
 
     @staticmethod
@@ -384,6 +389,7 @@ class TMACancellationService:
             run.status = "failed"
             run.error_message = message[:1500]
             await db.commit()
+            await flush_cache_invalidation_events(db)
 
     @classmethod
     async def create_revision(
@@ -447,4 +453,5 @@ class TMACancellationService:
         assignment.activated_at = None
         assignment.closed_at = None
         await db.commit()
+        await flush_cache_invalidation_events(db)
         return revision

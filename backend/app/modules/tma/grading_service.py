@@ -80,8 +80,11 @@ class TMAGradingService:
             or not component.is_active
             or component.assessment_scheme_id != scheme.id
             or component.is_hybrid
+            or component.is_examinable
         ):
-            raise ConflictException("TMA requires an active non-hybrid assessment component.")
+            raise ConflictException(
+                "TMA requires an active non-examinable, non-hybrid assessment component."
+            )
         if enrollment.class_id is None:
             raise ConflictException("Student has no active classroom.")
         score = TMAGradingService.scaled_component_score(

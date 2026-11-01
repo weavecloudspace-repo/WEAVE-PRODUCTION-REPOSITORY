@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.cache.events import flush_cache_invalidation_events
 
 from app.core.exceptions import ConflictException, ForbiddenException, NotFoundException
 from app.modules.student_academics.assessment_repository import AssessmentRepository
@@ -291,6 +292,7 @@ class TMAAttemptService:
             raise ConflictException("This assignment has already been submitted.")
         try:
             await db.commit()
+            await flush_cache_invalidation_events(db)
         except IntegrityError as exc:
             await db.rollback()
             raise ConflictException("Attempt was started concurrently. Reload it.") from exc
@@ -371,6 +373,7 @@ class TMAAttemptService:
                 payload.selected_option_id,
             )
         await db.commit()
+        await flush_cache_invalidation_events(db)
         return TMAAnswerSaveResponse(
             attempt_id=attempt.id,
             question_id=payload.question_id,
@@ -438,6 +441,7 @@ class TMAAttemptService:
             attempt.total_questions = total
             await TMAAttemptRepository.save(db, attempt)
             await db.commit()
+            await flush_cache_invalidation_events(db)
         except IntegrityError as exc:
             await db.rollback()
             raise ConflictException("Concurrent submission or score creation conflict.") from exc

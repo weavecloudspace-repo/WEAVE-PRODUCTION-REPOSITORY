@@ -28,6 +28,7 @@ async def get_authoring_configuration(db: AsyncSession, actor: TMAAuthor) -> dic
                         AssessmentComponent.assessment_scheme_id == scheme.id,
                         AssessmentComponent.is_active.is_(True),
                         AssessmentComponent.is_hybrid.is_(False),
+                        AssessmentComponent.is_examinable.is_(False),
                     )
                 )
             )

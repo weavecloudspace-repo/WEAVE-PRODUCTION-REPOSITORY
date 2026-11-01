@@ -2,7 +2,7 @@
 
 Admins enter at `/admin/tma`; teachers enter at `/teacher/tma`. Both roles share the same editor. The sidebar entry is present in desktop and mobile menus. Mobile drawers and the five-button bottom dock keep their existing layout.
 
-Creating an assignment selects a level/subject, the current term, a non-hybrid assessment component and an optional expected closing time. Saving opens the assignment editor. The closing time is informational; access ends through the manual Close action.
+Creating an assignment selects a level, a subject filtered to that level, the current term, a non-examinable/non-hybrid assessment component and an optional expected closing time. Saving opens the assignment editor. The closing time is informational; access ends through the manual Close action. Component eligibility is rechecked during activation and score writing, including for existing assignments.
 
 The new authenticated `/api/v1/tma/configuration` endpoint returns tenant-scoped choices and checks the existing teacher authoring guard for each level/subject. It does not grant any additional write permissions.
 
@@ -27,3 +27,11 @@ The focused backend suite, frontend unit/mobile shell checks, changed-file lint,
 The backend's existing teacher-list pagination filters after fetching a tenant page, so a page may contain fewer than 24 visible assignments and its total is not a global count. The UI uses page navigation rather than displaying that count as an overall total.
 
 No migration or deployment configuration change is required. Deploy the backend configuration endpoint before or alongside the frontend. Rolling back the frontend removes the entry points without deleting assignments or student data.
+
+## Redis caching
+
+Staff configuration and image metadata use 60-second TTLs; assignment lists and question payloads use 15 seconds; revision history uses 30 seconds. Keys include tenant, actor type/ID, resource and normalized filters/pagination. Current teacher authorization is checked before cached staff records are returned. Assignment details, student attempts/answers/results, submissions, readiness, cancellation status and signed image URLs remain live reads. No browser cache is added.
+
+The central model registry installs transaction-aware TMA invalidation listeners. Flushed assignment, question, revision, media and related academic/curriculum/class/teacher/enrollment changes queue tenant-generation invalidation. The existing cache event pipeline deletes the generation key after a successful commit; TMA services flush it immediately after their own commits, including cancellation worker paths. The Core SQL media-delete path queues invalidation explicitly. A rollback discards queued TMA invalidation; a savepoint rollback preserves outer transaction events.
+
+Generation keys use random namespaces. An older in-flight request cannot populate the namespace used after invalidation, even when reads and writes overlap. Previous entries expire under their short TTLs. Redis failures use the database path. Cache tests cover isolation, parameter identity, invalidation, rollback, race behavior and database fallback; an external Redis instance has not been exercised in this implementation session.

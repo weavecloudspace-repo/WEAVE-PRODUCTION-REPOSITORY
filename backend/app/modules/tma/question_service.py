@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.cache.events import flush_cache_invalidation_events
 from sqlalchemy.exc import IntegrityError
 
 from app.core.exceptions import BadRequestException, ConflictException, NotFoundException
@@ -121,6 +122,7 @@ class TMAQuestionService:
             )
             await db.flush()
             await db.commit()
+            await flush_cache_invalidation_events(db)
         except IntegrityError as exc:
             await db.rollback()
             raise ConflictException(
@@ -244,6 +246,7 @@ class TMAQuestionService:
             question.version += 1
             await TMAQuestionRepository.save_question(db, question)
             await db.commit()
+            await flush_cache_invalidation_events(db)
         except IntegrityError as exc:
             await db.rollback()
             raise ConflictException("Concurrent question update failed.") from exc
@@ -278,6 +281,7 @@ class TMAQuestionService:
                 question.id,
             )
             await db.commit()
+            await flush_cache_invalidation_events(db)
         except IntegrityError as exc:
             await db.rollback()
             raise ConflictException("This question has protected student answer evidence.") from exc

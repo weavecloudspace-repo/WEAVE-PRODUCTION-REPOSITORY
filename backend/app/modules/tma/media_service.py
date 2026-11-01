@@ -11,6 +11,9 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.cache.events import flush_cache_invalidation_events
+from app.core.cache.events import queue_cache_key_invalidation
+from app.modules.tma.cache import generation_key
 
 from app.core.exceptions import ConflictException, NotFoundException
 from app.core.storage.factory import get_media_storage
@@ -100,6 +103,7 @@ class TMAMediaService:
         try:
             await TMAMediaAssetRepository.add(db, asset)
             await db.commit()
+            await flush_cache_invalidation_events(db)
         except Exception:
             await db.rollback()
             try:
@@ -249,7 +253,9 @@ class TMAMediaService:
         )
         if not deleted:
             raise ConflictException("The image is still referenced by a question or option.")
+        queue_cache_key_invalidation(db, generation_key(actor.tenant_id))
         await db.commit()
+        await flush_cache_invalidation_events(db)
         try:
             await get_media_storage().delete_object(object_key=asset.object_key)
         except Exception:

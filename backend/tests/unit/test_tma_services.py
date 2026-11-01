@@ -94,6 +94,7 @@ async def test_submission_rejects_existing_component_score(monkeypatch) -> None:
         assessment_scheme_id=_id(),
         is_active=True,
         is_hybrid=False,
+        is_examinable=False,
         maximum_score=Decimal("20"),
     )
     scheme = SimpleNamespace(id=component.assessment_scheme_id, status="active")
@@ -153,6 +154,7 @@ async def test_component_write_targets_only_selected_ca(monkeypatch) -> None:
         assessment_scheme_id=_id(),
         is_active=True,
         is_hybrid=False,
+        is_examinable=False,
         maximum_score=Decimal("15"),
     )
     scheme = SimpleNamespace(id=component.assessment_scheme_id, status="active")

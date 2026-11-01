@@ -6,13 +6,15 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from pydantic import TypeAdapter
 
 from app.core.dependencies.db import DbSession
 from app.core.dependencies.route_guards import (
     get_current_onboarded_student,
     get_current_tenant_member,
 )
-from app.core.exceptions import ForbiddenException
+from app.core.exceptions import ForbiddenException, ConflictException, NotFoundException
+from app.modules.tma.cache import cached_staff_read
 from app.modules.students.models import Student
 from app.modules.teachers.models import TeacherMembership
 from app.modules.tenant_admins.models import TenantAdmin
@@ -72,7 +74,32 @@ CurrentStudent = Annotated[Student, Depends(get_current_onboarded_student)]
 async def authoring_configuration(db: DbSession, actor: Author):
     from app.modules.tma.configuration_service import get_authoring_configuration
 
-    return await get_authoring_configuration(db, actor)
+    async def fetch():
+        return TMAAuthoringConfiguration.model_validate(
+            await get_authoring_configuration(db, actor)
+        ).model_dump(mode="json")
+
+    response = TMAAuthoringConfiguration.model_validate(
+        await cached_staff_read(actor, "configuration", fetch, ttl=60)
+    )
+    if TMAAuthorizationService.actor_type(actor).value == "teacher":
+        visible = []
+        for scope in response.scopes:
+            try:
+                await TMAAuthorizationService.require_authoring_access(
+                    db,
+                    actor=actor,
+                    academic_level_id=scope.academic_level_id,
+                    curriculum_subject_id=scope.curriculum_subject_id,
+                    academic_term_id=response.academic_term_id,
+                )
+            except (ForbiddenException, ConflictException, NotFoundException):
+                continue
+            visible.append(scope)
+        response.scopes = visible
+        levels = {scope.academic_level_id for scope in visible}
+        response.classes = [room for room in response.classes if room.academic_level_id in levels]
+    return response
 
 
 def _admin_question(question, options) -> TMAQuestionAdminResponse:
@@ -120,19 +147,37 @@ async def list_assignments(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
 ) -> TMAAssignmentListResponse:
-    items, total = await TMAAssignmentService.list_assignments(
-        db,
-        actor=actor,
-        academic_term_id=academic_term_id,
-        offset=offset,
-        limit=limit,
+    async def fetch():
+        items, total = await TMAAssignmentService.list_assignments(
+            db, actor=actor, academic_term_id=academic_term_id, offset=offset, limit=limit
+        )
+        return TMAAssignmentListResponse(
+            items=[TMAAssignmentResponse.model_validate(item) for item in items],
+            total=total,
+            offset=offset,
+            limit=limit,
+        ).model_dump(mode="json")
+
+    response = TMAAssignmentListResponse.model_validate(
+        await cached_staff_read(
+            actor,
+            "assignments",
+            fetch,
+            params={"term": academic_term_id, "offset": offset, "limit": limit},
+            ttl=15,
+        )
     )
-    return TMAAssignmentListResponse(
-        items=[TMAAssignmentResponse.model_validate(item) for item in items],
-        total=total,
-        offset=offset,
-        limit=limit,
-    )
+    if TMAAuthorizationService.actor_type(actor).value == "teacher":
+        visible = []
+        for item in response.items:
+            try:
+                await TMAAssignmentService.get_assignment(db, actor=actor, assignment_id=item.id)
+            except (ForbiddenException, ConflictException, NotFoundException):
+                continue
+            visible.append(item)
+        response.items = visible
+        response.total = len(visible)
+    return response
 
 
 @author_router.get("/assignments/{assignment_id}", response_model=TMAAssignmentResponse)
@@ -202,12 +247,20 @@ async def list_questions(
     db: DbSession,
     actor: Author,
 ) -> list[TMAQuestionAdminResponse]:
-    rows = await TMAQuestionService.list_questions(
-        db,
-        actor=actor,
-        assignment_id=assignment_id,
+    await TMAAssignmentService.get_assignment(db, actor=actor, assignment_id=assignment_id)
+    adapter = TypeAdapter(list[TMAQuestionAdminResponse])
+
+    async def fetch():
+        rows = await TMAQuestionService.list_questions(db, actor=actor, assignment_id=assignment_id)
+        return [
+            _admin_question(question, options).model_dump(mode="json") for question, options in rows
+        ]
+
+    return adapter.validate_python(
+        await cached_staff_read(
+            actor, "questions", fetch, params={"assignment": assignment_id}, ttl=15
+        )
     )
-    return [_admin_question(question, options) for question, options in rows]
 
 
 @author_router.post(
@@ -385,12 +438,21 @@ async def list_tma_images(
     db: DbSession,
     actor: Author,
 ) -> list[TMAMediaAssetResponse]:
-    assets = await TMAMediaService.list_assignment_images(
-        db,
-        actor=actor,
-        assignment_id=assignment_id,
+    await TMAAssignmentService.get_assignment(db, actor=actor, assignment_id=assignment_id)
+
+    async def fetch():
+        assets = await TMAMediaService.list_assignment_images(
+            db, actor=actor, assignment_id=assignment_id
+        )
+        return [
+            TMAMediaAssetResponse.model_validate(asset).model_dump(mode="json") for asset in assets
+        ]
+
+    return TypeAdapter(list[TMAMediaAssetResponse]).validate_python(
+        await cached_staff_read(
+            actor, "images", fetch, params={"assignment": assignment_id}, ttl=60
+        )
     )
-    return [TMAMediaAssetResponse.model_validate(asset) for asset in assets]
 
 
 @author_router.get(
@@ -581,12 +643,18 @@ async def list_assignment_revisions(
         actor=actor,
         assignment_id=assignment_id,
     )
-    revisions = await TMARevisionRepository.list_for_assignment(
-        db,
-        actor.tenant_id,
-        assignment.id,
-    )
-    return TMARevisionHistoryResponse(
-        assignment_id=assignment.id,
-        revisions=[TMARevisionResponse.model_validate(item) for item in revisions],
+
+    async def fetch():
+        revisions = await TMARevisionRepository.list_for_assignment(
+            db, actor.tenant_id, assignment.id
+        )
+        return TMARevisionHistoryResponse(
+            assignment_id=assignment.id,
+            revisions=[TMARevisionResponse.model_validate(item) for item in revisions],
+        ).model_dump(mode="json")
+
+    return TMARevisionHistoryResponse.model_validate(
+        await cached_staff_read(
+            actor, "revisions", fetch, params={"assignment": assignment.id}, ttl=30
+        )
     )

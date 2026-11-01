@@ -98,7 +98,7 @@ function Configuration({
   );
   return (
     <form
-      className="space-y-5"
+      className="space-y-6 sm:space-y-7"
       onSubmit={(e) => {
         e.preventDefault();
         if (
@@ -129,33 +129,38 @@ function Configuration({
         {config.term_name?.replaceAll("_", " ") || "No current term"}. Each
         assignment covers all eligible classes at the selected level.
       </p>
-      <Select
-        label="Academic level"
-        value={level}
-        onChange={(value) => {
-          setLevel(value);
-          setSubject("");
-        }}
-        disabled={locked}
-      >
-        {levels.map(([id, name]) => (
-          <option key={id} value={id}>
-            {name}
-          </option>
-        ))}
-      </Select>
-      <Select
-        label="Subject"
-        value={subject}
-        onChange={setSubject}
-        disabled={locked || !level}
-      >
-        {subjects.map((s) => (
-          <option key={s.curriculum_subject_id} value={s.curriculum_subject_id}>
-            {s.subject_name}
-          </option>
-        ))}
-      </Select>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Select
+          label="Academic level"
+          value={level}
+          onChange={(value) => {
+            setLevel(value);
+            setSubject("");
+          }}
+          disabled={locked}
+        >
+          {levels.map(([id, name]) => (
+            <option key={id} value={id}>
+              {name}
+            </option>
+          ))}
+        </Select>
+        <Select
+          label="Subject"
+          value={subject}
+          onChange={setSubject}
+          disabled={locked || !level}
+        >
+          {subjects.map((s) => (
+            <option
+              key={s.curriculum_subject_id}
+              value={s.curriculum_subject_id}
+            >
+              {s.subject_name}
+            </option>
+          ))}
+        </Select>
+      </div>
       {!level && (
         <p className="text-xs text-text-muted">
           Choose an academic level to see its available subjects.
@@ -173,6 +178,9 @@ function Configuration({
           </option>
         ))}
       </Select>
+      <p className="text-xs leading-5 text-text-muted">
+        Only non-examinable, non-hybrid assessment components are available.
+      </p>
       {locked && (
         <p className="text-xs text-text-muted">
           Only the lead teacher or admin may change academic scope, before any
@@ -906,6 +914,7 @@ export default function TmaPage({ role }) {
       )}
       <Modal
         open={dialog === "create" || dialog === "settings"}
+        className="max-w-2xl"
         title={
           dialog === "create" ? "Create assignment" : "Assignment settings"
         }
