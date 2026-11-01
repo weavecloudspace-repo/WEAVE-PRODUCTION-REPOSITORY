@@ -1,0 +1,2 @@
+Temporary marker to trigger frontend CI on the already merged integration snapshot.
+No application source or feature branch changes.
