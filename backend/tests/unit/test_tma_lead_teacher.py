@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy import ForeignKeyConstraint, UniqueConstraint
 
-from app.core.exceptions import BadRequestException, ForbiddenException
+from app.core.exceptions import BadRequestException, ForbiddenException, NotFoundException
 from app.modules.teachers.models import TeacherMembership, TeacherMembershipStatus
 from app.modules.tenant_admins.models import TenantAdmin
 from app.modules.tma.authorization import TMAAuthorizationService
@@ -65,7 +65,7 @@ def test_admin_remains_manager_and_only_selected_teacher_manages() -> None:
     TMAAuthorizationService.require_assignment_management(lead, row)
     with pytest.raises(ForbiddenException):
         TMAAuthorizationService.require_assignment_management(collaborator, row)
-    with pytest.raises(ForbiddenException):
+    with pytest.raises(NotFoundException):
         TMAAuthorizationService.require_assignment_management(teacher(uid(), lead.id), row)
 
 
@@ -249,7 +249,7 @@ async def test_invalid_lead_is_rejected_by_scope_validation(monkeypatch):
     owner = admin()
     assigned = teacher(owner.tenant_id)
     db = AsyncMock()
-    db.execute.return_value.scalar_one_or_none.return_value = assigned
+    db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: assigned)
     access = AsyncMock(side_effect=ForbiddenException("not assigned to this subject"))
     monkeypatch.setattr(mod.TMAAuthorizationService, "require_authoring_access", access)
     with pytest.raises(ForbiddenException):
@@ -262,7 +262,7 @@ async def test_invalid_lead_is_rejected_by_scope_validation(monkeypatch):
             academic_term_id=uid(),
         )
     access.assert_awaited_once()
-    db.execute.return_value.scalar_one_or_none.return_value = None
+    db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: None)
     with pytest.raises(BadRequestException, match="active teacher"):
         await mod.TMAAssignmentService._validate_lead_teacher(
             db,
