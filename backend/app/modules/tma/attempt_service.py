@@ -249,6 +249,7 @@ class TMAAttemptService:
             db,
             student=student,
             assignment_id=assignment_id,
+            lock=True,
         )
         if enrollment.class_id is None:
             raise ForbiddenException("You must have a current classroom.")

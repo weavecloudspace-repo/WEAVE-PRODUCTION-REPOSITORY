@@ -112,6 +112,22 @@ class TMARevisionHistoryResponse(TMAOutput):
     revisions: list[TMARevisionResponse] = Field(default_factory=list)
 
 
+class TMACancellationRequest(TMAInput):
+    reason: str = Field(min_length=5, max_length=2000)
+
+
+class TMACancellationRunResponse(TMAOutput):
+    id: uuid.UUID
+    assignment_id: uuid.UUID
+    revision_id: uuid.UUID
+    status: str
+    reason: str
+    reversed_scores: int = Field(ge=0)
+    error_message: str | None
+    created_at: datetime
+    completed_at: datetime | None
+
+
 # ---------- Question and option authoring ----------
 
 

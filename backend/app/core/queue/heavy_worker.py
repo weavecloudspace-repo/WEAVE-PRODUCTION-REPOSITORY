@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+
+from arq import cron
+from sqlalchemy import select
 from typing import Any
 from uuid import UUID
 
@@ -27,6 +30,8 @@ from app.modules.student_academics.lifecycle_repository import (  # noqa: E402
 from app.modules.student_academics.models import (  # noqa: E402
     StudentProgressionRunStatus,
 )
+from app.modules.tma.cancellation_service import TMACancellationService  # noqa: E402
+from app.modules.tma.models import TMACancellationRun  # noqa: E402
 from app.modules.student_academics.session_closure_service import (  # noqa: E402
     SessionClosureService,
 )
@@ -182,6 +187,44 @@ async def process_session_progression_job(
         raise failure_exception
 
 
+
+
+@capture_worker_exceptions(queue_name=HEAVY_QUEUE_NAME)
+async def process_tma_cancellation_job(
+    ctx: dict[str, Any], run_id: str, tenant_id: str,
+) -> dict[str, int | str]:
+    """Reverse only verified TMA-owned scores, atomically."""
+    _ = ctx
+    parsed_tenant, parsed_run = UUID(tenant_id), UUID(run_id)
+    try:
+        async with AsyncSessionLocal() as db:
+            return await TMACancellationService.process(
+                db, tenant_id=parsed_tenant, run_id=parsed_run,
+            )
+    except Exception as exc:
+        logger.exception("tma.cancellation.failed", extra={"run_id": run_id})
+        async with AsyncSessionLocal() as failure_db:
+            await TMACancellationService.mark_failed(
+                failure_db, tenant_id=parsed_tenant, run_id=parsed_run,
+                message=str(exc),
+            )
+        return {"status": "failed", "reversed_scores": 0}
+
+
+async def poll_tma_cancellations(ctx: dict[str, Any]) -> dict[str, int]:
+    """Recover pending jobs if enqueueing initially failed."""
+    async with AsyncSessionLocal() as db:
+        pending = (await db.execute(
+            select(TMACancellationRun.id, TMACancellationRun.tenant_id)
+            .where(TMACancellationRun.status == "pending")
+            .order_by(TMACancellationRun.created_at)
+            .limit(10)
+        )).all()
+    for run_id, tenant_id in pending:
+        await process_tma_cancellation_job(ctx, str(run_id), str(tenant_id))
+    return {"processed": len(pending)}
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     """Initialize optional monitoring for this worker process."""
 
@@ -211,6 +254,17 @@ class WorkerSettings:
     functions = [
         process_bulk_import_job,
         process_session_progression_job,
+        process_tma_cancellation_job,
+    ]
+    cron_jobs = [
+        cron(
+            poll_tma_cancellations,
+            minute={3, 13, 23, 33, 43, 53},
+            run_at_startup=True,
+            unique=True,
+            timeout=3600,
+            max_tries=1,
+        ),
     ]
 
     on_startup = startup

@@ -17,11 +17,14 @@ from app.modules.students.models import Student
 from app.modules.teachers.models import TeacherMembership
 from app.modules.tenant_admins.models import TenantAdmin
 from app.modules.tma.assignment_service import TMAAssignmentService
+from app.modules.tma.cancellation_service import TMACancellationService
 from app.modules.tma.attempt_service import TMAAttemptService
 from app.modules.tma.lifecycle_service import TMALifecycleService
 from app.modules.tma.media_service import TMAMediaService
 from app.modules.tma.question_service import TMAQuestionService
 from app.modules.tma.reporting_service import TMAReportingService
+from app.modules.tma.authorization import TMAAuthorizationService
+from app.modules.tma.repository import TMARevisionRepository
 from app.modules.tma.schemas import (
     TMAAnswerSaveRequest,
     TMAAnswerSaveResponse,
@@ -30,6 +33,10 @@ from app.modules.tma.schemas import (
     TMAAssignmentResponse,
     TMAAssignmentStatusResponse,
     TMAAssignmentUpdate,
+    TMACancellationRequest,
+    TMACancellationRunResponse,
+    TMARevisionResponse,
+    TMARevisionHistoryResponse,
     TMAQuestionAdminResponse,
     TMAQuestionCreate,
     TMAQuestionUpdate,
@@ -459,4 +466,91 @@ async def list_assignment_submissions(
         participation_status=participation_status,
         offset=offset,
         limit=limit,
+    )
+
+
+@author_router.post(
+    "/assignments/{assignment_id}/close", response_model=TMAAssignmentStatusResponse,
+)
+async def close_assignment(
+    assignment_id: uuid.UUID, db: DbSession, actor: Author,
+) -> TMAAssignmentStatusResponse:
+    assignment = await TMACancellationService.close(
+        db, actor=actor, assignment_id=assignment_id,
+    )
+    return TMAAssignmentStatusResponse.model_validate(assignment)
+
+
+@author_router.post(
+    "/assignments/{assignment_id}/cancel",
+    response_model=TMACancellationRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def cancel_assignment(
+    assignment_id: uuid.UUID, payload: TMACancellationRequest,
+    db: DbSession, actor: Author,
+) -> TMACancellationRunResponse:
+    run = await TMACancellationService.cancel(
+        db, actor=actor, assignment_id=assignment_id, reason=payload.reason,
+    )
+    return TMACancellationRunResponse.model_validate(run)
+
+
+@author_router.get(
+    "/assignments/{assignment_id}/cancellation",
+    response_model=TMACancellationRunResponse,
+)
+async def get_cancellation(
+    assignment_id: uuid.UUID, db: DbSession, actor: Author,
+) -> TMACancellationRunResponse:
+    run = await TMACancellationService.get_status(
+        db, actor=actor, assignment_id=assignment_id,
+    )
+    return TMACancellationRunResponse.model_validate(run)
+
+
+@author_router.post(
+    "/assignments/{assignment_id}/cancellation/retry",
+    response_model=TMACancellationRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def retry_cancellation(
+    assignment_id: uuid.UUID, db: DbSession, actor: Author,
+) -> TMACancellationRunResponse:
+    run = await TMACancellationService.retry(
+        db, actor=actor, assignment_id=assignment_id,
+    )
+    return TMACancellationRunResponse.model_validate(run)
+
+
+@author_router.post(
+    "/assignments/{assignment_id}/revisions",
+    response_model=TMARevisionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_corrected_revision(
+    assignment_id: uuid.UUID, db: DbSession, actor: Author,
+) -> TMARevisionResponse:
+    revision = await TMACancellationService.create_revision(
+        db, actor=actor, assignment_id=assignment_id,
+    )
+    return TMARevisionResponse.model_validate(revision)
+
+
+@author_router.get(
+    "/assignments/{assignment_id}/revisions",
+    response_model=TMARevisionHistoryResponse,
+)
+async def list_assignment_revisions(
+    assignment_id: uuid.UUID, db: DbSession, actor: Author,
+) -> TMARevisionHistoryResponse:
+    assignment = await TMAAssignmentService.get_assignment(
+        db, actor=actor, assignment_id=assignment_id,
+    )
+    revisions = await TMARevisionRepository.list_for_assignment(
+        db, actor.tenant_id, assignment.id,
+    )
+    return TMARevisionHistoryResponse(
+        assignment_id=assignment.id,
+        revisions=[TMARevisionResponse.model_validate(item) for item in revisions],
     )
