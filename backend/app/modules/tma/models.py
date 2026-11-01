@@ -99,7 +99,7 @@ class TMAActorType(str, PyEnum):
     TENANT_ADMIN = "tenant_admin"
 
 
-class Assignment(BaseModel):
+class TMAAssignment(BaseModel):
     """
     Represents a Tutor-Marked Assignment belonging to a school.
 
@@ -109,7 +109,7 @@ class Assignment(BaseModel):
     Multiple authorized teachers may collaborate on the same assignment
     """
 
-    __tablename__ = "term_assignments"
+    __tablename__ = "tma_assignments"
 
     # ==========================#
     # Academic Configuration
