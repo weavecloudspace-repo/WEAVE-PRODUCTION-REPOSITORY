@@ -181,7 +181,8 @@ class TMAAIService:
                     }
                 )
             )
-            if image is not None else None
+            if image is not None
+            else None
             for image in images
         ]
         created_assets: list[uuid.UUID] = []
