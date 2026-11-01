@@ -29,6 +29,35 @@ class TMAOutput(BaseModel):
     model_config = ConfigDict(from_attributes=True, use_enum_values=True)
 
 
+class TMAAuthoringScope(TMAOutput):
+    academic_level_id: uuid.UUID
+    curriculum_subject_id: uuid.UUID
+    level_name: str
+    subject_name: str
+
+
+class TMAAuthoringComponent(TMAOutput):
+    id: uuid.UUID
+    name: str
+    maximum_score: Decimal
+
+
+class TMAAuthoringClass(TMAOutput):
+    id: uuid.UUID
+    name: str
+    academic_level_id: uuid.UUID
+
+
+class TMAAuthoringConfiguration(TMAOutput):
+    academic_session_id: uuid.UUID | None
+    academic_term_id: uuid.UUID | None
+    term_name: str | None
+    term_open: bool
+    scopes: list[TMAAuthoringScope]
+    components: list[TMAAuthoringComponent]
+    classes: list[TMAAuthoringClass] = Field(default_factory=list)
+
+
 # ---------- Assignment and lifecycle ----------
 
 

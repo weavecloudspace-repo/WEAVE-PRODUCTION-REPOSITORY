@@ -8,6 +8,7 @@ import MembershipScopeGuard from "./MembershipScopeGuard";
 import RoleGuard from "./RoleGuard";
 import RuntimeFeatureRoute from "./RuntimeFeatureRoute";
 import TeacherClassDutyRoute from "./TeacherClassDutyRoute";
+const TmaPage = lazy(() => import("../features/tma/TmaPage"));
 
 const CommunicationInboxPage = lazy(
   () => import("../pages/shared/CommunicationInboxPage"),
@@ -54,6 +55,8 @@ export const teacherRoutes = (
     <Route element={<MembershipScopeGuard role="teacher" />}>
       <Route element={<DashboardShell role="teacher" />}>
         <Route path="/teacher/dashboard" element={<TeacherDashboardPage />} />
+        <Route path="/teacher/tma" element={<TmaPage role="teacher" />} />
+        <Route path="/teacher/tma/:assignmentId" element={<TmaPage role="teacher" />} />
         <Route
           path="/teacher/getting-started"
           element={<RoleGettingStartedPage role="teacher" />}

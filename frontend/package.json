@@ -26,6 +26,7 @@
     "check": "npm run lint && npm test && npm run build"
   },
   "dependencies": {
+    "katex": "^0.19.1",
     "lucide-react": "^0.468.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

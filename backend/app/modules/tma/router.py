@@ -27,6 +27,7 @@ from app.modules.tma.authorization import TMAAuthorizationService
 from app.modules.tma.repository import TMARevisionRepository
 from app.modules.tma.schemas import (
     TMAAnswerSaveRequest,
+    TMAAuthoringConfiguration,
     TMAAnswerSaveResponse,
     TMAAssignmentCreate,
     TMAAssignmentListResponse,
@@ -65,6 +66,13 @@ async def _current_author(
 
 Author = Annotated[TenantAdmin | TeacherMembership, Depends(_current_author)]
 CurrentStudent = Annotated[Student, Depends(get_current_onboarded_student)]
+
+
+@author_router.get("/configuration", response_model=TMAAuthoringConfiguration)
+async def authoring_configuration(db: DbSession, actor: Author):
+    from app.modules.tma.configuration_service import get_authoring_configuration
+
+    return await get_authoring_configuration(db, actor)
 
 
 def _admin_question(question, options) -> TMAQuestionAdminResponse:
