@@ -749,20 +749,47 @@ export default function TmaPage({ role }) {
                 </div>
               )}
               {tab === "submissions" && (
-                <Card className="space-y-4 p-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      aria-label="Search submissions"
-                      placeholder="Student name or admission number"
-                      className={field}
-                      value={search}
-                      onChange={(e) => {
-                        setSearch(e.target.value);
-                        setReportOffset(0);
-                      }}
-                    />
+                <Card className="tma-submissions">
+                  <div className="tma-submissions-heading">
+                    <div>
+                      <h2 className="font-semibold">Student submissions</h2>
+                      <p className="mt-1 text-sm text-text-muted">
+                        Review participation and scores for this assignment.
+                      </p>
+                    </div>
+                    {(search || participation || classFilter) && (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setSearch("");
+                          setParticipation("");
+                          setClassFilter("");
+                          setReportOffset(0);
+                        }}
+                      >
+                        Clear filters
+                      </Button>
+                    )}
+                  </div>
+                  <div className="tma-submission-filters">
+                    <label className="tma-submission-search">
+                      <span className="mb-1.5 block text-sm font-semibold text-text-soft">
+                        Search students
+                      </span>
+                      <input
+                        aria-label="Search submissions"
+                        placeholder="Name or admission number"
+                        className={field}
+                        value={search}
+                        onChange={(e) => {
+                          setSearch(e.target.value);
+                          setReportOffset(0);
+                        }}
+                      />
+                    </label>
                     <Select
                       label="Participation"
+                      placeholder="All participation"
                       clearable
                       value={participation}
                       onChange={(v) => {
@@ -778,6 +805,7 @@ export default function TmaPage({ role }) {
                     </Select>
                     <Select
                       label="Class"
+                      placeholder="All classes"
                       clearable
                       value={classFilter}
                       onChange={(v) => {
@@ -798,40 +826,65 @@ export default function TmaPage({ role }) {
                         ))}
                     </Select>
                   </div>
-                  {report?.items.map((s) => (
-                    <div
-                      key={s.student_id}
-                      className="flex flex-wrap justify-between gap-2 border-b border-border py-3"
-                    >
-                      <div>
-                        <p className="font-medium">{s.student_name}</p>
-                        <p className="text-xs text-text-muted">
-                          {s.admission_number} · {s.class_name}
-                          {!s.is_currently_eligible &&
-                            " · Historical participant"}
-                        </p>
-                      </div>
-                      <div className="text-sm">
-                        {s.participation_status.replaceAll("_", " ")} ·{" "}
-                        {s.score ?? "—"}
-                      </div>
+                  <div className="tma-submission-list">
+                    <div className="tma-submission-columns" aria-hidden="true">
+                      <span>Student</span>
+                      <span>Participation</span>
+                      <span>Score</span>
                     </div>
-                  ))}
-                  <div className="flex justify-between">
-                    <Button
-                      variant="outline"
-                      disabled={!reportOffset}
-                      onClick={() => setReportOffset(reportOffset - 25)}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={!report || reportOffset + 25 >= report.total}
-                      onClick={() => setReportOffset(reportOffset + 25)}
-                    >
-                      Next
-                    </Button>
+                    {report?.items.map((s) => (
+                      <div key={s.student_id} className="tma-submission-row">
+                        <div className="tma-submission-student">
+                          <p className="font-medium break-words">
+                            {s.student_name}
+                          </p>
+                          <p className="text-xs text-text-muted">
+                            {s.admission_number} · {s.class_name}
+                            {!s.is_currently_eligible &&
+                              " · Historical participant"}
+                          </p>
+                        </div>
+                        <div className="tma-submission-participation">
+                          <span
+                            className={`tma-participation tma-participation--${s.participation_status}`}
+                          >
+                            {s.participation_status.replaceAll("_", " ")}
+                          </span>
+                        </div>
+                        <div className="tma-submission-score">
+                          <span className="tma-submission-score-label">Score</span>
+                          <span>{s.score ?? "—"}</span>
+                        </div>
+                      </div>
+                    ))}
+                    {report?.items.length === 0 && (
+                      <p className="px-4 py-8 text-center text-sm text-text-muted">
+                        No students match the current filters.
+                      </p>
+                    )}
+                  </div>
+                  <div className="tma-submission-pagination">
+                    <p className="text-sm text-text-muted">
+                      {report?.total
+                        ? `${reportOffset + 1}–${Math.min(reportOffset + report.items.length, report.total)} of ${report.total} students`
+                        : "0 students"}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        disabled={!reportOffset}
+                        onClick={() => setReportOffset(reportOffset - 25)}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={!report || reportOffset + 25 >= report.total}
+                        onClick={() => setReportOffset(reportOffset + 25)}
+                      >
+                        Next
+                      </Button>
+                    </div>
                   </div>
                 </Card>
               )}
