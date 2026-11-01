@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ConflictException, ForbiddenException, NotFoundException
 from app.modules.student_academics.assessment_repository import AssessmentRepository
 from app.modules.student_academics.repository import StudentAcademicRepository
+from app.modules.student_academics.models import AcademicTermStatus
 from app.modules.students.models import Student
 from app.modules.students.repository import StudentEnrollmentRepository
 from app.modules.student_academics.curriculum_service import CurriculumResolutionService
@@ -79,7 +80,7 @@ class TMAAttemptService:
         student: Student,
     ) -> list[TMAStudentAssignmentResponse]:
         term = await StudentAcademicRepository.get_current_term(db, student.tenant_id)
-        if term is None:
+        if term is None or term.status != AcademicTermStatus.OPEN or not term.is_current:
             return []
         enrollment = await StudentEnrollmentRepository.get_authoritative_for_session(
             db,

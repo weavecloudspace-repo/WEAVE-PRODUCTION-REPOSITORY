@@ -17,6 +17,7 @@ from app.modules.student_academics.models import (
     StudentSubjectResult,
 )
 from app.modules.student_academics.repository import StudentAcademicRepository
+from app.modules.student_academics.hybrid_scores import component_is_complete
 from app.modules.student_academics.write_guard import ensure_academic_write_window
 from app.modules.student_academics.curriculum_service import CurriculumResolutionService
 from app.modules.students.models import StudentEnrollment
@@ -180,7 +181,9 @@ class TMAGradingService:
         )
         persisted = [row.score for _, row in components if row is not None]
         result.total_score = sum(persisted, Decimal("0"))
-        complete = bool(components) and all(row is not None for _, row in components)
+        complete = bool(components) and all(
+            component_is_complete(item, row) for item, row in components
+        )
         if complete:
             scale = await StudentAcademicRepository.find_grade_for_score(
                 db,
