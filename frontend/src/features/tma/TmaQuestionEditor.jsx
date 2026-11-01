@@ -12,7 +12,7 @@ import {
   Trash2,
   Plus,
   Eye,
-  Sparkles,
+  Bot,
 } from "lucide-react";
 import Button from "../../components/ui/Button";
 import SearchableSelect from "../../components/ui/SearchableSelect";
@@ -297,7 +297,7 @@ export default function TmaQuestionEditor({
             onClick={onAI}
             aria-label="Open AI assistant"
           >
-            <Sparkles size={17} />
+            <Bot size={17} />
             Generate with AI
           </Button>
         </div>

@@ -113,7 +113,7 @@ export default function TmaQuestionList({
             onClick={() => { setSelectedId(questions[selectedIndex + 1].id); setStudentView(false); }}>Next</Button>
         </div>
         {editable && canEdit(question) ? <div className="flex gap-2">
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => onEdit(question)}>
+          <Button size="sm" variant="outline" aria-label={`Edit question ${selectedIndex + 1}`} disabled={busy} onClick={() => onEdit(question)}>
             <Pencil size={15} /> Edit
           </Button>
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => onDelete(question)}

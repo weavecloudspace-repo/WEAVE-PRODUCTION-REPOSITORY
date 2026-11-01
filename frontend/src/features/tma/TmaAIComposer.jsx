@@ -3,7 +3,7 @@ import {
   ArrowUp,
   X,
   SlidersHorizontal,
-  Sparkles,
+  Bot,
   Wallet,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -137,7 +137,7 @@ export default function TmaAIComposer({
     <aside className="tma-ai-composer" aria-label="AI question assistant">
       <header className="tma-ai-heading">
         <span className="tma-ai-icon">
-          <Sparkles size={18} />
+          <Bot size={18} />
         </span>
         <div>
           <h2>Generate questions</h2>

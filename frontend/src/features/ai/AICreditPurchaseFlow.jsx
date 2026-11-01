@@ -104,7 +104,7 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
         ? "Choose how many credits you need."
         : "Review your purchase before opening secure payment."}
       className="ai-credit-compact-modal"
-      onClose={reset}
+      onClose={() => reset()}
     >
       <div className="space-y-4">
         <div className="flex items-center gap-3 rounded-xl border border-border bg-surface-muted/30 p-3">

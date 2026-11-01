@@ -11,35 +11,42 @@ const source = await readFile(
   "utf8",
 );
 const { code } = await transformWithOxc(
-  source
-    .slice(source.indexOf("export default function"))
-    .replace("export default ", ""),
+  source.slice(source.indexOf("export default function")).replace("export default ", ""),
   "TmaQuestionList.jsx",
   { jsx: { runtime: "classic" } },
 );
+const Icon = () => null;
 const List = runInNewContext(`${code}\nTmaQuestionList`, {
   React,
+  useState: (initial) => [initial, () => {}],
+  useEffect: () => {},
   Link: ({ to, ...props }) => React.createElement("a", { href: to, ...props }),
   Button: (props) => {
     const buttonProps = { ...props };
     delete buttonProps.variant;
+    delete buttonProps.size;
     return React.createElement("button", buttonProps);
   },
-  ArrowUpRight: () => null,
-  BookOpen: () => null,
-  Image: () => null,
-  Pencil: () => null,
-  Trash2: () => null,
+  MathText: ({ children }) => React.createElement("span", {}, children),
+  TmaAssetImage: ({ alt }) => React.createElement("img", { alt }),
+  ArrowUpRight: Icon,
+  BookOpen: Icon,
+  CheckCircle2: Icon,
+  Eye: Icon,
+  EyeOff: Icon,
+  Image: Icon,
+  Pencil: Icon,
+  Trash2: Icon,
 });
 const question = {
   id: "q1",
+  assignment_id: "a1",
   question_text: "Solve <script>alert(1)</script>",
   options: [
-    {
-      id: "o1",
-      option_text: "Answer should only appear in preview",
-      image_asset_id: "image",
-    },
+    { id: "o1", option_text: "Correct answer", is_correct: true, image_asset_id: "image" },
+    { id: "o2", option_text: "Wrong answer", is_correct: false },
+    { id: "o3", option_text: "Other answer", is_correct: false },
+    { id: "o4", option_text: "Last answer", is_correct: false },
   ],
 };
 function render(props = {}) {
@@ -54,23 +61,26 @@ function render(props = {}) {
   );
 }
 
-test("compact rows link to the dedicated preview without expanding answer options", () => {
+test("question audit shows answer key, options, and dedicated full preview", () => {
   const html = render();
   assert.match(html, /href="\/teacher\/tma\/a1\/questions\/q1"/);
-  assert.match(html, /Includes media/);
+  assert.match(html, /Answer key review/);
+  assert.match(html, /Correct answer/);
+  assert.match(html, /Wrong answer/);
+  assert.match(html, /Answer key:/);
   assert.match(html, /&lt;script&gt;/);
-  assert.doesNotMatch(html, /<script>|Answer should only appear in preview/);
+  assert.doesNotMatch(html, /<script>/);
 });
 
 test("edit and delete are exposed only for editable questions the actor can manage", () => {
-  assert.match(render(), /Edit question 1/);
-  assert.match(render(), /Delete question 1/);
+  assert.match(render(), /aria-label="Edit question 1"/);
+  assert.match(render(), /aria-label="Delete question 1"/);
   for (const props of [{ editable: false }, { canEdit: () => false }]) {
     const html = render(props);
     assert.doesNotMatch(html, /Edit question 1|Delete question 1/);
-    assert.match(html, /Preview question 1/);
+    assert.match(html, /Full preview/);
   }
-  assert.equal((render({ busy: true }).match(/disabled=""/g) || []).length, 2);
+  assert.equal((render({ busy: true }).match(/disabled=""/g) || []).length, 3);
 });
 
 test("edit and delete callbacks receive the selected saved question", () => {
@@ -85,17 +95,10 @@ test("edit and delete callbacks receive the selected saved question", () => {
   });
   function visit(node) {
     if (!React.isValidElement(node)) return;
-    if (
-      node.props["aria-label"] === "Edit question 1" ||
-      node.props["aria-label"] === "Delete question 1"
-    ) {
+    if (["Edit question 1", "Delete question 1"].includes(node.props["aria-label"]))
       node.props.onClick();
-    }
     React.Children.forEach(node.props.children, visit);
   }
   visit(tree);
-  assert.deepEqual(calls, [
-    ["edit", question],
-    ["delete", question],
-  ]);
+  assert.deepEqual(calls, [["edit", question], ["delete", question]]);
 });

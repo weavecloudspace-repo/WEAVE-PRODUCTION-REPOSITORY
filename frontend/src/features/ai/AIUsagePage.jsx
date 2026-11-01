@@ -150,7 +150,6 @@ export default function AIUsagePage({ role }) {
   const actors = data.actors?.items || [];
   const pending = (data.requests?.items || []).filter((item) => item.status === "pending");
   const weekly = quota?.weekly;
-  const isTeacher = role === "teacher";
   const tabs = admin
     ? [{ id: "overview", label: "School usage" }, { id: "requests", label: `Requests${pending.length ? ` (${pending.length})` : ""}` }, { id: "transactions", label: "Transactions" }]
     : [{ id: "overview", label: "My credits" }, { id: "transactions", label: "Transactions" }];
