@@ -101,7 +101,7 @@ PLAN_ENTITLEMENTS: dict[str, PlanEntitlements] = {
     ),
     SubscriptionPlan.PROFESSIONAL.value: PlanEntitlements(
         features=_paid_features(tenant_branding=True, cbt_pairing=True),
-        limits=_limits(students=1000, teachers=100, parents=1000, cbt_servers=2),
+        limits=_limits(students=1200, teachers=100, parents=1000, cbt_servers=2),
     ),
     SubscriptionPlan.ENTERPRISE.value: PlanEntitlements(
         features=_paid_features(tenant_branding=True, cbt_pairing=True),

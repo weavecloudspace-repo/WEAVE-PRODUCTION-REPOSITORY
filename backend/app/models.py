@@ -47,3 +47,4 @@ import app.modules.tma.cache_events  # noqa: E402,F401
 import app.modules.student_academics.elective_integrity  # noqa: E402,F401
 import app.modules.student_academics.grading_scale_integrity  # noqa: E402,F401
 import app.modules.cbt.results.models
+import app.modules.cbt.results.rollback_models
