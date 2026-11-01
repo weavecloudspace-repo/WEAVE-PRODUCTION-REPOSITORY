@@ -260,7 +260,7 @@ class AIQuotaPaymentService:
             "credits": purchase.credits,
             "amount_kobo": purchase.amount_kobo,
         }
-        if purchase.initiated_by_teacher_membership_id is not None:
+        if getattr(purchase, "initiated_by_teacher_membership_id", None) is not None:
             expected_metadata["teacher_membership_id"] = str(
                 purchase.initiated_by_teacher_membership_id
             )

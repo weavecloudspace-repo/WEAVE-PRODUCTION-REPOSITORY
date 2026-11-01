@@ -783,12 +783,12 @@ class AIQuotaService:
         )
         if purchase_preview is None or purchase_preview.tenant_id != tenant_id:
             raise AIQuotaNotFoundError("Quota purchase was not found.")
-        if purchase_preview.initiated_by_teacher_membership_id is not None:
+        if getattr(purchase_preview, "initiated_by_teacher_membership_id", None) is not None:
             account = await cls._ensure_quota_account(
                 db,
                 tenant_id=tenant_id,
                 actor_type=AIQuotaActorType.TEACHER,
-                actor_id=purchase_preview.initiated_by_teacher_membership_id,
+                actor_id=getattr(purchase_preview, "initiated_by_teacher_membership_id", None),
             )
             await cls._ensure_extra_balance(
                 db,
@@ -813,7 +813,7 @@ class AIQuotaService:
                 return response
             if purchase.status != AIQuotaPurchaseStatus.PENDING:
                 raise AIQuotaConflictError("Only pending quota purchases can be credited.")
-            if purchase.initiated_by_teacher_membership_id is not None:
+            if getattr(purchase, "initiated_by_teacher_membership_id", None) is not None:
                 account = await AIQuotaAccountRepository.get_by_teacher_membership(
                     db,
                     tenant_id=tenant_id,
@@ -1713,7 +1713,9 @@ class AIQuotaService:
             reference=purchase.reference,
             status=purchase.status,
             initiated_by_admin_id=purchase.initiated_by_admin_id,
-            initiated_by_teacher_membership_id=purchase.initiated_by_teacher_membership_id,
+            initiated_by_teacher_membership_id=getattr(
+                purchase, "initiated_by_teacher_membership_id", None
+            ),
             initiated_by_email=initiated_by_email,
             created_at=purchase.created_at,
             credited_at=purchase.credited_at,
