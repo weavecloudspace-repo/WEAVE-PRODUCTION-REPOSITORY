@@ -207,16 +207,9 @@ class TMAAttemptService:
             )
         if participant is None:
             raise ConflictException("Unable to register participation.")
-        attempt = await TMAAttemptRepository.get_by_participant(
-            db, student.tenant_id, participant.id,
+        attempt = await TMAAttemptRepository.create_if_missing(
+            db, student.tenant_id, participant.id, revision.id,
         )
-        if attempt is None:
-            attempt = await TMAAttemptRepository.create(
-                db, TMAAttempt(
-                    tenant_id=student.tenant_id, participant_id=participant.id,
-                    revision_id=revision.id,
-                ),
-            )
         if attempt.status == TMAAttemptStatus.SUBMITTED:
             raise ConflictException("This assignment has already been submitted.")
         try:
