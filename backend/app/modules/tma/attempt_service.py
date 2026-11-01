@@ -461,25 +461,35 @@ class TMAAttemptService:
         ):
             raise ConflictException("Assignment has not been submitted.")
         assignment = await TMAAssignmentRepository.get_by_id(
-            db, student.tenant_id, revision.assignment_id,
+            db,
+            student.tenant_id,
+            revision.assignment_id,
         )
         if assignment is None:
             raise NotFoundException("Assignment not found.")
         results = await StudentAcademicRepository.get_results_by_scope_batch(
-            db, student.tenant_id, {student.id}, assignment.curriculum_subject_id,
-            assignment.academic_session_id, assignment.academic_term_id,
+            db,
+            student.tenant_id,
+            {student.id},
+            assignment.curriculum_subject_id,
+            assignment.academic_session_id,
+            assignment.academic_term_id,
         )
         result = results.get(student.id)
         if result is None:
             raise ConflictException("Submitted TMA has no academic result.")
         component_scores = await StudentAcademicRepository.get_component_scores_batch(
-            db, student.tenant_id, {result.id}, assignment.assessment_component_id,
+            db,
+            student.tenant_id,
+            {result.id},
+            assignment.assessment_component_id,
         )
         stored = component_scores.get(result.id)
         if stored is None:
             raise ConflictException("Submitted TMA component score is missing.")
         return TMASubmitResponse(
-            attempt_id=attempt.id, status=attempt.status,
+            attempt_id=attempt.id,
+            status=attempt.status,
             correct_answers=attempt.correct_answers,
             total_questions=attempt.total_questions,
             component_score=stored.score,
