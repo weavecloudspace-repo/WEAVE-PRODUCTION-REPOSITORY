@@ -63,30 +63,29 @@ payment processing, or academic result-component synchronization.
 
 from __future__ import annotations
 
-from datetime import datetime
-from decimal import Decimal
-from enum import Enum as PyEnum
 import uuid
-from sqlalchemy.dialects.postgresql import UUID
+from datetime import datetime
+from enum import Enum as PyEnum
+
 from sqlalchemy import (
     CheckConstraint,
-    Index,
-    String,
-    Integer,
     DateTime,
+    Enum as SQLEnum,
     ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Integer,
     Text,
     UniqueConstraint,
-    Enum as SQLEnum,
-    Numeric,
-    ForeignKeyConstraint,
 )
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.shared.base_model import BaseModel, PUBLIC_SCHEMA
 
 
 class TMAAssignmentStatus(str, PyEnum):
-    """Lifecycle states of a Tutor-Marked Assignment"""
+    """Lifecycle states of a Tutor-Marked Assignment."""
 
     DRAFT = "draft"
     ACTIVE = "active"
@@ -94,7 +93,7 @@ class TMAAssignmentStatus(str, PyEnum):
 
 
 class TMAActorType(str, PyEnum):
-    """Authorized actor types responsible for TMA operations"""
+    """Authorized actor types responsible for TMA operations."""
 
     TEACHER = "teacher"
     TENANT_ADMIN = "tenant_admin"
@@ -105,9 +104,9 @@ class TMAAssignment(BaseModel):
     Represents a Tutor-Marked Assignment belonging to a school.
 
     Assignments are scoped to an academic level, curriculum subject,
-    academic session , and term rather than individual classrooms
+    academic session, and term rather than individual classrooms.
 
-    Multiple authorized teachers may collaborate on the same assignment
+    Multiple authorized teachers may collaborate on the same assignment.
     """
 
     __tablename__ = "tma_assignments"
@@ -117,7 +116,9 @@ class TMAAssignment(BaseModel):
     # ==========================#
 
     academic_level_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("academic_levels.id", ondelete="RESTRICT"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("academic_levels.id", ondelete="RESTRICT"),
+        nullable=False,
     )
 
     curriculum_subject_id: Mapped[uuid.UUID] = mapped_column(
@@ -160,9 +161,13 @@ class TMAAssignment(BaseModel):
         server_default=TMAAssignmentStatus.DRAFT.value,
     )
 
-    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    activated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # ==========================#
     # Revision Management
@@ -183,8 +188,7 @@ class TMAAssignment(BaseModel):
     )
 
     created_by_actor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        nullable=False,
+        UUID(as_uuid=True), nullable=False
     )
 
     # ==========================================
@@ -226,7 +230,7 @@ class TMAAssignmentRevision(BaseModel):
     Revisions are created when an existing assignment is cancelled and revised.
     Previous revisions remain immutable for auditing.
 
-    The parent TMAAssignment controls the assignment lifecycle
+    The parent TMAAssignment controls the assignment lifecycle.
     """
 
     __tablename__ = "tma_assignment_revisions"
@@ -235,9 +239,13 @@ class TMAAssignmentRevision(BaseModel):
 
     revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    invalidated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     invalidated_by_actor_type: Mapped[TMAActorType | None] = mapped_column(
         SQLEnum(
@@ -330,13 +338,13 @@ class TMAQuestion(BaseModel):
     Each question contributes exactly one raw mark to the assignment.
 
     Questions may contain text, an image or both. Image binaries are
-    stored in Cloudflare R2 and referenced through TMAMediaAssest
+    stored in Cloudflare R2 and referenced through TMAMediaAsset.
 
-    Questions belong to a specific assignment revision , preserving
-    historical question records when an assignment is revised
+    Questions belong to a specific assignment revision, preserving
+    historical question records when an assignment is revised.
 
-    Question ordering is maintained for administrative purposes
-    Student-facing question randomization is handled separately
+    Question ordering is maintained for administrative purposes.
+    Student-facing question randomization is handled separately.
     """
 
     __tablename__ = "tma_questions"
@@ -349,11 +357,15 @@ class TMAQuestion(BaseModel):
 
     question_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    image_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    image_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     position: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
 
     author_actor_type: Mapped[TMAActorType] = mapped_column(
         SQLEnum(
@@ -365,7 +377,9 @@ class TMAQuestion(BaseModel):
         nullable=False,
     )
 
-    author_actor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    author_actor_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
 
     __table_args__ = (
         # Ensure the revision belongs to the same tenant.
