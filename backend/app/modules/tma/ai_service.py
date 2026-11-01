@@ -152,7 +152,11 @@ class TMAAIService:
         # Validate every image before writing anything to storage.
         images = [question.image, *(option.image for option in question.options)]
         validated = [
-            AIImageTransportPayload.model_validate(image.model_dump())
+            AIImageTransportPayload.model_validate(
+                image.model_dump(
+                    include={"content_type", "data_base64", "sha256", "width", "height", "alt_text"}
+                )
+            )
             if image is not None else None
             for image in images
         ]
