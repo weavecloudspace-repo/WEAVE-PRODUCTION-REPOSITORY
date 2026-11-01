@@ -1,0 +1,1 @@
+"""TMA persistence repository (placeholder)."""
