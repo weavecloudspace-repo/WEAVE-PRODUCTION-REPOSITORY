@@ -382,6 +382,7 @@ class TMAStudentAssignmentResponse(TMAOutput):
     assessment_component_id: uuid.UUID
     status: TMAAssignmentStatus
     attempt_status: TMAAttemptStatus | None
+    attempt_id: uuid.UUID | None = None
     closes_at: datetime | None
     can_start_or_resume: bool
     component_maximum_score: Decimal = Field(gt=0, max_digits=5, decimal_places=2)

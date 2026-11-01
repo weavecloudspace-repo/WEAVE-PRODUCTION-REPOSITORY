@@ -284,6 +284,16 @@ function DashboardShellFrame({
   }, [sidebarCollapsed]);
 
   useEffect(() => {
+    if (role !== "student") return;
+    const focusAttempt = () => {
+      setSidebarCollapsed(true);
+      setMobileNavOpen(false);
+    };
+    window.addEventListener("weave:tma-attempt-opened", focusAttempt);
+    return () => window.removeEventListener("weave:tma-attempt-opened", focusAttempt);
+  }, [role]);
+
+  useEffect(() => {
     if (guidePageActive) {
       clearGuideReturn();
       setGuideReturn(null);

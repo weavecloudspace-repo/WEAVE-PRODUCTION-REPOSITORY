@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from app.core.exceptions import BadRequestException, ConflictException, ForbiddenException
 from app.modules.student_academics.models import AcademicTermStatus
 from app.modules.tenant_admins.models import TenantAdmin
-from app.modules.tma.models import TMAAssignment, TMAAssignmentStatus
+from app.modules.tma.models import TMAAssignment, TMAAssignmentStatus, TMAAttemptStatus
 from app.modules.tma.schemas import (
     TMAAssignmentCreate,
     TMAAssignmentUpdate,
@@ -312,7 +312,12 @@ async def test_academic_scope_edit_still_requires_lead_permission(monkeypatch) -
 
 
 @pytest.mark.asyncio
-async def test_student_list_displays_closes_at_without_enforcing_it(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "attempt_status", [None, TMAAttemptStatus.IN_PROGRESS, TMAAttemptStatus.SUBMITTED]
+)
+async def test_student_list_displays_closes_at_without_enforcing_it(
+    monkeypatch, attempt_status
+) -> None:
     from app.modules.tma import attempt_service as mod
 
     student = SimpleNamespace(id=_id(), tenant_id=_id())
@@ -333,6 +338,8 @@ async def test_student_list_displays_closes_at_without_enforcing_it(monkeypatch)
         closes_at=_date(-3),
     )
     revision = SimpleNamespace(id=_id(), published_at=_date(-10), invalidated_at=None)
+    participant = SimpleNamespace(id=_id(), revision_id=revision.id)
+    attempt = SimpleNamespace(id=_id(), status=attempt_status)
     scheme = SimpleNamespace(id=_id())
     component = SimpleNamespace(
         maximum_score=Decimal("20.00"),
@@ -361,12 +368,12 @@ async def test_student_list_displays_closes_at_without_enforcing_it(monkeypatch)
     monkeypatch.setattr(
         mod.TMAParticipantRepository,
         "list_for_student",
-        AsyncMock(return_value=[]),
+        AsyncMock(return_value=[participant] if attempt_status else []),
     )
     monkeypatch.setattr(
         mod.TMAAttemptRepository,
         "list_for_participants",
-        AsyncMock(return_value={}),
+        AsyncMock(return_value={participant.id: attempt} if attempt_status else {}),
     )
     monkeypatch.setattr(
         mod.TMARevisionRepository,
@@ -389,7 +396,9 @@ async def test_student_list_displays_closes_at_without_enforcing_it(monkeypatch)
     )
     assert len(items) == 1
     assert items[0].closes_at == assignment.closes_at
-    assert items[0].can_start_or_resume is True
+    assert items[0].can_start_or_resume is (attempt_status != TMAAttemptStatus.SUBMITTED)
+    assert items[0].attempt_status == attempt_status
+    assert items[0].attempt_id == (attempt.id if attempt_status else None)
 
 
 def test_student_schema_exposes_optional_closes_at() -> None:

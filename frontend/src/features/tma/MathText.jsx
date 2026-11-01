@@ -36,7 +36,7 @@ function formatted(text) {
 
 export default function MathText({ children }) {
   return (
-    <span className="block max-w-full overflow-x-auto whitespace-pre-wrap break-words">
+    <span className="block max-w-full overflow-x-auto overflow-y-hidden py-1 whitespace-pre-wrap break-words">
       {splitMathSegments(children).map((part, index) =>
         part.math ? (
           <span

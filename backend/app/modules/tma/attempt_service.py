@@ -151,6 +151,7 @@ class TMAAttemptService:
                     assessment_component_id=assignment.assessment_component_id,
                     status=assignment.status,
                     attempt_status=attempt.status if attempt else None,
+                    attempt_id=attempt.id if attempt else None,
                     closes_at=assignment.closes_at,
                     can_start_or_resume=attempt is None
                     or attempt.status == TMAAttemptStatus.IN_PROGRESS,

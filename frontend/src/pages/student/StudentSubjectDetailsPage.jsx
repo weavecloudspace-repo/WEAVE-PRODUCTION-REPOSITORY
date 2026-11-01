@@ -12,6 +12,7 @@ import { invalidateDashboardSessionCache } from "../../services/dashboardSession
 import { realtimeClient } from "../../services/realtimeClient";
 import { cleanText } from "../../utils/academicDashboard";
 import { cn } from "../../utils/cn";
+import StudentSubjectTma from "../../features/tma/student/StudentSubjectTma";
 import {
   displayStatusLabel,
   hasValue,
@@ -150,6 +151,7 @@ function StudentSubjectDetailsPage() {
                   : scoredComponents > 0 ? "In progress" : "Awaiting marks"}
               </Badge>
             </div>
+            <StudentSubjectTma subject={result} />
             <nav
               aria-label="Subject sections"
               className="flex gap-6 border-t border-border/70 px-5 sm:px-6"
