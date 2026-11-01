@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, CreditCard, ShieldCheck, Wallet } from "lucide-react";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import { api } from "../../services/api";
 import { paystackCheckoutUrl } from "../tma/aiCredits";
+import { startPaymentVerificationPoll } from "./paymentVerificationPoll";
 
 const formatMoney = (kobo, currency = "NGN") =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency }).format(
@@ -22,9 +23,46 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
   const [checkoutUrl, setCheckoutUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [verificationStatus, setVerificationStatus] = useState("");
+  const poll = useRef(null);
+  const completion = useRef({ onVerified, onClose });
   const locked = useRef(false);
   const path = role === "admin" ? "/ai/admin/quota/purchases" : "/ai/teacher/purchases";
   const valid = Number.isSafeInteger(Number(credits)) && Number(credits) > 0;
+
+  useEffect(() => { completion.current = { onVerified, onClose }; }, [onVerified, onClose]);
+  useEffect(() => {
+    if (!open || !purchase?.reference) return;
+    let active = true;
+    const reference = purchase.reference;
+    const verification = startPaymentVerificationPoll({
+      verify: (signal) => api.post(`${path}/${encodeURIComponent(reference)}/verify`, {}, { signal }),
+      onStatus: (status) => { if (active) setVerificationStatus(status); },
+      onError: (failure) => {
+        if (active) setError(failure.userMessage || failure.message || "Could not check payment. Try again.");
+      },
+      onSuccess: async () => {
+        setError("");
+        try {
+          await completion.current.onVerified?.();
+          if (!active) return;
+          setStep("quota");
+          setQuote(null);
+          setPurchase(null);
+          setCheckoutUrl("");
+          completion.current.onClose();
+        } catch {
+          if (active) setError("Payment is confirmed. Refresh the dashboard to load your updated balance.");
+        }
+      },
+    });
+    poll.current = verification;
+    return () => {
+      active = false;
+      verification.dispose();
+      if (poll.current === verification) poll.current = null;
+    };
+  }, [open, purchase?.reference, path]);
 
   const run = async (fn) => {
     if (locked.current) return;
@@ -83,18 +121,7 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
       }
     });
   };
-  const verify = () => run(async () => {
-    if (!purchase?.reference) return;
-    const result = await api.post(
-      `${path}/${encodeURIComponent(purchase.reference)}/verify`, {},
-    );
-    if (result.status === "success") {
-      await onVerified?.();
-      reset(true);
-      return;
-    }
-    setError(`Payment is ${result.status}. Credits will appear only after verification.`);
-  });
+  const verify = () => { setError(""); void poll.current?.checkNow(); };
 
   return (
     <Modal
@@ -159,7 +186,15 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
               <div className="space-y-2 rounded-xl bg-surface-muted/30 p-3 text-xs">
                 <p className="break-all text-text-muted">Reference: {purchase.reference}</p>
                 <p className="text-text-muted">
-                  Finish payment in the secure tab, then check payment status here.
+                  Finish payment in the secure tab. We’ll check automatically and update your balance.
+                </p>
+                <p role="status" className="text-text-muted">
+                  {verificationStatus === "checking" ? "Checking payment…"
+                    : verificationStatus === "success" ? "Payment confirmed. Updating your balance…"
+                    : verificationStatus === "timed_out" ? "Automatic checks paused. You can still check payment below."
+                    : ["failed", "cancelled"].includes(verificationStatus) ? `Payment ${verificationStatus}. No credits were added.`
+                    : verificationStatus === "stopped" ? "Automatic checks stopped. Try checking again below."
+                    : "Waiting for payment confirmation…"}
                 </p>
                 {checkoutUrl && <a className="font-semibold text-primary underline"
                   href={checkoutUrl} target="_blank" rel="noopener noreferrer">Reopen Paystack checkout</a>}
@@ -173,8 +208,8 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
                   <CreditCard size={16} /> {busy ? "Opening…" : "Pay securely"}
                 </Button>
               ) : (
-                <Button className="flex-1" disabled={busy} onClick={verify}>
-                  {busy ? "Verifying…" : "Check payment"}
+                <Button className="flex-1" disabled={busy || ["checking", "success", "failed", "cancelled"].includes(verificationStatus)} onClick={verify}>
+                  {verificationStatus === "checking" ? "Verifying…" : "Check payment"}
                 </Button>
               )}
             </div>
