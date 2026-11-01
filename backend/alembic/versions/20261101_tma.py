@@ -18,16 +18,26 @@ depends_on = None
 SCHEMA = "public"
 
 assignment_status = postgresql.ENUM(
-    "draft", "active", "closed",
-    name="tma_assignment_status", schema=SCHEMA, create_type=False,
+    "draft",
+    "active",
+    "closed",
+    name="tma_assignment_status",
+    schema=SCHEMA,
+    create_type=False,
 )
 actor_type = postgresql.ENUM(
-    "teacher", "tenant_admin",
-    name="tma_actor_type", schema=SCHEMA, create_type=False,
+    "teacher",
+    "tenant_admin",
+    name="tma_actor_type",
+    schema=SCHEMA,
+    create_type=False,
 )
 attempt_status = postgresql.ENUM(
-    "in_progress", "submitted",
-    name="tma_attempt_status", schema=SCHEMA, create_type=False,
+    "in_progress",
+    "submitted",
+    name="tma_attempt_status",
+    schema=SCHEMA,
+    create_type=False,
 )
 
 # These are existing academic tables. Global UUID primary keys already make
@@ -59,19 +69,29 @@ PARENT_KEYS = (
 def _base_columns() -> list[sa.Column]:
     return [
         sa.Column(
-            "id", sa.UUID(), primary_key=True, unique=True, nullable=False,
+            "id",
+            sa.UUID(),
+            primary_key=True,
+            unique=True,
+            nullable=False,
         ),
         sa.Column(
-            "tenant_id", sa.UUID(),
-            sa.ForeignKey("public.tenants.id"), nullable=False,
+            "tenant_id",
+            sa.UUID(),
+            sa.ForeignKey("public.tenants.id"),
+            nullable=False,
         ),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True),
-            server_default=sa.text("now()"), nullable=False,
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True),
-            server_default=sa.text("now()"), nullable=False,
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
     ]
 
@@ -101,31 +121,38 @@ def upgrade() -> None:
         sa.Column("academic_term_id", sa.UUID(), nullable=False),
         sa.Column("assessment_component_id", sa.UUID(), nullable=False),
         sa.Column(
-            "status", assignment_status,
-            server_default="draft", nullable=False,
+            "status",
+            assignment_status,
+            server_default="draft",
+            nullable=False,
         ),
         sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("closed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
-            "current_revision_number", sa.Integer(),
-            server_default="1", nullable=False,
+            "current_revision_number",
+            sa.Integer(),
+            server_default="1",
+            nullable=False,
         ),
         sa.Column("created_by_actor_type", actor_type, nullable=False),
         sa.Column("created_by_actor_id", sa.UUID(), nullable=False),
         sa.ForeignKeyConstraint(
             ["tenant_id", "academic_level_id"],
             ["public.academic_levels.tenant_id", "public.academic_levels.id"],
-            name="fk_tma_assignment_tenant_level", ondelete="RESTRICT",
+            name="fk_tma_assignment_tenant_level",
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["tenant_id", "curriculum_subject_id"],
             ["public.curriculum_subjects.tenant_id", "public.curriculum_subjects.id"],
-            name="fk_tma_assignment_tenant_subject", ondelete="RESTRICT",
+            name="fk_tma_assignment_tenant_subject",
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["tenant_id", "academic_session_id"],
             ["public.academic_sessions.tenant_id", "public.academic_sessions.id"],
-            name="fk_tma_assignment_tenant_session", ondelete="RESTRICT",
+            name="fk_tma_assignment_tenant_session",
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["tenant_id", "academic_term_id", "academic_session_id"],
@@ -134,7 +161,8 @@ def upgrade() -> None:
                 "public.academic_terms.id",
                 "public.academic_terms.academic_session_id",
             ],
-            name="fk_tma_assignment_term_session", ondelete="RESTRICT",
+            name="fk_tma_assignment_term_session",
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["tenant_id", "assessment_component_id"],
@@ -142,15 +170,21 @@ def upgrade() -> None:
                 "public.assessment_components.tenant_id",
                 "public.assessment_components.id",
             ],
-            name="fk_tma_assignment_tenant_component", ondelete="RESTRICT",
+            name="fk_tma_assignment_tenant_component",
+            ondelete="RESTRICT",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "id",
+            "tenant_id",
+            "id",
             name="uq_tma_assignments_tenant_id",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "academic_level_id", "curriculum_subject_id",
-            "academic_session_id", "academic_term_id", "assessment_component_id",
+            "tenant_id",
+            "academic_level_id",
+            "curriculum_subject_id",
+            "academic_session_id",
+            "academic_term_id",
+            "assessment_component_id",
             name="uq_tma_assignment_component_scope",
         ),
         sa.CheckConstraint(
@@ -160,7 +194,8 @@ def upgrade() -> None:
     )
     op.create_index(
         "ix_tma_assignments_tenant_term_status",
-        "tma_assignments", ["tenant_id", "academic_term_id", "status"],
+        "tma_assignments",
+        ["tenant_id", "academic_term_id", "status"],
         schema=SCHEMA,
     )
     op.create_index(
@@ -182,21 +217,29 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["tenant_id", "assignment_id"],
             ["public.tma_assignments.tenant_id", "public.tma_assignments.id"],
-            name="fk_tma_revisions_tenant_assignment", ondelete="RESTRICT",
+            name="fk_tma_revisions_tenant_assignment",
+            ondelete="RESTRICT",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "assignment_id", "revision_number",
+            "tenant_id",
+            "assignment_id",
+            "revision_number",
             name="uq_tma_revisions_assignment_number",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "id", name="uq_tma_revisions_tenant_id",
+            "tenant_id",
+            "id",
+            name="uq_tma_revisions_tenant_id",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "id", "assignment_id",
+            "tenant_id",
+            "id",
+            "assignment_id",
             name="uq_tma_revisions_tenant_id_assignment",
         ),
         sa.CheckConstraint(
-            "revision_number >= 1", name="ck_tma_revisions_number_positive",
+            "revision_number >= 1",
+            name="ck_tma_revisions_number_positive",
         ),
         sa.CheckConstraint(
             """
@@ -230,21 +273,28 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["tenant_id", "assignment_id"],
             ["public.tma_assignments.tenant_id", "public.tma_assignments.id"],
-            name="fk_tma_media_assets_tenant_assignment", ondelete="RESTRICT",
+            name="fk_tma_media_assets_tenant_assignment",
+            ondelete="RESTRICT",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "object_key",
+            "tenant_id",
+            "object_key",
             name="uq_tma_media_assets_tenant_object_key",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "id", name="uq_tma_media_assets_tenant_id",
+            "tenant_id",
+            "id",
+            name="uq_tma_media_assets_tenant_id",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "assignment_id", "id",
+            "tenant_id",
+            "assignment_id",
+            "id",
             name="uq_tma_media_tenant_assignment_id",
         ),
         sa.CheckConstraint(
-            "size_bytes > 0", name="ck_tma_media_assets_size_positive",
+            "size_bytes > 0",
+            name="ck_tma_media_assets_size_positive",
         ),
         sa.CheckConstraint(
             "LENGTH(BTRIM(object_key)) > 0",
@@ -261,7 +311,8 @@ def upgrade() -> None:
     )
     op.create_index(
         "ix_tma_media_assets_tenant_assignment",
-        "tma_media_assets", ["tenant_id", "assignment_id"],
+        "tma_media_assets",
+        ["tenant_id", "assignment_id"],
         schema=SCHEMA,
     )
 
@@ -273,7 +324,10 @@ def upgrade() -> None:
         sa.Column("image_asset_id", sa.UUID(), nullable=True),
         sa.Column("position", sa.Integer(), nullable=False),
         sa.Column(
-            "version", sa.Integer(), server_default="1", nullable=False,
+            "version",
+            sa.Integer(),
+            server_default="1",
+            nullable=False,
         ),
         sa.Column("author_actor_type", actor_type, nullable=False),
         sa.Column("author_actor_id", sa.UUID(), nullable=False),
@@ -284,7 +338,8 @@ def upgrade() -> None:
                 "public.tma_assignment_revisions.id",
                 "public.tma_assignment_revisions.assignment_id",
             ],
-            name="fk_tma_questions_tenant_revision", ondelete="RESTRICT",
+            name="fk_tma_questions_tenant_revision",
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["tenant_id", "assignment_id", "image_asset_id"],
@@ -293,21 +348,30 @@ def upgrade() -> None:
                 "public.tma_media_assets.assignment_id",
                 "public.tma_media_assets.id",
             ],
-            name="fk_tma_questions_tenant_media", ondelete="RESTRICT",
+            name="fk_tma_questions_tenant_media",
+            ondelete="RESTRICT",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "revision_id", "position",
+            "tenant_id",
+            "revision_id",
+            "position",
             name="uq_tma_questions_revision_position",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "id", name="uq_tma_questions_tenant_id",
+            "tenant_id",
+            "id",
+            name="uq_tma_questions_tenant_id",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "id", "revision_id",
+            "tenant_id",
+            "id",
+            "revision_id",
             name="uq_tma_questions_tenant_id_revision",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "id", "assignment_id",
+            "tenant_id",
+            "id",
+            "assignment_id",
             name="uq_tma_questions_tenant_id_assignment",
         ),
         sa.CheckConstraint(
@@ -318,10 +382,12 @@ def upgrade() -> None:
             name="ck_tma_questions_content_required",
         ),
         sa.CheckConstraint(
-            "position >= 1", name="ck_tma_questions_position_positive",
+            "position >= 1",
+            name="ck_tma_questions_position_positive",
         ),
         sa.CheckConstraint(
-            "version >= 1", name="ck_tma_questions_version_positive",
+            "version >= 1",
+            name="ck_tma_questions_version_positive",
         ),
     )
 
@@ -332,7 +398,9 @@ def upgrade() -> None:
         sa.Column("option_text", sa.Text(), nullable=True),
         sa.Column("image_asset_id", sa.UUID(), nullable=True),
         sa.Column(
-            "is_correct", sa.Boolean(), server_default=sa.text("false"),
+            "is_correct",
+            sa.Boolean(),
+            server_default=sa.text("false"),
             nullable=False,
         ),
         sa.Column("position", sa.Integer(), nullable=False),
@@ -343,7 +411,8 @@ def upgrade() -> None:
                 "public.tma_questions.id",
                 "public.tma_questions.assignment_id",
             ],
-            name="fk_tma_question_options_tenant_question", ondelete="RESTRICT",
+            name="fk_tma_question_options_tenant_question",
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["tenant_id", "assignment_id", "image_asset_id"],
@@ -352,17 +421,24 @@ def upgrade() -> None:
                 "public.tma_media_assets.assignment_id",
                 "public.tma_media_assets.id",
             ],
-            name="fk_tma_question_options_tenant_media", ondelete="RESTRICT",
+            name="fk_tma_question_options_tenant_media",
+            ondelete="RESTRICT",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "question_id", "position",
+            "tenant_id",
+            "question_id",
+            "position",
             name="uq_tma_question_options_position",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "id", name="uq_tma_question_options_tenant_id",
+            "tenant_id",
+            "id",
+            name="uq_tma_question_options_tenant_id",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "question_id", "id",
+            "tenant_id",
+            "question_id",
+            "id",
             name="uq_tma_question_options_tenant_question_id",
         ),
         sa.CheckConstraint(
@@ -373,13 +449,16 @@ def upgrade() -> None:
             name="ck_tma_question_options_content_required",
         ),
         sa.CheckConstraint(
-            "position >= 1", name="ck_tma_question_options_position_positive",
+            "position >= 1",
+            name="ck_tma_question_options_position_positive",
         ),
     )
     op.create_index(
         "uq_tma_question_options_one_correct",
-        "tma_question_options", ["tenant_id", "question_id"],
-        unique=True, schema=SCHEMA,
+        "tma_question_options",
+        ["tenant_id", "question_id"],
+        unique=True,
+        schema=SCHEMA,
         postgresql_where=sa.text("is_correct = true"),
     )
 
@@ -395,12 +474,14 @@ def upgrade() -> None:
                 "public.tma_assignment_revisions.tenant_id",
                 "public.tma_assignment_revisions.id",
             ],
-            name="fk_tma_participants_tenant_revision", ondelete="RESTRICT",
+            name="fk_tma_participants_tenant_revision",
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["tenant_id", "student_id"],
             ["public.students.tenant_id", "public.students.id"],
-            name="fk_tma_participants_tenant_student", ondelete="RESTRICT",
+            name="fk_tma_participants_tenant_student",
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["tenant_id", "student_enrollment_id", "student_id", "class_id"],
@@ -410,28 +491,37 @@ def upgrade() -> None:
                 "public.student_enrollments.student_id",
                 "public.student_enrollments.class_id",
             ],
-            name="fk_tma_participants_student_enrollment", ondelete="RESTRICT",
+            name="fk_tma_participants_student_enrollment",
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["tenant_id", "class_id"],
             ["public.classes.tenant_id", "public.classes.id"],
-            name="fk_tma_participants_tenant_class", ondelete="RESTRICT",
+            name="fk_tma_participants_tenant_class",
+            ondelete="RESTRICT",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "revision_id", "student_id",
+            "tenant_id",
+            "revision_id",
+            "student_id",
             name="uq_tma_participants_revision_student",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "id", name="uq_tma_participants_tenant_id",
+            "tenant_id",
+            "id",
+            name="uq_tma_participants_tenant_id",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "id", "revision_id",
+            "tenant_id",
+            "id",
+            "revision_id",
             name="uq_tma_participants_tenant_id_revision",
         ),
     )
     op.create_index(
         "ix_tma_participants_tenant_student",
-        "tma_participants", ["tenant_id", "student_id"],
+        "tma_participants",
+        ["tenant_id", "student_id"],
         schema=SCHEMA,
     )
 
@@ -440,12 +530,16 @@ def upgrade() -> None:
         sa.Column("participant_id", sa.UUID(), nullable=False),
         sa.Column("revision_id", sa.UUID(), nullable=False),
         sa.Column(
-            "status", attempt_status, server_default="in_progress",
+            "status",
+            attempt_status,
+            server_default="in_progress",
             nullable=False,
         ),
         sa.Column(
-            "started_at", sa.DateTime(timezone=True),
-            server_default=sa.text("now()"), nullable=False,
+            "started_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("correct_answers", sa.Integer(), nullable=True),
@@ -457,17 +551,23 @@ def upgrade() -> None:
                 "public.tma_participants.id",
                 "public.tma_participants.revision_id",
             ],
-            name="fk_tma_attempts_tenant_participant", ondelete="RESTRICT",
+            name="fk_tma_attempts_tenant_participant",
+            ondelete="RESTRICT",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "participant_id",
+            "tenant_id",
+            "participant_id",
             name="uq_tma_attempts_tenant_participant",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "id", name="uq_tma_attempts_tenant_id",
+            "tenant_id",
+            "id",
+            name="uq_tma_attempts_tenant_id",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "id", "revision_id",
+            "tenant_id",
+            "id",
+            "revision_id",
             name="uq_tma_attempts_tenant_id_revision",
         ),
         sa.CheckConstraint(
@@ -494,7 +594,9 @@ def upgrade() -> None:
     )
     op.create_index(
         "ix_tma_attempts_tenant_status",
-        "tma_attempts", ["tenant_id", "status"], schema=SCHEMA,
+        "tma_attempts",
+        ["tenant_id", "status"],
+        schema=SCHEMA,
     )
 
     _create(
@@ -510,7 +612,8 @@ def upgrade() -> None:
                 "public.tma_attempts.id",
                 "public.tma_attempts.revision_id",
             ],
-            name="fk_tma_answers_tenant_attempt", ondelete="RESTRICT",
+            name="fk_tma_answers_tenant_attempt",
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["tenant_id", "question_id", "revision_id"],
@@ -519,7 +622,8 @@ def upgrade() -> None:
                 "public.tma_questions.id",
                 "public.tma_questions.revision_id",
             ],
-            name="fk_tma_answers_tenant_question", ondelete="RESTRICT",
+            name="fk_tma_answers_tenant_question",
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["tenant_id", "question_id", "selected_option_id"],
@@ -528,14 +632,19 @@ def upgrade() -> None:
                 "public.tma_question_options.question_id",
                 "public.tma_question_options.id",
             ],
-            name="fk_tma_answers_tenant_question_option", ondelete="RESTRICT",
+            name="fk_tma_answers_tenant_question_option",
+            ondelete="RESTRICT",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "attempt_id", "question_id",
+            "tenant_id",
+            "attempt_id",
+            "question_id",
             name="uq_tma_answers_attempt_question",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "id", name="uq_tma_answers_tenant_id",
+            "tenant_id",
+            "id",
+            name="uq_tma_answers_tenant_id",
         ),
     )
 
@@ -547,28 +656,33 @@ def downgrade() -> None:
     op.drop_table("tma_attempts", schema=SCHEMA)
     op.drop_index(
         "ix_tma_participants_tenant_student",
-        table_name="tma_participants", schema=SCHEMA,
+        table_name="tma_participants",
+        schema=SCHEMA,
     )
     op.drop_table("tma_participants", schema=SCHEMA)
     op.drop_index(
         "uq_tma_question_options_one_correct",
-        table_name="tma_question_options", schema=SCHEMA,
+        table_name="tma_question_options",
+        schema=SCHEMA,
     )
     op.drop_table("tma_question_options", schema=SCHEMA)
     op.drop_table("tma_questions", schema=SCHEMA)
     op.drop_index(
         "ix_tma_media_assets_tenant_assignment",
-        table_name="tma_media_assets", schema=SCHEMA,
+        table_name="tma_media_assets",
+        schema=SCHEMA,
     )
     op.drop_table("tma_media_assets", schema=SCHEMA)
     op.drop_table("tma_assignment_revisions", schema=SCHEMA)
     op.drop_index(
         "ix_tma_assignments_tenant_level_subject",
-        table_name="tma_assignments", schema=SCHEMA,
+        table_name="tma_assignments",
+        schema=SCHEMA,
     )
     op.drop_index(
         "ix_tma_assignments_tenant_term_status",
-        table_name="tma_assignments", schema=SCHEMA,
+        table_name="tma_assignments",
+        schema=SCHEMA,
     )
     op.drop_table("tma_assignments", schema=SCHEMA)
 

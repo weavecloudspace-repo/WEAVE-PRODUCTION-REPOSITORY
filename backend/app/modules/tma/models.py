@@ -168,13 +168,9 @@ class TMAAssignment(BaseModel):
         server_default=TMAAssignmentStatus.DRAFT.value,
     )
 
-    activated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    closed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # ==========================#
     # Revision Management
@@ -194,9 +190,7 @@ class TMAAssignment(BaseModel):
         nullable=False,
     )
 
-    created_by_actor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
-    )
+    created_by_actor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     # ==========================================
     # Database Constraints and Indexes
@@ -301,13 +295,9 @@ class TMAAssignmentRevision(BaseModel):
 
     revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    published_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    invalidated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     invalidated_by_actor_type: Mapped[TMAActorType | None] = mapped_column(
         SQLEnum(
@@ -424,21 +414,15 @@ class TMAQuestion(BaseModel):
     revision_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     # Enforce asset ownership within the assignment of this revision.
-    assignment_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
-    )
+    assignment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     question_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    image_asset_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
+    image_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     position: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    version: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=1, server_default="1"
-    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
     author_actor_type: Mapped[TMAActorType] = mapped_column(
         SQLEnum(
@@ -450,9 +434,7 @@ class TMAQuestion(BaseModel):
         nullable=False,
     )
 
-    author_actor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
-    )
+    author_actor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     __table_args__ = (
         # Ensure the revision belongs to the same tenant.
@@ -548,15 +530,11 @@ class TMAQuestionOption(BaseModel):
 
     question_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
-    assignment_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
-    )
+    assignment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     option_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    image_asset_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
+    image_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     is_correct: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
@@ -839,7 +817,6 @@ class TMAParticipant(BaseModel):
             "revision_id",
             name="uq_tma_participants_tenant_id_revision",
         ),
-
         # Ensure the revision belongs to the same tenant.
         ForeignKeyConstraint(
             ["tenant_id", "revision_id"],
@@ -850,7 +827,6 @@ class TMAParticipant(BaseModel):
             name="fk_tma_participants_tenant_revision",
             ondelete="RESTRICT",
         ),
-
         # Prevent duplicate participation for the same
         # student within an assignment revision.
         UniqueConstraint(
@@ -859,14 +835,12 @@ class TMAParticipant(BaseModel):
             "student_id",
             name="uq_tma_participants_revision_student",
         ),
-
         # Support tenant-safe references from attempts.
         UniqueConstraint(
             "tenant_id",
             "id",
             name="uq_tma_participants_tenant_id",
         ),
-
         # Optimize student participation history.
         Index(
             "ix_tma_participants_tenant_student",
@@ -913,9 +887,7 @@ class TMAAttempt(BaseModel):
             TMAAttemptStatus,
             name="tma_attempt_status",
             schema=PUBLIC_SCHEMA,
-            values_callable=lambda enum_cls: [
-                member.value for member in enum_cls
-            ],
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
         ),
         nullable=False,
         default=TMAAttemptStatus.IN_PROGRESS,
@@ -955,14 +927,12 @@ class TMAAttempt(BaseModel):
             name="fk_tma_attempts_tenant_participant",
             ondelete="RESTRICT",
         ),
-
         # Enforce exactly one attempt per participant.
         UniqueConstraint(
             "tenant_id",
             "participant_id",
             name="uq_tma_attempts_tenant_participant",
         ),
-
         UniqueConstraint(
             "tenant_id",
             "id",
@@ -975,7 +945,6 @@ class TMAAttempt(BaseModel):
             "id",
             name="uq_tma_attempts_tenant_id",
         ),
-
         # Validate attempt lifecycle and grading fields.
         CheckConstraint(
             """
@@ -998,7 +967,6 @@ class TMAAttempt(BaseModel):
             """,
             name="ck_tma_attempts_submission_consistency",
         ),
-
         # Prevent submission timestamps preceding attempt start.
         CheckConstraint(
             """
@@ -1007,7 +975,6 @@ class TMAAttempt(BaseModel):
             """,
             name="ck_tma_attempts_submission_chronology",
         ),
-
         # Optimize attempt lookups by status.
         Index(
             "ix_tma_attempts_tenant_status",
@@ -1068,7 +1035,6 @@ class TMAAnswer(BaseModel):
             name="fk_tma_answers_tenant_attempt",
             ondelete="RESTRICT",
         ),
-
         # Ensure the question belongs to the same school.
         ForeignKeyConstraint(
             ["tenant_id", "question_id", "revision_id"],
@@ -1080,7 +1046,6 @@ class TMAAnswer(BaseModel):
             name="fk_tma_answers_tenant_question",
             ondelete="RESTRICT",
         ),
-
         # Prevent selecting an option that belongs to another question.
         ForeignKeyConstraint(
             ["tenant_id", "question_id", "selected_option_id"],
@@ -1092,7 +1057,6 @@ class TMAAnswer(BaseModel):
             name="fk_tma_answers_tenant_question_option",
             ondelete="RESTRICT",
         ),
-
         # An attempt can have only one saved selection per question.
         UniqueConstraint(
             "tenant_id",
@@ -1100,7 +1064,6 @@ class TMAAnswer(BaseModel):
             "question_id",
             name="uq_tma_answers_attempt_question",
         ),
-
         # Support tenant-safe references to individual answer records.
         UniqueConstraint(
             "tenant_id",
