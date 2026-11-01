@@ -695,9 +695,7 @@ class TMAMediaAsset(BaseModel):
     # ==========================================
 
     __table_args__ = (
-
-        # Ensure the asset belongs to an assignment
-        # within the same tenant.
+        # Ensure the asset and assignment belong to the same tenant.
         ForeignKeyConstraint(
             ["tenant_id", "assignment_id"],
             [
@@ -707,71 +705,40 @@ class TMAMediaAsset(BaseModel):
             name="fk_tma_media_assets_tenant_assignment",
             ondelete="RESTRICT",
         ),
-
-        # Prevent duplicate R2 object references
-        # within the same tenant.
+        # Prevent duplicate object keys within a tenant.
         UniqueConstraint(
             "tenant_id",
             "object_key",
             name="uq_tma_media_assets_tenant_object_key",
         ),
-
+        # Enforce assignment ownership of question and option images.
         UniqueConstraint(
             "tenant_id",
             "assignment_id",
             "id",
             name="uq_tma_media_tenant_assignment_id",
         ),
-        # Support tenant-safe foreign keys from
-        # questions and answer options.
         UniqueConstraint(
             "tenant_id",
             "id",
             name="uq_tma_media_assets_tenant_id",
         ),
-
-        # Ensure the object metadata cannot be blank or malformed.
         CheckConstraint(
             "LENGTH(BTRIM(content_type)) > 0",
             name="ck_tma_media_assets_content_type_required",
         ),
         CheckConstraint(
-            "checksum_sha256 IS NULL OR checksum_sha256 ~ '^[0-9a-fA-F]{64}        CheckConstraint(
-            "size_bytes > 0",
-            name="ck_tma_media_assets_size_positive",
-        ),
-
-        # Ensure the R2 object key is not empty.
-        CheckConstraint(
-            "LENGTH(BTRIM(object_key)) > 0",
-            name="ck_tma_media_assets_object_key_required",
-        ),
-
-        # Optimize media lookups for an assignment.
-        Index(
-            "ix_tma_media_assets_tenant_assignment",
-            "tenant_id",
-            "assignment_id",
-        ),
-    )
-
-",
+            "checksum_sha256 IS NULL OR LENGTH(checksum_sha256) = 64",
             name="ck_tma_media_assets_checksum_sha256",
         ),
-
-        # Ensure uploaded images have a valid size.
         CheckConstraint(
             "size_bytes > 0",
             name="ck_tma_media_assets_size_positive",
         ),
-
-        # Ensure the R2 object key is not empty.
         CheckConstraint(
             "LENGTH(BTRIM(object_key)) > 0",
             name="ck_tma_media_assets_object_key_required",
         ),
-
-        # Optimize media lookups for an assignment.
         Index(
             "ix_tma_media_assets_tenant_assignment",
             "tenant_id",
