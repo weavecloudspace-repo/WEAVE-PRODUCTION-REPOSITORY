@@ -462,7 +462,10 @@ class TMAAttemptService:
             student=student,
             attempt_id=attempt_id,
         )
-        if revision.invalidated_at is not None or attempt.score_reversed_at is not None:
+        if (
+            getattr(revision, "invalidated_at", None) is not None
+            or getattr(attempt, "score_reversed_at", None) is not None
+        ):
             raise ConflictException("This TMA revision was cancelled.")
         if (
             attempt.status != TMAAttemptStatus.SUBMITTED
