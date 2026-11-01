@@ -195,7 +195,6 @@ class TMAAssignmentService:
             actor=actor,
             assignment=assignment,
         )
-        TMAAuthorizationService.require_assignment_management(actor, assignment)
         changes = payload.model_dump(exclude_unset=True)
         if not changes:
             return assignment
@@ -208,6 +207,7 @@ class TMAAssignmentService:
         if any(value is None for value in scope_changes.values()):
             raise BadRequestException("Academic configuration fields cannot be null.")
         if scope_changes:
+            TMAAuthorizationService.require_assignment_management(actor, assignment)
             TMAAuthorizationService.require_draft_assignment(assignment)
             revision = await TMARevisionRepository.get_by_number(
                 db,

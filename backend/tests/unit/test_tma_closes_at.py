@@ -267,22 +267,46 @@ async def test_null_academic_scope_remains_invalid(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_lead_management_authorization_still_applies(monkeypatch) -> None:
+async def test_authorized_collaborator_can_change_closing_estimate(monkeypatch) -> None:
     from app.modules.tma import assignment_service as mod
 
     author = _actor()
     assignment = _assignment(author, TMAAssignmentStatus.ACTIVE)
     current, save, _ = _setup(monkeypatch, assignment)
-    def deny(*args, **kwargs):
+
+    def deny_management(*args, **kwargs):
         raise ForbiddenException("Not lead")
 
     monkeypatch.setattr(
-        mod.TMAAuthorizationService, "require_assignment_management", deny
+        mod.TMAAuthorizationService, "require_assignment_management", deny_management
+    )
+    date = _date()
+    changed = await mod.TMAAssignmentService.update_draft_assignment(
+        AsyncMock(), actor=current, assignment_id=assignment.id,
+        payload=TMAAssignmentUpdate(closes_at=date),
+    )
+    assert changed.closes_at == date
+    save.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_academic_scope_edit_still_requires_lead_permission(monkeypatch) -> None:
+    from app.modules.tma import assignment_service as mod
+
+    author = _actor()
+    assignment = _assignment(author, TMAAssignmentStatus.DRAFT)
+    current, save, _ = _setup(monkeypatch, assignment)
+
+    def deny_management(*args, **kwargs):
+        raise ForbiddenException("Not lead")
+
+    monkeypatch.setattr(
+        mod.TMAAuthorizationService, "require_assignment_management", deny_management
     )
     with pytest.raises(ForbiddenException):
         await mod.TMAAssignmentService.update_draft_assignment(
             AsyncMock(), actor=current, assignment_id=assignment.id,
-            payload=TMAAssignmentUpdate(closes_at=_date()),
+            payload=TMAAssignmentUpdate(academic_level_id=_id()),
         )
     save.assert_not_awaited()
 
