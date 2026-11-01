@@ -187,11 +187,11 @@ async def process_session_progression_job(
         raise failure_exception
 
 
-
-
 @capture_worker_exceptions(queue_name=HEAVY_QUEUE_NAME)
 async def process_tma_cancellation_job(
-    ctx: dict[str, Any], run_id: str, tenant_id: str,
+    ctx: dict[str, Any],
+    run_id: str,
+    tenant_id: str,
 ) -> dict[str, int | str]:
     """Reverse only verified TMA-owned scores, atomically."""
     _ = ctx
@@ -199,13 +199,17 @@ async def process_tma_cancellation_job(
     try:
         async with AsyncSessionLocal() as db:
             return await TMACancellationService.process(
-                db, tenant_id=parsed_tenant, run_id=parsed_run,
+                db,
+                tenant_id=parsed_tenant,
+                run_id=parsed_run,
             )
     except Exception as exc:
         logger.exception("tma.cancellation.failed", extra={"run_id": run_id})
         async with AsyncSessionLocal() as failure_db:
             await TMACancellationService.mark_failed(
-                failure_db, tenant_id=parsed_tenant, run_id=parsed_run,
+                failure_db,
+                tenant_id=parsed_tenant,
+                run_id=parsed_run,
                 message=str(exc),
             )
         return {"status": "failed", "reversed_scores": 0}
@@ -214,12 +218,14 @@ async def process_tma_cancellation_job(
 async def poll_tma_cancellations(ctx: dict[str, Any]) -> dict[str, int]:
     """Recover pending jobs if enqueueing initially failed."""
     async with AsyncSessionLocal() as db:
-        pending = (await db.execute(
-            select(TMACancellationRun.id, TMACancellationRun.tenant_id)
-            .where(TMACancellationRun.status == "pending")
-            .order_by(TMACancellationRun.created_at)
-            .limit(10)
-        )).all()
+        pending = (
+            await db.execute(
+                select(TMACancellationRun.id, TMACancellationRun.tenant_id)
+                .where(TMACancellationRun.status == "pending")
+                .order_by(TMACancellationRun.created_at)
+                .limit(10)
+            )
+        ).all()
     for run_id, tenant_id in pending:
         await process_tma_cancellation_job(ctx, str(run_id), str(tenant_id))
     return {"processed": len(pending)}

@@ -1115,7 +1115,8 @@ class TMACancellationRun(BaseModel):
         ForeignKeyConstraint(
             ["tenant_id", "assignment_id"],
             ["public.tma_assignments.tenant_id", "public.tma_assignments.id"],
-            name="fk_tma_cancellation_assignment", ondelete="RESTRICT",
+            name="fk_tma_cancellation_assignment",
+            ondelete="RESTRICT",
         ),
         ForeignKeyConstraint(
             ["tenant_id", "revision_id", "assignment_id"],
@@ -1124,10 +1125,13 @@ class TMACancellationRun(BaseModel):
                 "public.tma_assignment_revisions.id",
                 "public.tma_assignment_revisions.assignment_id",
             ],
-            name="fk_tma_cancellation_revision", ondelete="RESTRICT",
+            name="fk_tma_cancellation_revision",
+            ondelete="RESTRICT",
         ),
         UniqueConstraint(
-            "tenant_id", "revision_id", name="uq_tma_cancellation_revision",
+            "tenant_id",
+            "revision_id",
+            name="uq_tma_cancellation_revision",
         ),
         Index("ix_tma_cancellation_pending", "status", "created_at"),
         CheckConstraint(

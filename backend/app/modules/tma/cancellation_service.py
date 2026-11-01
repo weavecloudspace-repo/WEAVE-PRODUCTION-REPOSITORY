@@ -47,31 +47,51 @@ logger = logging.getLogger(__name__)
 class TMACancellationService:
     @staticmethod
     async def _assignment(
-        db: AsyncSession, *, actor: TMAAuthor, assignment_id: uuid.UUID,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
     ):
         assignment = await TMAAssignmentRepository.get_by_id(
-            db, actor.tenant_id, assignment_id, lock=True,
+            db,
+            actor.tenant_id,
+            assignment_id,
+            lock=True,
         )
         if assignment is None:
             raise NotFoundException("TMA assignment not found.")
         await TMAAuthorizationService.require_assignment_access(
-            db, actor=actor, assignment=assignment,
+            db,
+            actor=actor,
+            assignment=assignment,
         )
         TMAAuthorizationService.require_assignment_management(actor, assignment)
         return assignment
 
     @staticmethod
     async def _run(db: AsyncSession, *, tenant_id: uuid.UUID, assignment_id: uuid.UUID):
-        return (await db.execute(
-            select(TMACancellationRun).where(
-                TMACancellationRun.tenant_id == tenant_id,
-                TMACancellationRun.assignment_id == assignment_id,
-            ).order_by(TMACancellationRun.created_at.desc())
-        )).scalars().first()
+        return (
+            (
+                await db.execute(
+                    select(TMACancellationRun)
+                    .where(
+                        TMACancellationRun.tenant_id == tenant_id,
+                        TMACancellationRun.assignment_id == assignment_id,
+                    )
+                    .order_by(TMACancellationRun.created_at.desc())
+                )
+            )
+            .scalars()
+            .first()
+        )
 
     @classmethod
     async def close(
-        cls, db: AsyncSession, *, actor: TMAAuthor, assignment_id: uuid.UUID,
+        cls,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
     ):
         assignment = await cls._assignment(db, actor=actor, assignment_id=assignment_id)
         if assignment.status == TMAAssignmentStatus.CLOSED:
@@ -85,13 +105,19 @@ class TMACancellationService:
 
     @classmethod
     async def cancel(
-        cls, db: AsyncSession, *, actor: TMAAuthor,
-        assignment_id: uuid.UUID, reason: str,
+        cls,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
+        reason: str,
     ) -> TMACancellationRun:
         assignment = await cls._assignment(db, actor=actor, assignment_id=assignment_id)
         if assignment.status == TMAAssignmentStatus.CANCELLING:
             run = await cls._run(
-                db, tenant_id=actor.tenant_id, assignment_id=assignment_id,
+                db,
+                tenant_id=actor.tenant_id,
+                assignment_id=assignment_id,
             )
             if run is None:
                 raise ConflictException("Cancellation record is missing.")
@@ -99,7 +125,10 @@ class TMACancellationService:
         if assignment.status != TMAAssignmentStatus.CLOSED:
             raise ConflictException("Close the assignment before cancelling it.")
         revision = await TMARevisionRepository.get_by_number(
-            db, actor.tenant_id, assignment_id, assignment.current_revision_number,
+            db,
+            actor.tenant_id,
+            assignment_id,
+            assignment.current_revision_number,
         )
         if revision is None or revision.invalidated_at is not None:
             raise ConflictException("Current revision cannot be cancelled.")
@@ -127,7 +156,8 @@ class TMACancellationService:
 
         try:
             queued = await enqueue_tma_cancellation_job(
-                run_id=str(run.id), tenant_id=str(run.tenant_id),
+                run_id=str(run.id),
+                tenant_id=str(run.tenant_id),
             )
             if not queued:
                 logger.warning("TMA cancellation enqueue deferred to recovery poll: %s", run.id)
@@ -138,7 +168,11 @@ class TMACancellationService:
 
     @classmethod
     async def get_status(
-        cls, db: AsyncSession, *, actor: TMAAuthor, assignment_id: uuid.UUID,
+        cls,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
     ) -> TMACancellationRun:
         await cls._assignment(db, actor=actor, assignment_id=assignment_id)
         run = await cls._run(db, tenant_id=actor.tenant_id, assignment_id=assignment_id)
@@ -148,7 +182,11 @@ class TMACancellationService:
 
     @classmethod
     async def retry(
-        cls, db: AsyncSession, *, actor: TMAAuthor, assignment_id: uuid.UUID,
+        cls,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
     ) -> TMACancellationRun:
         assignment = await cls._assignment(db, actor=actor, assignment_id=assignment_id)
         if assignment.status != TMAAssignmentStatus.CANCELLING:
@@ -164,13 +202,18 @@ class TMACancellationService:
 
     @staticmethod
     async def process(
-        db: AsyncSession, *, tenant_id: uuid.UUID, run_id: uuid.UUID,
+        db: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        run_id: uuid.UUID,
     ) -> dict[str, int | str]:
-        run = (await db.execute(
-            select(TMACancellationRun)
-            .where(TMACancellationRun.tenant_id == tenant_id, TMACancellationRun.id == run_id)
-            .with_for_update()
-        )).scalar_one_or_none()
+        run = (
+            await db.execute(
+                select(TMACancellationRun)
+                .where(TMACancellationRun.tenant_id == tenant_id, TMACancellationRun.id == run_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
         if run is None:
             raise NotFoundException("TMA cancellation job not found.")
         if run.status == "completed":
@@ -179,14 +222,20 @@ class TMACancellationService:
             return {"status": run.status, "reversed_scores": run.reversed_scores}
 
         assignment = await TMAAssignmentRepository.get_by_id(
-            db, tenant_id, run.assignment_id, lock=True,
+            db,
+            tenant_id,
+            run.assignment_id,
+            lock=True,
         )
         if assignment is None or assignment.status != TMAAssignmentStatus.CANCELLING:
             raise ConflictException("TMA is not in a cancellable state.")
         if assignment.current_revision_number < 1:
             raise ConflictException("Assignment revision is invalid.")
         revision = await TMARevisionRepository.get_by_id(
-            db, tenant_id, run.revision_id, lock=True,
+            db,
+            tenant_id,
+            run.revision_id,
+            lock=True,
         )
         if (
             revision is None
@@ -198,23 +247,25 @@ class TMACancellationService:
 
         # Refuse to alter results outside their permitted academic write window.
         await ensure_academic_write_window(db, tenant_id=tenant_id)
-        attempts = (await db.execute(
-            select(TMAAttempt, TMAParticipant)
-            .join(
-                TMAParticipant,
-                and_(
-                    TMAParticipant.id == TMAAttempt.participant_id,
-                    TMAParticipant.tenant_id == tenant_id,
-                    TMAParticipant.revision_id == run.revision_id,
-                ),
+        attempts = (
+            await db.execute(
+                select(TMAAttempt, TMAParticipant)
+                .join(
+                    TMAParticipant,
+                    and_(
+                        TMAParticipant.id == TMAAttempt.participant_id,
+                        TMAParticipant.tenant_id == tenant_id,
+                        TMAParticipant.revision_id == run.revision_id,
+                    ),
+                )
+                .where(
+                    TMAAttempt.tenant_id == tenant_id,
+                    TMAAttempt.revision_id == run.revision_id,
+                    TMAAttempt.status == TMAAttemptStatus.SUBMITTED,
+                )
+                .order_by(TMAAttempt.id)
             )
-            .where(
-                TMAAttempt.tenant_id == tenant_id,
-                TMAAttempt.revision_id == run.revision_id,
-                TMAAttempt.status == TMAAttemptStatus.SUBMITTED,
-            )
-            .order_by(TMAAttempt.id)
-        )).all()
+        ).all()
         to_reverse = []
         seen_scores: set[uuid.UUID] = set()
         for attempt, participant in attempts:
@@ -228,30 +279,31 @@ class TMACancellationService:
             if attempt.score_id in seen_scores:
                 raise ConflictException("Duplicate TMA score ownership detected.")
             seen_scores.add(attempt.score_id)
-            row = (await db.execute(
-                select(StudentAssessmentScore, StudentSubjectResult)
-                .join(
-                    StudentSubjectResult,
-                    and_(
-                        StudentSubjectResult.id
-                        == StudentAssessmentScore.student_subject_result_id,
-                        StudentSubjectResult.tenant_id == tenant_id,
-                    ),
+            row = (
+                await db.execute(
+                    select(StudentAssessmentScore, StudentSubjectResult)
+                    .join(
+                        StudentSubjectResult,
+                        and_(
+                            StudentSubjectResult.id
+                            == StudentAssessmentScore.student_subject_result_id,
+                            StudentSubjectResult.tenant_id == tenant_id,
+                        ),
+                    )
+                    .where(
+                        StudentAssessmentScore.tenant_id == tenant_id,
+                        StudentAssessmentScore.id == attempt.score_id,
+                        StudentAssessmentScore.assessment_component_id
+                        == assignment.assessment_component_id,
+                        StudentSubjectResult.student_id == participant.student_id,
+                        StudentSubjectResult.academic_session_id == assignment.academic_session_id,
+                        StudentSubjectResult.academic_term_id == assignment.academic_term_id,
+                        StudentSubjectResult.curriculum_subject_id
+                        == assignment.curriculum_subject_id,
+                    )
+                    .with_for_update()
                 )
-                .where(
-                    StudentAssessmentScore.tenant_id == tenant_id,
-                    StudentAssessmentScore.id == attempt.score_id,
-                    StudentAssessmentScore.assessment_component_id
-                    == assignment.assessment_component_id,
-                    StudentSubjectResult.student_id == participant.student_id,
-                    StudentSubjectResult.academic_session_id
-                    == assignment.academic_session_id,
-                    StudentSubjectResult.academic_term_id == assignment.academic_term_id,
-                    StudentSubjectResult.curriculum_subject_id
-                    == assignment.curriculum_subject_id,
-                )
-                .with_for_update()
-            )).one_or_none()
+            ).one_or_none()
             if row is None:
                 raise ConflictException("TMA-owned academic score is missing or was moved.")
             score, result = row
@@ -273,7 +325,9 @@ class TMACancellationService:
             await db.delete(score)
             await db.flush()
             components = await StudentAcademicRepository.list_result_component_scores(
-                db, tenant_id, result,
+                db,
+                tenant_id,
+                result,
             )
             result.total_score = sum(
                 (row.score for _, row in components if row is not None), Decimal("0")
@@ -282,7 +336,9 @@ class TMACancellationService:
                 component_is_complete(component, row) for component, row in components
             ):
                 scale = await StudentAcademicRepository.find_grade_for_score(
-                    db, tenant_id, result.total_score,
+                    db,
+                    tenant_id,
+                    result.total_score,
                 )
                 result.grade = scale.grade if scale else None
                 result.remark = scale.remark if scale else None
@@ -308,15 +364,22 @@ class TMACancellationService:
 
     @staticmethod
     async def mark_failed(
-        db: AsyncSession, *, tenant_id: uuid.UUID,
-        run_id: uuid.UUID, message: str,
+        db: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        run_id: uuid.UUID,
+        message: str,
     ) -> None:
-        run = (await db.execute(
-            select(TMACancellationRun).where(
-                TMACancellationRun.tenant_id == tenant_id,
-                TMACancellationRun.id == run_id,
-            ).with_for_update()
-        )).scalar_one_or_none()
+        run = (
+            await db.execute(
+                select(TMACancellationRun)
+                .where(
+                    TMACancellationRun.tenant_id == tenant_id,
+                    TMACancellationRun.id == run_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
         if run is not None and run.status == "pending":
             run.status = "failed"
             run.error_message = message[:1500]
@@ -324,18 +387,27 @@ class TMACancellationService:
 
     @classmethod
     async def create_revision(
-        cls, db: AsyncSession, *, actor: TMAAuthor, assignment_id: uuid.UUID,
+        cls,
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment_id: uuid.UUID,
     ) -> TMAAssignmentRevision:
         assignment = await cls._assignment(db, actor=actor, assignment_id=assignment_id)
         if assignment.status != TMAAssignmentStatus.CANCELLED:
             raise ConflictException("Finish cancellation before creating a revision.")
         previous = await TMARevisionRepository.get_by_number(
-            db, actor.tenant_id, assignment.id, assignment.current_revision_number,
+            db,
+            actor.tenant_id,
+            assignment.id,
+            assignment.current_revision_number,
         )
         if previous is None or previous.invalidated_at is None:
             raise ConflictException("Previous revision is not invalidated.")
         prior_questions = await TMAQuestionRepository.list_for_revision_with_options(
-            db, actor.tenant_id, previous.id,
+            db,
+            actor.tenant_id,
+            previous.id,
         )
         revision = TMAAssignmentRevision(
             tenant_id=actor.tenant_id,
@@ -356,18 +428,20 @@ class TMACancellationService:
                 version=1,
             )
             await TMAQuestionRepository.add_question(db, cloned)
-            db.add_all([
-                TMAQuestionOption(
-                    tenant_id=actor.tenant_id,
-                    assignment_id=assignment.id,
-                    question_id=cloned.id,
-                    position=opt.position,
-                    option_text=opt.option_text,
-                    image_asset_id=opt.image_asset_id,
-                    is_correct=opt.is_correct,
-                )
-                for opt in originals_options
-            ])
+            db.add_all(
+                [
+                    TMAQuestionOption(
+                        tenant_id=actor.tenant_id,
+                        assignment_id=assignment.id,
+                        question_id=cloned.id,
+                        position=opt.position,
+                        option_text=opt.option_text,
+                        image_asset_id=opt.image_asset_id,
+                        is_correct=opt.is_correct,
+                    )
+                    for opt in originals_options
+                ]
+            )
         assignment.current_revision_number = revision.revision_number
         assignment.status = TMAAssignmentStatus.DRAFT
         assignment.activated_at = None

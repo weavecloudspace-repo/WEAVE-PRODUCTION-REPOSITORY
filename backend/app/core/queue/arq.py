@@ -137,12 +137,14 @@ async def enqueue_attendance_retention_job(*, tenant_id: str | None = None) -> b
 async def enqueue_tma_cancellation_job(*, run_id: str, tenant_id: str) -> bool:
     """Persistent pending runs are recovered by the heavy-worker poll."""
     redis = await create_pool(
-        get_arq_redis_settings(), default_queue_name=HEAVY_QUEUE_NAME,
+        get_arq_redis_settings(),
+        default_queue_name=HEAVY_QUEUE_NAME,
     )
     try:
         job = await redis.enqueue_job(
             "process_tma_cancellation_job",
-            run_id, tenant_id,
+            run_id,
+            tenant_id,
             _queue_name=HEAVY_QUEUE_NAME,
             _job_id=f"tma-cancel:{run_id}",
         )
