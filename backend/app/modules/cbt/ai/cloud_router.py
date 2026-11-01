@@ -107,12 +107,11 @@ async def admin_cloud_actor_balances(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
 ) -> AIActorQuotaBalanceListResponse:
-    return await CBTAIService.list_actor_quota_balances(
+    balances = await CBTAIService.list_actor_quota_balances(
         db,
         actor=to_existing_ai_actor(actor),
-        offset=offset,
-        limit=limit,
     )
+    return balances.model_copy(update={"items": balances.items[offset : offset + limit]})
 
 
 @router.get("/admin/quota/requests", response_model=AIQuotaRequestListResponse)
