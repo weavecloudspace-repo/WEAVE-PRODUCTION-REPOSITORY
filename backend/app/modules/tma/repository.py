@@ -38,8 +38,11 @@ class TMAAssignmentRepository:
 
     @staticmethod
     async def get_by_id(
-        db: AsyncSession, tenant_id: uuid.UUID, assignment_id: uuid.UUID,
-        *, lock: bool = False,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        assignment_id: uuid.UUID,
+        *,
+        lock: bool = False,
     ) -> TMAAssignment | None:
         query = select(TMAAssignment).where(
             TMAAssignment.tenant_id == tenant_id,
@@ -51,7 +54,9 @@ class TMAAssignmentRepository:
 
     @staticmethod
     async def get_by_component_scope(
-        db: AsyncSession, tenant_id: uuid.UUID, *,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        *,
         academic_level_id: uuid.UUID,
         curriculum_subject_id: uuid.UUID,
         academic_session_id: uuid.UUID,
@@ -73,7 +78,9 @@ class TMAAssignmentRepository:
 
     @staticmethod
     async def list_for_scope(
-        db: AsyncSession, tenant_id: uuid.UUID, *,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        *,
         academic_session_id: uuid.UUID | None = None,
         academic_term_id: uuid.UUID | None = None,
         academic_level_id: uuid.UUID | None = None,
@@ -99,14 +106,18 @@ class TMAAssignmentRepository:
             await db.execute(select(func.count(TMAAssignment.id)).where(*filters))
         ).scalar_one()
         rows = (
-            await db.execute(
-                select(TMAAssignment)
-                .where(*filters)
-                .order_by(TMAAssignment.created_at.desc(), TMAAssignment.id.desc())
-                .offset(offset)
-                .limit(limit)
+            (
+                await db.execute(
+                    select(TMAAssignment)
+                    .where(*filters)
+                    .order_by(TMAAssignment.created_at.desc(), TMAAssignment.id.desc())
+                    .offset(offset)
+                    .limit(limit)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return list(rows), total
 
     @staticmethod
@@ -127,8 +138,11 @@ class TMARevisionRepository:
 
     @staticmethod
     async def get_by_id(
-        db: AsyncSession, tenant_id: uuid.UUID, revision_id: uuid.UUID,
-        *, lock: bool = False,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        revision_id: uuid.UUID,
+        *,
+        lock: bool = False,
     ) -> TMAAssignmentRevision | None:
         query = select(TMAAssignmentRevision).where(
             TMAAssignmentRevision.tenant_id == tenant_id,
@@ -140,7 +154,9 @@ class TMARevisionRepository:
 
     @staticmethod
     async def get_by_number(
-        db: AsyncSession, tenant_id: uuid.UUID, assignment_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        assignment_id: uuid.UUID,
         revision_number: int,
     ) -> TMAAssignmentRevision | None:
         return (
@@ -155,7 +171,9 @@ class TMARevisionRepository:
 
     @staticmethod
     async def list_for_assignment(
-        db: AsyncSession, tenant_id: uuid.UUID, assignment_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        assignment_id: uuid.UUID,
     ) -> list[TMAAssignmentRevision]:
         return list(
             (
@@ -167,12 +185,15 @@ class TMARevisionRepository:
                     )
                     .order_by(TMAAssignmentRevision.revision_number.desc())
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
 
     @staticmethod
     async def save(
-        db: AsyncSession, revision: TMAAssignmentRevision,
+        db: AsyncSession,
+        revision: TMAAssignmentRevision,
     ) -> TMAAssignmentRevision:
         db.add(revision)
         await db.flush()
@@ -190,8 +211,11 @@ class TMAQuestionRepository:
 
     @staticmethod
     async def get_question(
-        db: AsyncSession, tenant_id: uuid.UUID, question_id: uuid.UUID,
-        *, lock: bool = False,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        question_id: uuid.UUID,
+        *,
+        lock: bool = False,
     ) -> TMAQuestion | None:
         query = select(TMAQuestion).where(
             TMAQuestion.tenant_id == tenant_id,
@@ -203,7 +227,9 @@ class TMAQuestionRepository:
 
     @staticmethod
     async def list_for_revision_with_options(
-        db: AsyncSession, tenant_id: uuid.UUID, revision_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        revision_id: uuid.UUID,
     ) -> list[tuple[TMAQuestion, list[TMAQuestionOption]]]:
         """Fetch all questions and options in two queries (no N+1)."""
         questions = list(
@@ -216,25 +242,31 @@ class TMAQuestionRepository:
                     )
                     .order_by(TMAQuestion.position, TMAQuestion.id)
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
         if not questions:
             return []
         question_ids = [question.id for question in questions]
         options = (
-            await db.execute(
-                select(TMAQuestionOption)
-                .where(
-                    TMAQuestionOption.tenant_id == tenant_id,
-                    TMAQuestionOption.question_id.in_(question_ids),
-                )
-                .order_by(
-                    TMAQuestionOption.question_id,
-                    TMAQuestionOption.position,
-                    TMAQuestionOption.id,
+            (
+                await db.execute(
+                    select(TMAQuestionOption)
+                    .where(
+                        TMAQuestionOption.tenant_id == tenant_id,
+                        TMAQuestionOption.question_id.in_(question_ids),
+                    )
+                    .order_by(
+                        TMAQuestionOption.question_id,
+                        TMAQuestionOption.position,
+                        TMAQuestionOption.id,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         by_question: dict[uuid.UUID, list[TMAQuestionOption]] = {
             question_id: [] for question_id in question_ids
         }
@@ -244,7 +276,9 @@ class TMAQuestionRepository:
 
     @staticmethod
     async def replace_options(
-        db: AsyncSession, tenant_id: uuid.UUID, question_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        question_id: uuid.UUID,
         options: Sequence[TMAQuestionOption],
     ) -> None:
         """Replace options only after the service validates DRAFT and ownership.
@@ -252,7 +286,9 @@ class TMAQuestionRepository:
         The service must lock the parent question and check its version.
         Existing submitted answers are protected by RESTRICT foreign keys.
         """
-        if any(option.tenant_id != tenant_id or option.question_id != question_id for option in options):
+        if any(
+            option.tenant_id != tenant_id or option.question_id != question_id for option in options
+        ):
             raise ValueError("option scope does not match question")
         await db.execute(
             delete(TMAQuestionOption).where(
@@ -272,11 +308,16 @@ class TMAQuestionRepository:
 
     @staticmethod
     async def delete_draft_question(
-        db: AsyncSession, tenant_id: uuid.UUID, question_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        question_id: uuid.UUID,
     ) -> bool:
         """Caller must lock/validate that the question is still in DRAFT."""
         question = await TMAQuestionRepository.get_question(
-            db, tenant_id, question_id, lock=True,
+            db,
+            tenant_id,
+            question_id,
+            lock=True,
         )
         if question is None:
             return False
@@ -302,7 +343,9 @@ class TMAMediaAssetRepository:
 
     @staticmethod
     async def get_by_id(
-        db: AsyncSession, tenant_id: uuid.UUID, asset_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        asset_id: uuid.UUID,
     ) -> TMAMediaAsset | None:
         return (
             await db.execute(
@@ -315,7 +358,9 @@ class TMAMediaAssetRepository:
 
     @staticmethod
     async def get_by_object_key(
-        db: AsyncSession, tenant_id: uuid.UUID, object_key: str,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        object_key: str,
     ) -> TMAMediaAsset | None:
         return (
             await db.execute(
@@ -328,7 +373,9 @@ class TMAMediaAssetRepository:
 
     @staticmethod
     async def list_for_assignment(
-        db: AsyncSession, tenant_id: uuid.UUID, assignment_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        assignment_id: uuid.UUID,
     ) -> list[TMAMediaAsset]:
         return list(
             (
@@ -340,12 +387,16 @@ class TMAMediaAssetRepository:
                     )
                     .order_by(TMAMediaAsset.created_at, TMAMediaAsset.id)
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
 
     @staticmethod
     async def delete_unreferenced(
-        db: AsyncSession, tenant_id: uuid.UUID, asset_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        asset_id: uuid.UUID,
     ) -> bool:
         """Remove metadata only if neither questions nor options use it.
 
@@ -383,7 +434,8 @@ class TMAParticipantRepository:
 
     @staticmethod
     async def insert_missing(
-        db: AsyncSession, tenant_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
         participants: Sequence[TMAParticipant],
     ) -> list[uuid.UUID]:
         """Insert roster members idempotently without modifying existing history."""
@@ -414,7 +466,9 @@ class TMAParticipantRepository:
 
     @staticmethod
     async def get_by_revision_student(
-        db: AsyncSession, tenant_id: uuid.UUID, revision_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        revision_id: uuid.UUID,
         student_id: uuid.UUID,
     ) -> TMAParticipant | None:
         return (
@@ -429,7 +483,9 @@ class TMAParticipantRepository:
 
     @staticmethod
     async def list_for_revision(
-        db: AsyncSession, tenant_id: uuid.UUID, revision_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        revision_id: uuid.UUID,
     ) -> list[TMAParticipant]:
         return list(
             (
@@ -441,12 +497,16 @@ class TMAParticipantRepository:
                     )
                     .order_by(TMAParticipant.student_id)
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
 
     @staticmethod
     async def list_for_student(
-        db: AsyncSession, tenant_id: uuid.UUID, student_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        student_id: uuid.UUID,
     ) -> list[TMAParticipant]:
         return list(
             (
@@ -458,7 +518,9 @@ class TMAParticipantRepository:
                     )
                     .order_by(TMAParticipant.created_at.desc(), TMAParticipant.id.desc())
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
 
 
@@ -473,8 +535,11 @@ class TMAAttemptRepository:
 
     @staticmethod
     async def get_by_id(
-        db: AsyncSession, tenant_id: uuid.UUID, attempt_id: uuid.UUID,
-        *, lock: bool = False,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        attempt_id: uuid.UUID,
+        *,
+        lock: bool = False,
     ) -> TMAAttempt | None:
         query = select(TMAAttempt).where(
             TMAAttempt.tenant_id == tenant_id,
@@ -486,8 +551,11 @@ class TMAAttemptRepository:
 
     @staticmethod
     async def get_by_participant(
-        db: AsyncSession, tenant_id: uuid.UUID, participant_id: uuid.UUID,
-        *, lock: bool = False,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        participant_id: uuid.UUID,
+        *,
+        lock: bool = False,
     ) -> TMAAttempt | None:
         query = select(TMAAttempt).where(
             TMAAttempt.tenant_id == tenant_id,
@@ -499,24 +567,31 @@ class TMAAttemptRepository:
 
     @staticmethod
     async def list_for_participants(
-        db: AsyncSession, tenant_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
         participant_ids: set[uuid.UUID],
     ) -> dict[uuid.UUID, TMAAttempt]:
         if not participant_ids:
             return {}
         attempts = (
-            await db.execute(
-                select(TMAAttempt).where(
-                    TMAAttempt.tenant_id == tenant_id,
-                    TMAAttempt.participant_id.in_(participant_ids),
+            (
+                await db.execute(
+                    select(TMAAttempt).where(
+                        TMAAttempt.tenant_id == tenant_id,
+                        TMAAttempt.participant_id.in_(participant_ids),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return {attempt.participant_id: attempt for attempt in attempts}
 
     @staticmethod
     async def list_submitted_for_revision(
-        db: AsyncSession, tenant_id: uuid.UUID, revision_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        revision_id: uuid.UUID,
     ) -> list[TMAAttempt]:
         return list(
             (
@@ -529,7 +604,9 @@ class TMAAttemptRepository:
                     )
                     .order_by(TMAAttempt.submitted_at, TMAAttempt.id)
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
 
     @staticmethod
@@ -544,7 +621,9 @@ class TMAAnswerRepository:
 
     @staticmethod
     async def list_for_attempt(
-        db: AsyncSession, tenant_id: uuid.UUID, attempt_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        attempt_id: uuid.UUID,
     ) -> list[TMAAnswer]:
         return list(
             (
@@ -556,13 +635,18 @@ class TMAAnswerRepository:
                     )
                     .order_by(TMAAnswer.question_id)
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
 
     @staticmethod
     async def save_selection(
-        db: AsyncSession, tenant_id: uuid.UUID, attempt_id: uuid.UUID,
-        revision_id: uuid.UUID, question_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        attempt_id: uuid.UUID,
+        revision_id: uuid.UUID,
+        question_id: uuid.UUID,
         selected_option_id: uuid.UUID,
     ) -> TMAAnswer:
         """Upsert the selection; caller must lock the attempt and check ACTIVE."""
@@ -589,7 +673,9 @@ class TMAAnswerRepository:
 
     @staticmethod
     async def clear_selection(
-        db: AsyncSession, tenant_id: uuid.UUID, attempt_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        attempt_id: uuid.UUID,
         question_id: uuid.UUID,
     ) -> bool:
         """Remove one selection; caller must lock the IN_PROGRESS attempt."""
