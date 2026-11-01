@@ -81,7 +81,9 @@ def test_filters_restrict_class_status_and_literal_search() -> None:
     assert "in_progress" in params.values()
     assert "ILIKE" in sql
     assert "ESCAPE" in sql
-    assert any(r"Ann\\_\\%\\\\ "[:-1] in str(value) for value in params.values())
+    expected = r"Ann_%\\"
+    expected = expected.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    assert f"%{expected}%" in params.values()
 
 
 def test_elective_eligibility_is_student_specific() -> None:
@@ -93,7 +95,11 @@ def test_elective_eligibility_is_student_specific() -> None:
     )
     assert "student_elective_selections" in sql
     assert "EXISTS" in sql
-    assert elective_class in params.values()
+    assert any(
+        elective_class in value
+        for value in params.values()
+        if isinstance(value, (list, tuple, set))
+    )
 
 
 def test_no_active_classes_still_keeps_historical_roster() -> None:
