@@ -689,6 +689,65 @@ class AIQuotaService:
         return cls._purchase_response(purchase)
 
     @classmethod
+    async def create_pending_teacher_purchase(
+        cls, db: AsyncSession, *, tenant_id: uuid.UUID,
+        teacher_membership_id: uuid.UUID, credits: int,
+        amount_kobo: int, reference: str,
+    ) -> AIQuotaPurchaseResponse:
+        """Create a personal purchase without touching the school reserve."""
+        cls._require_positive_credits(credits)
+        if type(amount_kobo) is not int or amount_kobo <= 0:
+            raise ValueError("amount_kobo must be a positive integer.")
+        normalized = reference.strip()
+        if not normalized:
+            raise ValueError("reference cannot be blank.")
+        await cls._ensure_quota_account(
+            db, tenant_id=tenant_id,
+            actor_type=AIQuotaActorType.TEACHER,
+            actor_id=teacher_membership_id,
+        )
+        existing = await AIQuotaPurchaseRepository.get_by_reference(
+            db, reference=normalized,
+        )
+        if existing is not None:
+            if (
+                existing.tenant_id == tenant_id
+                and existing.initiated_by_teacher_membership_id == teacher_membership_id
+                and existing.credits == credits
+                and existing.amount_kobo == amount_kobo
+            ):
+                return cls._purchase_response(existing)
+            raise AIQuotaConflictError("A different quota purchase uses this reference.")
+        purchase = AIQuotaPurchase(
+            tenant_id=tenant_id,
+            initiated_by_teacher_membership_id=teacher_membership_id,
+            credits=credits, amount_kobo=amount_kobo,
+            reference=normalized, status=AIQuotaPurchaseStatus.PENDING,
+        )
+        try:
+            await AIQuotaPurchaseRepository.create(db, purchase)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+        return cls._purchase_response(purchase)
+
+    @classmethod
+    async def list_teacher_purchases(
+        cls, db: AsyncSession, *, tenant_id: uuid.UUID,
+        teacher_membership_id: uuid.UUID,
+        status: AIQuotaPurchaseStatus | None = None,
+        offset: int = 0, limit: int = 50,
+    ) -> AIQuotaPurchaseListResponse:
+        rows, total = await AIQuotaPurchaseRepository.list_for_teacher(
+            db, tenant_id=tenant_id, membership_id=teacher_membership_id,
+            status=status, offset=offset, limit=limit,
+        )
+        return AIQuotaPurchaseListResponse(
+            items=[cls._purchase_response(item) for item in rows], total=total,
+        )
+
+    @classmethod
     async def credit_verified_purchase(
         cls,
         db: AsyncSession,
@@ -706,7 +765,17 @@ class AIQuotaService:
         )
         if purchase_preview is None or purchase_preview.tenant_id != tenant_id:
             raise AIQuotaNotFoundError("Quota purchase was not found.")
-        await cls._ensure_tenant_balance(db, tenant_id=tenant_id)
+        if purchase_preview.initiated_by_teacher_membership_id is not None:
+            account = await cls._ensure_quota_account(
+                db, tenant_id=tenant_id,
+                actor_type=AIQuotaActorType.TEACHER,
+                actor_id=purchase_preview.initiated_by_teacher_membership_id,
+            )
+            await cls._ensure_extra_balance(
+                db, tenant_id=tenant_id, quota_account_id=account.id,
+            )
+        else:
+            await cls._ensure_tenant_balance(db, tenant_id=tenant_id)
         try:
             purchase = await AIQuotaPurchaseRepository.get_by_reference(
                 db,
@@ -723,28 +792,44 @@ class AIQuotaService:
                 return response
             if purchase.status != AIQuotaPurchaseStatus.PENDING:
                 raise AIQuotaConflictError("Only pending quota purchases can be credited.")
-            tenant_balance = await AITenantCreditBalanceRepository.get_for_tenant(
-                db,
-                tenant_id=tenant_id,
-                lock=True,
-            )
-            if tenant_balance is None:
-                raise AIQuotaConflictError("Tenant credit balance is missing.")
-            tenant_balance.available_credits += purchase.credits
+            if purchase.initiated_by_teacher_membership_id is not None:
+                account = await AIQuotaAccountRepository.get_by_teacher_membership(
+                    db, tenant_id=tenant_id,
+                    teacher_membership_id=purchase.initiated_by_teacher_membership_id,
+                    lock=True,
+                )
+                if account is None:
+                    raise AIQuotaConflictError("Teacher AI quota account is missing.")
+                extra = await AIExtraCreditBalanceRepository.get_for_account(
+                    db, tenant_id=tenant_id, quota_account_id=account.id, lock=True,
+                )
+                if extra is None:
+                    raise AIQuotaConflictError("Teacher top-up balance is missing.")
+                extra.available_credits += purchase.credits
+                await AIExtraCreditBalanceRepository.save(db, extra)
+                bucket = AICreditLedgerBucket.TOP_UP
+                quota_account_id = account.id
+                description = "Teacher AI credit purchase credited."
+            else:
+                tenant_balance = await AITenantCreditBalanceRepository.get_for_tenant(
+                    db, tenant_id=tenant_id, lock=True,
+                )
+                if tenant_balance is None:
+                    raise AIQuotaConflictError("Tenant credit balance is missing.")
+                tenant_balance.available_credits += purchase.credits
+                await AITenantCreditBalanceRepository.save(db, tenant_balance)
+                bucket = AICreditLedgerBucket.TENANT_RESERVE
+                quota_account_id = None
+                description = "Tenant AI credit purchase credited."
             purchase.status = AIQuotaPurchaseStatus.SUCCESS
             purchase.credited_at = cls._now()
-            await AITenantCreditBalanceRepository.save(db, tenant_balance)
             await AIQuotaPurchaseRepository.save(db, purchase)
             await AICreditLedgerRepository.create(
-                db,
-                AICreditLedger(
-                    tenant_id=tenant_id,
-                    quota_account_id=None,
-                    bucket=AICreditLedgerBucket.TENANT_RESERVE,
-                    event_type=AICreditLedgerEventType.PURCHASE,
-                    credit_delta=purchase.credits,
-                    purchase_id=purchase.id,
-                    description="Tenant AI credit purchase credited.",
+                db, AICreditLedger(
+                    tenant_id=tenant_id, quota_account_id=quota_account_id,
+                    bucket=bucket, event_type=AICreditLedgerEventType.PURCHASE,
+                    credit_delta=purchase.credits, purchase_id=purchase.id,
+                    description=description,
                 ),
             )
             if commit:
@@ -1597,6 +1682,7 @@ class AIQuotaService:
             reference=purchase.reference,
             status=purchase.status,
             initiated_by_admin_id=purchase.initiated_by_admin_id,
+            initiated_by_teacher_membership_id=purchase.initiated_by_teacher_membership_id,
             initiated_by_email=initiated_by_email,
             created_at=purchase.created_at,
             credited_at=purchase.credited_at,
