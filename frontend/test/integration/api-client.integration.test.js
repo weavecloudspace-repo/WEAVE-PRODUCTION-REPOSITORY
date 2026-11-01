@@ -7,6 +7,28 @@ import {
   jsonResponse,
 } from "../support/browserHarness.js";
 
+test("route notifications keep destination GETs alive but still cancel reads when leaving", async () => {
+  let signal;
+  let finish;
+  const harness = installBrowserHarness({ fetchImpl: async (_url, init) => {
+    signal = init.signal;
+    return new Promise((resolve) => { finish = resolve; });
+  } });
+  harness.window.location.href = "https://weave.test/admin/ai-usage";
+  const { api, NAVIGATION_ABORT_EVENT } = await importFreshApi();
+  const request = api.get("/ai/admin/quota/actors");
+  try {
+    harness.window.dispatchEvent(new Event(NAVIGATION_ABORT_EVENT));
+    assert.equal(signal.aborted, false);
+    harness.window.location.href = "https://weave.test/admin/tma";
+    harness.window.dispatchEvent(new Event(NAVIGATION_ABORT_EVENT));
+    assert.equal(signal.aborted, true);
+  } finally {
+    finish(jsonResponse(200, { items: [] }));
+    await request;
+  }
+});
+
 test("an authenticated request refreshes once after 401 and retries with the new token", async () => {
   const calls = [];
   let profileRequestCount = 0;

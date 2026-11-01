@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowUpRight, BookOpen, CheckCircle2, Eye, EyeOff, Image, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import Button from "../../components/ui/Button";
-import MathText from "./MathText";
+import MathText from "./MathText.jsx";
 import { TmaAssetImage } from "./TmaQuestionEditor";
 
 /**

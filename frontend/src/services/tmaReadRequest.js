@@ -4,11 +4,13 @@
 export async function tmaReadRequest(read, { timeoutMs = 20000 } = {}) {
   const controller = new AbortController();
   const navigationTarget = typeof window === "undefined" ? null : window;
-  const abortOnNavigation = () => controller.abort();
+  const requestLocation = navigationTarget?.location.href;
+  const abortOnNavigation = () => {
+    if (navigationTarget?.location.href !== requestLocation) controller.abort();
+  };
   navigationTarget?.addEventListener(
     "weave:navigation-start",
     abortOnNavigation,
-    { once: true },
   );
   let timer;
   try {
