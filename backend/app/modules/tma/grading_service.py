@@ -17,6 +17,7 @@ from app.modules.student_academics.models import (
     StudentSubjectResult,
 )
 from app.modules.student_academics.repository import StudentAcademicRepository
+from app.modules.student_academics.write_guard import ensure_academic_write_window
 from app.modules.student_academics.curriculum_service import CurriculumResolutionService
 from app.modules.students.models import StudentEnrollment
 from app.modules.tma.models import TMAAssignment, TMAQuestion, TMAQuestionOption
@@ -58,10 +59,7 @@ class TMAGradingService:
         Caller owns the transaction and holds the TMA attempt lock. Failures
         abort submission. Existing component scores are never overwritten.
         """
-        await __import__(
-            "app.modules.student_academics.write_guard",
-            fromlist=["ensure_academic_write_window"],
-        ).ensure_academic_write_window(db, tenant_id=tenant_id)
+        await ensure_academic_write_window(db, tenant_id=tenant_id)
         scheme = await AssessmentRepository.get_active_scheme(db, tenant_id)
         component = await AssessmentRepository.get_component(
             db, tenant_id, assignment.assessment_component_id,
