@@ -215,6 +215,18 @@ class TMAMediaAssetResponse(TMAOutput):
     created_at: datetime
 
 
+class TMAMediaSignedUrlResponse(TMAOutput):
+    media_asset_id: uuid.UUID
+    signed_url: str
+    expires_at: datetime
+
+
+class TMAMediaDeleteResponse(TMAOutput):
+    media_asset_id: uuid.UUID
+    deleted: bool
+    storage_cleaned: bool
+
+
 # ---------- Roster and participation ----------
 
 
