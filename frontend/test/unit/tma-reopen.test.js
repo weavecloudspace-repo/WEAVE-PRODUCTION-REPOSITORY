@@ -42,6 +42,7 @@ test("confirming reopen calls its service and reloads after success", async () =
     service: { reopen: async (id) => { events.push(["reopen", id]); } },
     setDialog: (value) => { events.push(["dialog", value]); },
     load: async () => { events.push(["load"]); },
+    showSuccess: (message) => { events.push(["success", message]); },
   });
-  assert.deepEqual(events, [["reopen", "assignment-1"], ["dialog", null], ["load"]]);
+  assert.deepEqual(events, [["reopen", "assignment-1"], ["success", "Assignment reopened."], ["dialog", null], ["load"]]);
 });

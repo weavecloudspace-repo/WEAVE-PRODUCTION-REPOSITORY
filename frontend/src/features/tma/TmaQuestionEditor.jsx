@@ -15,10 +15,12 @@ import {
   Bot,
 } from "lucide-react";
 import Button from "../../components/ui/Button";
+import { useToast } from "../../hooks/useToast";
 import SearchableSelect from "../../components/ui/SearchableSelect";
 import MathText from "./MathText.jsx";
 import { formatSelection } from "./textFormatting";
 import { tmaService } from "../../services/tmaService";
+import { getErrorMessage } from "../../services/api";
 
 const tools = [
   ["bold", Bold, "Bold"],
@@ -30,15 +32,17 @@ const tools = [
   ["link", LinkIcon, "Link"],
 ];
 export function TmaAssetImage({ assignmentId, assetId, alt, autoLoad = false }) {
+  const { showError } = useToast();
   // Loading by button avoids issuing signed URLs for off-screen editor assets.
   const [url, setUrl] = useState(null);
   const [error, setError] = useState("");
+  useEffect(() => { if (error) showError(error); }, [error, showError]);
   useEffect(() => {
     if (!autoLoad) return;
     let active = true;
     tmaService.imageUrl(assignmentId, assetId)
       .then((result) => { if (active) setUrl(result.signed_url); })
-      .catch((e) => { if (active) setError(e.message); });
+      .catch((e) => { if (active) setError(getErrorMessage(e)); });
     return () => { active = false; };
   }, [assignmentId, assetId, autoLoad]);
   return (
@@ -60,22 +64,18 @@ export function TmaAssetImage({ assignmentId, assetId, alt, autoLoad = false }) 
           type="button"
           className="min-h-11 text-sm text-primary underline"
           onClick={async () => {
+            setError("");
             try {
               const r = await tmaService.imageUrl(assignmentId, assetId);
               setUrl(r.signed_url);
               setError("");
             } catch (e) {
-              setError(e.message);
+              setError(getErrorMessage(e));
             }
           }}
         >
           View attached image
         </button>
-      )}
-      {error && (
-        <p role="alert" className="text-xs text-error">
-          {error}
-        </p>
       )}
     </div>
   );
@@ -204,9 +204,11 @@ export default function TmaQuestionEditor({
   onAI,
   onUpload,
 }) {
+  const { showError } = useToast();
   const [preview, setPreview] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  useEffect(() => { if (error) showError(error); }, [error, showError]);
   const valid = Boolean(
     (draft.question_text?.trim() || draft.image_asset_id) &&
     draft.options.length >= 4 &&
@@ -246,7 +248,7 @@ export default function TmaQuestionEditor({
               const asset = await onUpload(file);
               change(asset.id);
             } catch (e) {
-              setError(e.message);
+              setError(getErrorMessage(e));
             } finally {
               setUploading(false);
             }
@@ -321,11 +323,6 @@ export default function TmaQuestionEditor({
           </Button>
         </div>
       </header>
-      {error && (
-        <p role="alert" className="text-sm text-error">
-          {error}
-        </p>
-      )}
       {uploading && (
         <p role="status" className="text-sm text-text-muted">
           Uploading image…

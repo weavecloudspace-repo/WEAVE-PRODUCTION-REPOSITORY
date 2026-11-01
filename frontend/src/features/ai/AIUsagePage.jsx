@@ -3,7 +3,8 @@ import { ArrowLeft, ArrowRight, BarChart3, Check, CreditCard, History, RefreshCw
 import { Link } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
-import { api } from "../../services/api";
+import { api, getErrorMessage } from "../../services/api";
+import { useToast } from "../../hooks/useToast";
 import AICreditPurchaseFlow from "./AICreditPurchaseFlow";
 import { canRequestAICredits } from "../tma/aiCredits";
 import "./ai-usage.css";
@@ -14,7 +15,7 @@ const money = (value) => new Intl.NumberFormat("en-NG", {
   style: "currency", currency: "NGN",
 }).format(Number(value || 0) / 100);
 const date = (value) => value ? new Date(value).toLocaleString() : "—";
-const errorText = (error) => error?.userMessage || error?.message || "Something went wrong. Please retry.";
+const errorText = (error) => getErrorMessage(error, "Something went wrong. Please retry.");
 const progress = (used, available) => {
   const total = Number(used || 0) + Number(available || 0);
   return total ? Math.min(100, Math.round(Number(used || 0) / total * 100)) : 0;
@@ -46,21 +47,20 @@ function Pager({ page, total, onChange }) {
 }
 
 export default function AIUsagePage({ role }) {
+  const { showError, showSuccess } = useToast();
   const admin = role === "admin";
   const [tab, setTab] = useState("overview");
   const [page, setPage] = useState(0);
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [actionError, setActionError] = useState("");
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [action, setAction] = useState(null);
   const [credits, setCredits] = useState(20);
   const [note, setNote] = useState("");
   const version = useRef(0);
   const activeRequest = useRef(false);
+  const lastLoadError = useRef("");
   const reload = useCallback(async ({ silent = false } = {}) => {
     const current = ++version.current;
     if (!silent) setLoading(true);
@@ -81,12 +81,18 @@ export default function AIUsagePage({ role }) {
     const failed = [];
     Object.keys(requests).forEach((key, i) => {
       if (results[i].status === "fulfilled") next[key] = results[i].value;
-      else failed.push(`${key}: ${errorText(results[i].reason)}`);
+      else {
+        const message = errorText(results[i].reason);
+        const label = { quota: "AI balance", purchases: "Purchases", summary: "School reserve", actors: "Staff usage", requests: "Credit requests", allocations: "Allocations" }[key];
+        if (message) failed.push(`${label}: ${message}`);
+      }
     });
     setData(next);
-    setError(failed.join(" · "));
+    const failure = failed.join(" · ");
+    if (failure && (!silent || failure !== lastLoadError.current)) showError(failure);
+    lastLoadError.current = failure;
     setLoading(false);
-  }, [admin, page]);
+  }, [admin, page, showError]);
   useEffect(() => {
     void reload();
     const refresh = () => void reload({ silent: true });
@@ -100,15 +106,13 @@ export default function AIUsagePage({ role }) {
     if (activeRequest.current) return;
     activeRequest.current = true;
     setBusy(true);
-    setActionError("");
-    setMessage("");
     try {
       await fn();
       setAction(null);
-      setMessage(success);
+      showSuccess(success);
       await reload({ silent: true });
     } catch (failure) {
-      setActionError(errorText(failure));
+      showError(errorText(failure));
       await reload({ silent: true });
     } finally {
       setBusy(false);
@@ -119,7 +123,6 @@ export default function AIUsagePage({ role }) {
     setAction({ kind, item });
     setNote("");
     setCredits(kind === "approve" ? item?.requested_credits || 20 : 20);
-    setActionError("");
   };
   const submitAction = () => {
     if (!action) return;
@@ -171,8 +174,6 @@ export default function AIUsagePage({ role }) {
         <Button onClick={() => setPurchaseOpen(true)}><CreditCard size={16} /> Buy credits</Button>
       </div>
     </header>
-    {(error || actionError) && <p role="alert" className="ai-usage-alert">{actionError || error}</p>}
-    {message && <p role="status" className="ai-usage-message">{message}</p>}
     <section className="ai-usage-metrics" aria-label="AI credit summary">
       <Metric icon={Wallet} label={admin ? "School reserve" : "Available credits"}
         value={data.summary ? number(summary.tenant_reserve_credits) : admin ? "—" : quota ? number(quota.total_available_credits) : "—"}

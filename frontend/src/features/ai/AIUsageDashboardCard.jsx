@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, BarChart3, Wallet } from "lucide-react";
-import { api } from "../../services/api";
+import { api, getErrorMessage } from "../../services/api";
+import { useToast } from "../../hooks/useToast";
 import "./ai-usage.css";
 
 /** Small CBT-inspired AI balance summary, independent from dashboard analytics. */
 export default function AIUsageDashboardCard({ role }) {
+  const { showError } = useToast();
   const [data, setData] = useState(null);
-  const [error, setError] = useState("");
+  const lastError = useRef("");
   useEffect(() => {
     let alive = true;
     const load = async () => {
@@ -22,9 +24,13 @@ export default function AIUsageDashboardCard({ role }) {
           quota: result[0].value,
           summary: result[1]?.status === "fulfilled" ? result[1].value : null,
         });
-        setError("");
+        if (result[1]?.status === "rejected") throw result[1].reason;
+        lastError.current = "";
       } catch (failure) {
-        if (alive) setError(failure.userMessage || failure.message || "AI credits are unavailable.");
+        if (!alive) return;
+        const message = getErrorMessage(failure, "AI credits are unavailable.");
+        if (message && message !== lastError.current) showError(message);
+        lastError.current = message;
       }
     };
     void load();
@@ -33,7 +39,7 @@ export default function AIUsageDashboardCard({ role }) {
       alive = false;
       window.removeEventListener("focus", load);
     };
-  }, [role]);
+  }, [role, showError]);
   const value = role === "admin" ? data?.summary?.tenant_reserve_credits
     : data?.quota?.total_available_credits;
   return <section className="ai-dashboard-card" aria-label="AI credit usage">
@@ -46,7 +52,6 @@ export default function AIUsageDashboardCard({ role }) {
       <strong>{value == null ? "—" : Number(value).toLocaleString("en-NG")}</strong>
       <span>{role === "admin" ? "school credits available" : "credits available"}</span>
     </div>
-    {error ? <p className="text-xs text-error" role="status">{error}</p> : null}
     <div className="ai-dashboard-card-meta">
       <span>{role === "admin" ? `${data?.summary?.pending_request_count ?? "—"} pending requests`
         : `${data?.quota?.weekly?.used_credits ?? "—"} used this week`}</span>

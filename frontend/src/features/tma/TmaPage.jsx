@@ -14,7 +14,7 @@ import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Modal from "../../components/ui/Modal";
 import Badge from "../../components/ui/Badge";
-import { authSession } from "../../services/api";
+import { authSession, getErrorMessage } from "../../services/api";
 import { tmaService as service } from "../../services/tmaService";
 import { useToast } from "../../hooks/useToast";
 import TmaActions from "./TmaActions";
@@ -206,8 +206,6 @@ export default function TmaPage({ role }) {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [dialog, setDialog] = useState(null);
   const [draft, setDraft] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -233,7 +231,6 @@ export default function TmaPage({ role }) {
       const version = ++loadVersion.current;
       if (!background) setLoading(true);
       setLoadFailed(false);
-      setError("");
       try {
         const c = await service.configuration();
         if (version !== loadVersion.current) return;
@@ -260,14 +257,14 @@ export default function TmaPage({ role }) {
         }
       } catch (e) {
         if (version === loadVersion.current) {
-          setError(e.message);
+          showError(getErrorMessage(e));
           setLoadFailed(true);
         }
       } finally {
         if (version === loadVersion.current) setLoading(false);
       }
     },
-    [assignmentId, offset],
+    [assignmentId, offset, showError],
   );
   useEffect(() => {
     load();
@@ -298,23 +295,27 @@ export default function TmaPage({ role }) {
     )
       return;
     let active = true;
+    let lastError = "";
     const timer = window.setInterval(() => {
       service
         .cancellation(assignmentId)
         .then((result) => {
           if (!active) return;
+          lastError = "";
           setCancellation(result);
           if (result.status === "completed") load();
         })
         .catch((e) => {
-          if (active) setError(e.message);
+          const message = getErrorMessage(e);
+          if (active && message && message !== lastError) showError(message);
+          lastError = message;
         });
     }, 5000);
     return () => {
       active = false;
       window.clearInterval(timer);
     };
-  }, [assignmentId, assignment?.status, cancellation?.status, load]);
+  }, [assignmentId, assignment?.status, cancellation?.status, load, showError]);
   useEffect(() => {
     if (!assignmentId || tab !== "submissions") return;
     let active = true;
@@ -331,22 +332,19 @@ export default function TmaPage({ role }) {
         if (active) setReport(r);
       })
       .catch((e) => {
-        if (active) setError(e.message);
+        if (active) showError(getErrorMessage(e));
       });
     return () => {
       active = false;
     };
-  }, [assignmentId, tab, search, participation, classFilter, reportOffset]);
+  }, [assignmentId, tab, search, participation, classFilter, reportOffset, showError]);
   const run = async (fn, message = "") => {
     setBusy(true);
-    setError("");
-    setNotice("");
     try {
       await fn();
       if (message) showSuccess(message);
     } catch (e) {
-      setError(e.message);
-      showError(e.message);
+      showError(getErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -392,7 +390,7 @@ export default function TmaPage({ role }) {
       setDraft(createAnother ? blank() : null);
       setReadiness(null);
       await load({ background: true });
-    });
+    }, "Question saved.");
   const visibleList = list.filter(
     (a) =>
       (!statusFilter || a.status === statusFilter) &&
@@ -527,22 +525,7 @@ export default function TmaPage({ role }) {
             />
           )}
         </header>}
-        {error && (
-          <p
-            role="alert"
-            className="rounded-xl border border-error/30 bg-error-soft p-4 text-sm text-error"
-          >
-            {error}
-            <button className="ml-3 underline" onClick={load}>
-              Reload
-            </button>
-          </p>
-        )}
-        {notice && (
-          <p role="status" className="text-sm text-text-muted">
-            {notice}
-          </p>
-        )}
+        {loadFailed && <Button variant="outline" onClick={load}>Retry loading assignments</Button>}
         {loading ? (
           <p role="status">Loading assignments…</p>
         ) : loadFailed ? null : !assignmentId ? (
@@ -969,10 +952,12 @@ export default function TmaPage({ role }) {
                 run(async () => {
                   if (dialog === "settings") {
                     await service.update(assignmentId, body);
+                    showSuccess("Assignment updated.");
                     setDialog(null);
                     await load();
                   } else {
                     const a = await service.create(body);
+                    showSuccess("Assignment created.");
                     setDialog(null);
                     navigate(`${base}/${a.id}`);
                   }
@@ -1057,6 +1042,11 @@ export default function TmaPage({ role }) {
                     if (draft?.id === deleteTarget.id) setDraft(null);
                     setDeleteTarget(null);
                   }
+                  showSuccess({
+                    activate: "Assignment published.", reopen: "Assignment reopened.",
+                    close: "Assignment closed.", cancel: "Assignment cancellation started.",
+                    delete: "Question deleted.",
+                  }[dialog]);
                   setDialog(null);
                   await load();
                 })

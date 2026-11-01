@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowRight, CreditCard, ShieldCheck, Wallet } from "lucide-react";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
-import { api } from "../../services/api";
+import { api, getErrorMessage } from "../../services/api";
+import { useToast } from "../../hooks/useToast";
 import { paystackCheckoutUrl } from "../tma/aiCredits";
 import { startPaymentVerificationPoll } from "./paymentVerificationPoll";
 
@@ -16,13 +17,13 @@ const formatMoney = (kobo, currency = "NGN") =>
  * The second dialog is a checkout confirmation, never a card-data collector.
  */
 export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }) {
+  const { showError, showSuccess, showWarning, showInfo } = useToast();
   const [step, setStep] = useState("quota");
   const [credits, setCredits] = useState(20);
   const [quote, setQuote] = useState(null);
   const [purchase, setPurchase] = useState(null);
   const [checkoutUrl, setCheckoutUrl] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const [verificationStatus, setVerificationStatus] = useState("");
   const poll = useRef(null);
   const completion = useRef({ onVerified, onClose });
@@ -37,12 +38,17 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
     const reference = purchase.reference;
     const verification = startPaymentVerificationPoll({
       verify: (signal) => api.post(`${path}/${encodeURIComponent(reference)}/verify`, {}, { signal }),
-      onStatus: (status) => { if (active) setVerificationStatus(status); },
+      onStatus: (status) => {
+        if (!active) return;
+        setVerificationStatus(status);
+        if (status === "timed_out") showInfo("Automatic payment checks paused. Use Check payment to try again.");
+        if (["failed", "cancelled"].includes(status)) showError(`Payment ${status}. No credits were added.`);
+      },
       onError: (failure) => {
-        if (active) setError(failure.userMessage || failure.message || "Could not check payment. Try again.");
+        if (active) showError(getErrorMessage(failure, "Could not check payment. Try again."));
       },
       onSuccess: async () => {
-        setError("");
+        showSuccess("Payment confirmed. Your AI credits have been added.");
         try {
           await completion.current.onVerified?.();
           if (!active) return;
@@ -52,7 +58,7 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
           setCheckoutUrl("");
           completion.current.onClose();
         } catch {
-          if (active) setError("Payment is confirmed. Refresh the dashboard to load your updated balance.");
+          if (active) showError("Payment is confirmed. Refresh the dashboard to load your updated balance.");
         }
       },
     });
@@ -62,17 +68,16 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
       verification.dispose();
       if (poll.current === verification) poll.current = null;
     };
-  }, [open, purchase?.reference, path]);
+  }, [open, purchase?.reference, path, showError, showInfo, showSuccess]);
 
   const run = async (fn) => {
     if (locked.current) return;
     locked.current = true;
     setBusy(true);
-    setError("");
     try {
       await fn();
     } catch (failure) {
-      setError(failure.userMessage || failure.message || "Could not complete this action.");
+      showError(getErrorMessage(failure, "Could not complete this action."));
     } finally {
       locked.current = false;
       setBusy(false);
@@ -84,7 +89,6 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
     setQuote(null);
     setPurchase(null);
     setCheckoutUrl("");
-    setError("");
     onClose();
   };
   const getQuote = () => run(async () => {
@@ -111,17 +115,18 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
             result.quote.currency !== quote.currency) {
           tab?.close();
           setQuote(result.quote);
-          setError("The price changed. Please review the updated amount before opening checkout.");
+          showWarning("The price changed. Please review the updated amount before opening checkout.");
           return;
         }
         if (tab) tab.location.replace(url);
+        showInfo("Complete payment in Paystack. We’ll check it automatically.");
       } catch (failure) {
         tab?.close();
         throw failure;
       }
     });
   };
-  const verify = () => { setError(""); void poll.current?.checkNow(); };
+  const verify = () => { void poll.current?.checkNow(); };
 
   return (
     <Modal
@@ -188,14 +193,6 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
                 <p className="text-text-muted">
                   Finish payment in the secure tab. We’ll check automatically and update your balance.
                 </p>
-                <p role="status" className="text-text-muted">
-                  {verificationStatus === "checking" ? "Checking payment…"
-                    : verificationStatus === "success" ? "Payment confirmed. Updating your balance…"
-                    : verificationStatus === "timed_out" ? "Automatic checks paused. You can still check payment below."
-                    : ["failed", "cancelled"].includes(verificationStatus) ? `Payment ${verificationStatus}. No credits were added.`
-                    : verificationStatus === "stopped" ? "Automatic checks stopped. Try checking again below."
-                    : "Waiting for payment confirmation…"}
-                </p>
                 {checkoutUrl && <a className="font-semibold text-primary underline"
                   href={checkoutUrl} target="_blank" rel="noopener noreferrer">Reopen Paystack checkout</a>}
               </div>
@@ -215,7 +212,6 @@ export default function AICreditPurchaseFlow({ role, open, onClose, onVerified }
             </div>
           </>
         )}
-        {error && <p role="alert" className="rounded-xl border border-error/30 bg-error-soft p-3 text-sm text-error">{error}</p>}
         <p className="text-xs leading-5 text-text-muted">
           Payments are handled by Paystack. WEAVE never collects card details here.
         </p>

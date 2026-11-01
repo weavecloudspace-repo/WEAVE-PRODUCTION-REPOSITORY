@@ -9,7 +9,8 @@ import {
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/ui/Button";
-import { authSession } from "../../services/api";
+import { useToast } from "../../hooks/useToast";
+import { authSession, getErrorMessage } from "../../services/api";
 import { tmaService as service } from "../../services/tmaService";
 import {
   aiDraftScope,
@@ -49,6 +50,7 @@ export default function TmaAIReviewPage({ role }) {
 }
 
 function Review({ role, assignmentId, draftId }) {
+  const { showError, showSuccess } = useToast();
   const navigate = useNavigate();
   const scope = aiDraftScope(authSession.getUser(), role, assignmentId);
   const store = useMemo(
@@ -64,7 +66,6 @@ function Review({ role, assignmentId, draftId }) {
   const [assignment, setAssignment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const [index, setIndex] = useState(0);
   const [editing, setEditing] = useState(false);
   const [instruction, setInstruction] = useState("");
@@ -75,7 +76,7 @@ function Review({ role, assignmentId, draftId }) {
   useEffect(() => {
     let active = true;
     if (!store) {
-      setError("Sign in to this school to open AI drafts.");
+      showError("Sign in to this school to open AI drafts.");
       setLoading(false);
       return;
     }
@@ -84,14 +85,10 @@ function Review({ role, assignmentId, draftId }) {
         if (!active) return;
         setDraft(saved || null);
         setAssignment(a);
-        setError(
-          saved
-            ? ""
-            : "This draft is not available on this browser and school account.",
-        );
+        if (!saved) showError("This draft is not available on this browser and school account.");
       })
       .catch((e) => {
-        if (active) setError(e.message);
+        if (active) showError(getErrorMessage(e));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -99,7 +96,7 @@ function Review({ role, assignmentId, draftId }) {
     return () => {
       active = false;
     };
-  }, [store, assignmentId, draftId, reload]);
+  }, [store, assignmentId, draftId, reload, showError]);
   useEffect(() => {
     heading.current?.focus();
   }, []);
@@ -107,13 +104,12 @@ function Review({ role, assignmentId, draftId }) {
     if (pending.current) return;
     pending.current = true;
     setBusy(true);
-    setError("");
+
     try {
       await fn();
     } catch (e) {
-      setError(
-        e.message ||
-          "Could not confirm this operation. Your browser draft is preserved.",
+      showError(
+        getErrorMessage(e, "Could not confirm this operation. Your browser draft is preserved."),
       );
       const latest = await store?.get(draftId).catch(() => null);
       if (latest) setDraft(latest);
@@ -138,6 +134,7 @@ function Review({ role, assignmentId, draftId }) {
   const update = async (questions) => {
     setDraft(await controller.update(draftId, questions));
     setEditing(false);
+    showSuccess("Browser draft updated.");
   };
   return (
     <main className="tma-question-preview-page text-text">
@@ -177,6 +174,7 @@ function Review({ role, assignmentId, draftId }) {
             onClick={() =>
               run(async () => {
                 await controller.save(draftId);
+                showSuccess("Questions added to the assignment.");
                 navigate(base);
               })
             }
@@ -189,14 +187,6 @@ function Review({ role, assignmentId, draftId }) {
           </Button>
         )}
       </header>
-      {error && (
-        <div
-          role="alert"
-          className="mb-4 rounded-xl border border-error/30 bg-error-soft p-4 text-sm text-error"
-        >
-          {error}
-        </div>
-      )}
       {loading ? (
         <p role="status">Loading browser draft…</p>
       ) : !draft ? (
@@ -456,8 +446,8 @@ function Review({ role, assignmentId, draftId }) {
 }
 
 function DraftEditor({ question, disabled, onSave, onCancel }) {
+  const { showError } = useToast();
   const [value, setValue] = useState(() => structuredClone(question));
-  const [error, setError] = useState("");
   const option = (index, patch) =>
     setValue((q) => ({
       ...q,
@@ -469,8 +459,8 @@ function DraftEditor({ question, disabled, onSave, onCancel }) {
       onSubmit={(e) => {
         e.preventDefault();
         const invalid = validateAIQuestion(value);
-        setError(invalid);
-        if (!invalid) onSave(value);
+        if (invalid) showError(invalid);
+        else onSave(value);
       }}
     >
       <fieldset disabled={disabled} className="space-y-5">
@@ -573,11 +563,6 @@ function DraftEditor({ question, disabled, onSave, onCancel }) {
         >
           <Plus size={16} /> Add option
         </Button>
-        {error && (
-          <p role="alert" className="text-sm text-error">
-            {error}
-          </p>
-        )}
         <div className="flex gap-3">
           <Button type="submit">Save draft changes</Button>
           <Button variant="outline" onClick={onCancel}>

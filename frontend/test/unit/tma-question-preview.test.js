@@ -25,6 +25,7 @@ function render({
   const state = [questions, error, 0];
   const Preview = runInNewContext(`${code}\nQuestionPreview`, {
     React,
+    useToast: () => ({ showError() {} }),
     useState: () => [state[cursor++], () => {}],
     useRef: () => ({ current: null }),
     useEffect: () => {},

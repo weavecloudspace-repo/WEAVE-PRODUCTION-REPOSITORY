@@ -7,8 +7,9 @@ import {
   Wallet,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useToast } from "../../hooks/useToast";
 import { createAIDraftController, createAIDraftStore, aiDraftScope } from "./aiDrafts";
-import { api, authSession } from "../../services/api";
+import { api, authSession, getErrorMessage } from "../../services/api";
 import { tmaService as service } from "../../services/tmaService";
 
 // CBT composer interaction model, adapted to authenticated TMA generation APIs.
@@ -21,13 +22,13 @@ export default function TmaAIComposer({
   revisionNumber,
   onReview,
 }) {
+  const { showError } = useToast();
   const [prompt, setPrompt] = useState("");
   const [sent, setSent] = useState("");
   const [count, setCount] = useState(5);
   const [difficulty, setDifficulty] = useState("medium");
   const [visuals, setVisuals] = useState("text_only");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const [drafts, setDrafts] = useState([]);
   const user = authSession.getUser();
   const scope = user ? aiDraftScope(user, role, assignmentId) : null;
@@ -66,7 +67,7 @@ export default function TmaAIComposer({
   useEffect(() => {
     if (!open) return;
     composer.current?.focus();
-    store?.list().then(setDrafts).catch(() => setError("Browser draft storage is unavailable. Enable site storage to continue."));
+    store?.list().then(setDrafts).catch(() => showError("Browser draft storage is unavailable. Enable site storage to continue."));
     let active = true;
     api
       .get("/ai/quota")
@@ -79,18 +80,18 @@ export default function TmaAIComposer({
     return () => {
       active = false;
     };
-  }, [open, store]);
+  }, [open, store, showError]);
   const act = async (fn) => {
     if (pending.current) return;
     pending.current = true;
     setBusy(true);
-    setError("");
+
     try {
       await fn();
     } catch (e) {
       if (mounted.current)
-        setError(
-          e.message || "This operation could not be confirmed. Please retry.",
+        showError(
+          getErrorMessage(e, "This operation could not be confirmed. Please retry."),
         );
     } finally {
       pending.current = false;
@@ -163,14 +164,6 @@ export default function TmaAIComposer({
           <p role="status" className="tma-ai-progress">
             <span />
             Preparing your questions…
-          </p>
-        )}
-        {error && (
-          <p
-            role="alert"
-            className="rounded-xl border border-error/30 bg-error-soft p-3 text-sm text-error"
-          >
-            {error}
           </p>
         )}
         {drafts.length > 0 && (

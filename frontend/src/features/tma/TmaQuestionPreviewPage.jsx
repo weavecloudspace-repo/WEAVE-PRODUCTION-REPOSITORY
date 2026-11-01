@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import Button from "../../components/ui/Button";
+import { useToast } from "../../hooks/useToast";
 import MathText from "./MathText.jsx";
 import { TmaAssetImage } from "./TmaQuestionEditor";
 import { tmaService } from "../../services/tmaService";
+import { getErrorMessage } from "../../services/api";
 import "./tma-authoring.css";
 
 export default function TmaQuestionPreviewPage({ role }) {
@@ -20,8 +22,10 @@ export default function TmaQuestionPreviewPage({ role }) {
 }
 
 function QuestionPreview({ role, assignmentId, questionId }) {
+  const { showError } = useToast();
   const [questions, setQuestions] = useState(null);
   const [error, setError] = useState("");
+  useEffect(() => { if (error) showError(error); }, [error, showError]);
   const [retry, setRetry] = useState(0);
   const heading = useRef(null);
   const base = `/${role}/tma/${assignmentId}`;
@@ -33,7 +37,7 @@ function QuestionPreview({ role, assignmentId, questionId }) {
         if (active) setQuestions(items);
       })
       .catch((e) => {
-        if (active) setError(e.message || "Could not load this question.");
+        if (active) setError(getErrorMessage(e, "Could not load this question."));
       });
     return () => {
       active = false;
@@ -61,8 +65,7 @@ function QuestionPreview({ role, assignmentId, questionId }) {
         </p>
       </header>
       {error ? (
-        <div role="alert" className="rounded-xl border border-error/30 p-5">
-          <p>{error}</p>
+        <div className="py-3">
           <Button
             variant="outline"
             onClick={() => {
