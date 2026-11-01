@@ -778,7 +778,7 @@ class TMAAttempt(BaseModel):
 
     participant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        nullable=False
+        nullable=False,
     )
 
     status: Mapped[TMAAttemptStatus] = mapped_column(
@@ -786,37 +786,36 @@ class TMAAttempt(BaseModel):
             TMAAttemptStatus,
             name="tma_attempt_status",
             schema=PUBLIC_SCHEMA,
-         values_callable = lambda enum_cls : [
-            member.value for member in enum_cls
-         ],
-      ),
+            values_callable=lambda enum_cls: [
+                member.value for member in enum_cls
+            ],
+        ),
         nullable=False,
         default=TMAAttemptStatus.NOT_STARTED,
-        server_default=TMAAttemptStatus.NOT_STARTED.value
+        server_default=TMAAttemptStatus.NOT_STARTED.value,
     )
 
     started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
-        nullable=True
+        nullable=True,
     )
 
     submitted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
-        nullable=True
+        nullable=True,
     )
 
     correct_answers: Mapped[int | None] = mapped_column(
         Integer,
-        nullable=True
+        nullable=True,
     )
 
     total_questions: Mapped[int | None] = mapped_column(
         Integer,
-        nullable=True
+        nullable=True,
     )
 
     __table_args__ = (
-
         # Ensure the participant belongs to the same tenant.
         ForeignKeyConstraint(
             ["tenant_id", "participant_id"],
