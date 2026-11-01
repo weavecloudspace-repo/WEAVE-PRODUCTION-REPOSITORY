@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from app.core.exceptions import ConflictException
 from app.modules.tma.models import TMAAssignmentStatus
@@ -48,9 +49,10 @@ async def test_worker_closes_due_assignments_without_touching_student_scores(mon
     invalidation.assert_awaited_once_with(db)
     query = db.execute.call_args.args[0]
     assert "FOR UPDATE SKIP LOCKED" in str(
-        query.compile(compile_kwargs={"literal_binds": True}, dialect=__import__(
-            "sqlalchemy.dialects.postgresql", fromlist=["dialect"]
-        ).dialect())
+        query.compile(
+            compile_kwargs={"literal_binds": True},
+            dialect=postgresql.dialect(),
+        )
     )
 
 
@@ -81,9 +83,7 @@ async def test_student_write_guard_enforces_exact_deadline_even_before_worker(mo
     term = AsyncMock()
     enrollment = AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4()))
     monkeypatch.setattr(attempts.TMAAuthorizationService, "require_open_term", term)
-    monkeypatch.setattr(
-        attempts.TMAAuthorizationService, "require_student_eligibility", enrollment
-    )
+    monkeypatch.setattr(attempts.TMAAuthorizationService, "require_student_eligibility", enrollment)
     revision = SimpleNamespace(
         id=uuid.uuid4(), published_at=now - timedelta(days=1), invalidated_at=None
     )
@@ -127,16 +127,16 @@ async def test_reopening_expired_assignment_requires_new_deadline(monkeypatch):
     from app.modules.tenant_admins.models import TenantAdmin
 
     owner = TenantAdmin(id=uuid.uuid4(), tenant_id=uuid.uuid4())
-    assignment = _assignment(closes_at=datetime.now(timezone.utc) - timedelta(minutes=1),
-                             status=TMAAssignmentStatus.CLOSED)
+    assignment = _assignment(
+        closes_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        status=TMAAssignmentStatus.CLOSED,
+    )
     assignment.tenant_id = owner.tenant_id
     db = AsyncMock()
     monkeypatch.setattr(
         lifecycle.TMAAssignmentRepository, "get_by_id", AsyncMock(return_value=assignment)
     )
-    monkeypatch.setattr(
-        lifecycle.TMAAuthorizationService, "require_assignment_access", AsyncMock()
-    )
+    monkeypatch.setattr(lifecycle.TMAAuthorizationService, "require_assignment_access", AsyncMock())
     monkeypatch.setattr(
         lifecycle.TMAAuthorizationService, "require_assignment_management", lambda *_: None
     )
@@ -153,5 +153,8 @@ def test_worker_cron_preserves_cbts_and_tma_cancellation_jobs():
     names = {fn.__name__ for fn in WorkerSettings.functions}
     cron_names = {job.coroutine.__name__ for job in WorkerSettings.cron_jobs}
     assert {"process_cbt_result_rollback_job", "process_tma_cancellation_job"} <= names
-    assert {"poll_tma_deadlines", "poll_tma_cancellations",
-            "recover_cbt_result_rollbacks"} <= cron_names
+    assert {
+        "poll_tma_deadlines",
+        "poll_tma_cancellations",
+        "recover_cbt_result_rollbacks",
+    } <= cron_names
