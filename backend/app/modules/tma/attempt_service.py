@@ -47,11 +47,13 @@ class TMAAttemptService:
         *,
         student: Student,
         assignment_id: uuid.UUID,
+        lock: bool = False,
     ):
         assignment = await TMAAssignmentRepository.get_by_id(
             db,
             student.tenant_id,
             assignment_id,
+            lock=lock,
         )
         if assignment is None:
             raise NotFoundException("Assignment not found.")
@@ -310,6 +312,7 @@ class TMAAttemptService:
             db,
             student=student,
             assignment_id=revision.assignment_id,
+            lock=True,
         )
         if attempt.status != TMAAttemptStatus.IN_PROGRESS:
             raise ConflictException("Assignment already submitted.")
@@ -333,6 +336,7 @@ class TMAAttemptService:
             db,
             student=student,
             assignment_id=revision.assignment_id,
+            lock=True,
         )
         if attempt.status != TMAAttemptStatus.IN_PROGRESS:
             raise ConflictException("Submitted answers cannot be changed.")
@@ -396,6 +400,7 @@ class TMAAttemptService:
             db,
             student=student,
             assignment_id=revision.assignment_id,
+            lock=True,
         )
         if active_revision.id != revision.id:
             raise ConflictException("This is not the current published revision.")
@@ -424,6 +429,7 @@ class TMAAttemptService:
                 assignment=assignment,
                 correct=correct,
                 total=total,
+                attempt=attempt,
             )
             attempt.status = TMAAttemptStatus.SUBMITTED
             attempt.submitted_at = datetime.now(timezone.utc)
@@ -455,6 +461,8 @@ class TMAAttemptService:
             student=student,
             attempt_id=attempt_id,
         )
+        if revision.invalidated_at is not None or attempt.score_reversed_at is not None:
+            raise ConflictException("This TMA revision was cancelled.")
         if (
             attempt.status != TMAAttemptStatus.SUBMITTED
             or attempt.correct_answers is None

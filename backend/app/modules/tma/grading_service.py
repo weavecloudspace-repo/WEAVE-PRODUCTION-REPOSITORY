@@ -21,7 +21,7 @@ from app.modules.student_academics.hybrid_scores import component_is_complete
 from app.modules.student_academics.write_guard import ensure_academic_write_window
 from app.modules.student_academics.curriculum_service import CurriculumResolutionService
 from app.modules.students.models import StudentEnrollment
-from app.modules.tma.models import TMAAssignment, TMAQuestion, TMAQuestionOption
+from app.modules.tma.models import TMAAssignment, TMAAttempt, TMAQuestion, TMAQuestionOption
 
 
 class TMAGradingService:
@@ -59,6 +59,7 @@ class TMAGradingService:
         assignment: TMAAssignment,
         correct: int,
         total: int,
+        attempt: TMAAttempt | None = None,
     ) -> Decimal:
         """Write only this TMA's component in the academic DRAFT result.
 
@@ -163,17 +164,16 @@ class TMAGradingService:
                 recorded_by_actor_id=student_id,
             )
             await StudentAcademicRepository.upsert_result(db, result)
-        await StudentAcademicRepository.add_component_scores_batch(
-            db,
-            [
-                StudentAssessmentScore(
-                    tenant_id=tenant_id,
-                    student_subject_result_id=result.id,
-                    assessment_component_id=component.id,
-                    score=score,
-                )
-            ],
+        component_row = StudentAssessmentScore(
+            tenant_id=tenant_id,
+            student_subject_result_id=result.id,
+            assessment_component_id=component.id,
+            score=score,
         )
+        await StudentAcademicRepository.add_component_scores_batch(db, [component_row])
+        if attempt is not None:
+            attempt.score_id = component_row.id
+            attempt.score_snapshot = score
         components = await StudentAcademicRepository.list_result_component_scores(
             db,
             tenant_id,

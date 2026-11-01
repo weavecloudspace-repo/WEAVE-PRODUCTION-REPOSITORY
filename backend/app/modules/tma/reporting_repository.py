@@ -114,7 +114,10 @@ class TMAReportingRepository:
                     TMAAttempt.tenant_id == tenant_id,
                 ),
             )
-            .where(TMAParticipant.tenant_id == tenant_id)
+            .where(
+                TMAParticipant.tenant_id == tenant_id,
+                TMAAssignmentRevision.invalidated_at.is_(None),
+            )
             .subquery("ranked_participation")
         )
         history = (

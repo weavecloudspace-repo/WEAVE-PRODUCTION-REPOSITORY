@@ -64,6 +64,7 @@ payment processing, or academic result-component synchronization.
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from datetime import datetime
 from enum import Enum as PyEnum
 
@@ -81,6 +82,7 @@ from sqlalchemy import (
     text,
     BigInteger,
     String,
+    Numeric,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -95,6 +97,8 @@ class TMAAssignmentStatus(str, PyEnum):
     DRAFT = "draft"
     ACTIVE = "active"
     CLOSED = "closed"
+    CANCELLING = "cancelling"
+    CANCELLED = "cancelled"
 
 
 class TMAActorType(str, PyEnum):
@@ -918,6 +922,14 @@ class TMAAttempt(BaseModel):
         nullable=True,
     )
 
+    # Immutable source evidence for safe component-score rollback. Historical
+    # attempts without this provenance must not be automatically rolled back.
+    score_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    score_snapshot: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    score_reversed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     __table_args__ = (
         # Ensure the participant belongs to the same tenant.
         ForeignKeyConstraint(
@@ -1072,5 +1084,53 @@ class TMAAnswer(BaseModel):
             "tenant_id",
             "id",
             name="uq_tma_answers_tenant_id",
+        ),
+    )
+
+
+class TMACancellationRun(BaseModel):
+    """Durable, replayable cancellation job for exactly one assignment revision."""
+
+    __tablename__ = "tma_cancellation_runs"
+
+    assignment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    revision_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    requested_by_actor_type: Mapped[TMAActorType] = mapped_column(
+        SQLEnum(
+            TMAActorType,
+            name="tma_actor_type",
+            schema=PUBLIC_SCHEMA,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+    )
+    requested_by_actor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reversed_scores: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "assignment_id"],
+            ["public.tma_assignments.tenant_id", "public.tma_assignments.id"],
+            name="fk_tma_cancellation_assignment", ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "revision_id", "assignment_id"],
+            [
+                "public.tma_assignment_revisions.tenant_id",
+                "public.tma_assignment_revisions.id",
+                "public.tma_assignment_revisions.assignment_id",
+            ],
+            name="fk_tma_cancellation_revision", ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "tenant_id", "revision_id", name="uq_tma_cancellation_revision",
+        ),
+        Index("ix_tma_cancellation_pending", "status", "created_at"),
+        CheckConstraint(
+            "status IN ('pending','failed','completed')", name="ck_tma_cancellation_status"
         ),
     )
