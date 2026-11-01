@@ -519,6 +519,13 @@ class TMAQuestionOption(BaseModel):
             "id",
             name="uq_tma_question_options_tenant_id",
         ),
+        # Ensure an answer's selected option belongs to its question.
+        UniqueConstraint(
+            "tenant_id",
+            "question_id",
+            "id",
+            name="uq_tma_question_options_tenant_question_id",
+        ),
         # Allow at most one correct answer per question.
         Index(
             "uq_tma_question_options_one_correct",
@@ -878,5 +885,90 @@ class TMAAttempt(BaseModel):
             "ix_tma_attempts_tenant_status",
             "tenant_id",
             "status",
+        ),
+    )
+
+
+class TMAAnswer(BaseModel):
+    """
+    Stores one selected option per question for a student's TMA attempt.
+
+    An unanswered question has no TMAAnswer row. While an attempt is
+    IN_PROGRESS, the student may update the selected option or remove
+    the answer. Submitted attempts and answers must remain immutable.
+
+    The submission service validates that the question belongs to
+    the attempt participant's assignment revision, checks that the
+    assignment is ACTIVE, and grades the submitted answers.
+
+    Official assessment-component scores belong to WEAVE's existing
+    academic results infrastructure rather than this model.
+    """
+
+    __tablename__ = "tma_answers"
+
+    attempt_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+
+    question_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+
+    selected_option_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        # An answer must belong to an attempt in the same school.
+        ForeignKeyConstraint(
+            ["tenant_id", "attempt_id"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_attempts.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_attempts.id",
+            ],
+            name="fk_tma_answers_tenant_attempt",
+            ondelete="RESTRICT",
+        ),
+
+        # Ensure the question belongs to the same school.
+        ForeignKeyConstraint(
+            ["tenant_id", "question_id"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_questions.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_questions.id",
+            ],
+            name="fk_tma_answers_tenant_question",
+            ondelete="RESTRICT",
+        ),
+
+        # Prevent selecting an option that belongs to another question.
+        ForeignKeyConstraint(
+            ["tenant_id", "question_id", "selected_option_id"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_question_options.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_question_options.question_id",
+                f"{PUBLIC_SCHEMA}.tma_question_options.id",
+            ],
+            name="fk_tma_answers_tenant_question_option",
+            ondelete="RESTRICT",
+        ),
+
+        # An attempt can have only one saved selection per question.
+        UniqueConstraint(
+            "tenant_id",
+            "attempt_id",
+            "question_id",
+            name="uq_tma_answers_attempt_question",
+        ),
+
+        # Support tenant-safe references to individual answer records.
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            name="uq_tma_answers_tenant_id",
         ),
     )
