@@ -40,6 +40,17 @@ export default function TmaQuestionList({
         <div><h2>Question bank</h2><p>{questions.length} saved questions</p></div>
         <BookOpen size={19} aria-hidden="true" />
       </header>
+      <label className="tma-mobile-question-picker">
+        Jump to question
+        <select value={question?.id || ""} onChange={(event) => {
+          setSelectedId(event.target.value);
+          setStudentView(false);
+        }}>
+          {questions.map((item, i) => <option key={item.id} value={item.id}>
+            {i + 1}. {(item.question_text || "Image-based question").slice(0, 80)}
+          </option>)}
+        </select>
+      </label>
       <div className="tma-audit-question-nav">
         {questions.map((item, i) => <button
           key={item.id} type="button"

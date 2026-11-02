@@ -16,9 +16,10 @@ const { code } = await transformWithOxc(
   { jsx: { runtime: "classic" } },
 );
 const Icon = () => null;
+let stateUpdates = [];
 const List = runInNewContext(`${code}\nTmaQuestionList`, {
   React,
-  useState: (initial) => [initial, () => {}],
+  useState: (initial) => [initial, (value) => stateUpdates.push(value)],
   useEffect: () => {},
   Link: ({ to, ...props }) => React.createElement("a", { href: to, ...props }),
   Button: (props) => {
@@ -60,6 +61,27 @@ function render(props = {}) {
     }),
   );
 }
+
+test("mobile question picker selects a question and restores answer-key review", () => {
+  stateUpdates = [];
+  const tree = List({
+    questions: [question, { ...question, id: "q2", question_text: "Second question" }],
+    assignmentPath: "/teacher/tma/a1",
+    editable: false,
+  });
+  let picker;
+  function visit(element) {
+    if (!React.isValidElement(element)) return;
+    if (element.type === "select") picker = element;
+    React.Children.forEach(element.props.children, visit);
+  }
+  visit(tree);
+  assert.ok(picker, "question navigation has a native mobile selector");
+  assert.equal(picker.props.value, "q1");
+  assert.equal(React.Children.count(picker.props.children), 2);
+  picker.props.onChange({ target: { value: "q2" } });
+  assert.deepEqual(stateUpdates, ["q2", false]);
+});
 
 test("question audit shows answer key, options, and dedicated full preview", () => {
   const html = render();

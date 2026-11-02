@@ -786,7 +786,7 @@ export default function TmaPage({ role }) {
               </div>
               <nav
                 aria-label="Assignment sections"
-                className="flex gap-2 overflow-x-auto pb-1"
+                className="tma-assignment-tabs flex gap-2 overflow-x-auto pb-1"
               >
                 {["questions", "submissions", "history"].map((t) => (
                   <Button
@@ -810,7 +810,7 @@ export default function TmaPage({ role }) {
                           then preview.
                         </p>
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="tma-authoring-actions flex flex-wrap gap-2">
                         <Button variant="outline" disabled={busy} onClick={() => setAiOpen(true)}>
                           Generate with AI
                         </Button>

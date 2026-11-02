@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
+  ArrowLeft,
   X,
   SlidersHorizontal,
   Bot,
@@ -136,6 +137,9 @@ export default function TmaAIComposer({
   };
   return (
     <aside className="tma-ai-composer" aria-label="AI question assistant">
+      <button type="button" className="tma-ai-return" onClick={onClose}>
+        <ArrowLeft size={18} /> Back to assignment
+      </button>
       <header className="tma-ai-heading">
         <span className="tma-ai-icon">
           <Bot size={18} />
