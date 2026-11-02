@@ -43,6 +43,20 @@ test("student directory keeps placement and reassignment responsibilities separa
   assert.match(placementPage, /placeStudents/);
 });
 
+test("Edit Student offers safe first-class placement without using reassignment", () => {
+  const directory = readSource("pages", "admin", "StudentDirectoryPage.jsx");
+
+  assert.match(directory, /needsInitialClassPlacement\(editState\.student\)/);
+  assert.match(directory, /eligibleInitialPlacementClasses\(classes, editState\?\.student\?\.academic_level_id\)/);
+  assert.match(directory, /canPlaceStudentInClass\(student, initialPlacementSession\)/);
+  assert.match(directory, /studentService\.placeStudents\(\{/);
+  assert.match(directory, /student_ids:\s*\[student\.id\]/);
+  assert.match(directory, /initialClassId:\s*""/);
+  assert.match(directory, /profileChanged/);
+  assert.match(directory, /Assign class \(optional\)/);
+  assert.match(directory, /disabled=\{placementDisabled \|\| Boolean\(student\.upcoming_enrollment\) \|\| !student\.class_id\}/);
+});
+
 test("class placement UI exposes only the current open session and paginates the unassigned roster", () => {
   const source = readSource("pages", "admin", "StudentClassPlacementPage.jsx");
 
