@@ -44,11 +44,11 @@ async def test_term_closure_preview_does_not_query_next_term_specialization() ->
         status=AcademicTermStatus.OPEN,
         is_current=True,
     )
-    db = SimpleNamespace(
-        execute=AsyncMock(
-            side_effect=AssertionError("preview must not inspect next-term specialization")
-        )
-    )
+    # TMA closure blockers are now checked with three tenant-scoped counts;
+    # those reads must not inspect future-term specialization.
+    result = MagicMock()
+    result.scalar_one.return_value = 0
+    db = SimpleNamespace(execute=AsyncMock(return_value=result))
 
     with (
         patch.object(
@@ -77,7 +77,11 @@ async def test_term_closure_preview_does_not_query_next_term_specialization() ->
 
     assert preview.can_close is True
     assert preview.can_start_closing is True
-    db.execute.assert_not_awaited()
+    assert db.execute.await_count == 3
+    assert all(
+        "tma_assignments" in str(call.args[0])
+        for call in db.execute.await_args_list
+    )
 
 
 @pytest.mark.asyncio

@@ -46,6 +46,7 @@ class TMAAssignmentRepository:
         assignment_id: uuid.UUID,
         *,
         lock: bool = False,
+        shared_lock: bool = False,
     ) -> TMAAssignment | None:
         query = select(TMAAssignment).where(
             TMAAssignment.tenant_id == tenant_id,
@@ -53,6 +54,10 @@ class TMAAssignmentRepository:
         )
         if lock:
             query = query.with_for_update()
+        elif shared_lock:
+            # PostgreSQL FOR SHARE allows independent student writes while
+            # preventing staff from changing assignment state mid-submit.
+            query = query.with_for_update(read=True)
         return (await db.execute(query)).scalar_one_or_none()
 
     @staticmethod
@@ -98,15 +103,10 @@ class TMAAssignmentRepository:
             raise ValueError("offset must be nonnegative and limit must be 1..100")
         filters = [TMAAssignment.tenant_id == tenant_id]
         if teacher_membership_id is not None:
-            # Authorization happens before LIMIT/OFFSET: counts and pages
-            # must not include other teachers' assignments.
             filters.append(
                 exists(
                     select(TeacherAssignment.id)
-                    .join(
-                        ClassRoom,
-                        ClassRoom.id == TeacherAssignment.class_id,
-                    )
+                    .join(ClassRoom, ClassRoom.id == TeacherAssignment.class_id)
                     .where(
                         TeacherAssignment.tenant_id == tenant_id,
                         TeacherAssignment.teacher_membership_id == teacher_membership_id,
@@ -114,7 +114,7 @@ class TMAAssignmentRepository:
                         == TMAAssignment.curriculum_subject_id,
                         TeacherAssignment.effective_from <= date.today(),
                         (
-                            (TeacherAssignment.effective_to.is_(None))
+                            TeacherAssignment.effective_to.is_(None)
                             | (TeacherAssignment.effective_to >= date.today())
                         ),
                         ClassRoom.tenant_id == tenant_id,

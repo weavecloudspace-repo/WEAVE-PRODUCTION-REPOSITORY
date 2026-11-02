@@ -54,7 +54,7 @@ class TMAAttemptService:
             db,
             student.tenant_id,
             assignment_id,
-            lock=lock,
+            shared_lock=lock,
         )
         if assignment is None:
             raise NotFoundException("Assignment not found.")
@@ -230,6 +230,27 @@ class TMAAttemptService:
         return attempt, participant, revision
 
     @staticmethod
+    async def _locked_active_attempt(
+        db: AsyncSession, *, student: Student, attempt_id: uuid.UUID
+    ):
+        # Consistent locking: assignment SHARE -> student attempt UPDATE.
+        # The initial lookup is not locked and only discovers the assignment.
+        observed, _, revision = await TMAAttemptService._load_owned_attempt(
+            db, student=student, attempt_id=attempt_id
+        )
+        assignment, current_revision, enrollment = await TMAAttemptService._active_assignment(
+            db, student=student, assignment_id=revision.assignment_id, lock=True
+        )
+        if current_revision.id != observed.revision_id:
+            raise ConflictException("This attempt belongs to an older TMA revision.")
+        attempt, participant, latest = await TMAAttemptService._load_owned_attempt(
+            db, student=student, attempt_id=attempt_id, lock=True
+        )
+        if latest.id != current_revision.id or participant.revision_id != current_revision.id:
+            raise ConflictException("This attempt belongs to an older TMA revision.")
+        return attempt, participant, latest, assignment, enrollment
+
+    @staticmethod
     async def _build_start_response(
         db: AsyncSession,
         student: Student,
@@ -337,16 +358,8 @@ class TMAAttemptService:
         student: Student,
         attempt_id: uuid.UUID,
     ) -> TMAStartResponse:
-        attempt, _, revision = await TMAAttemptService._load_owned_attempt(
-            db,
-            student=student,
-            attempt_id=attempt_id,
-        )
-        await TMAAttemptService._active_assignment(
-            db,
-            student=student,
-            assignment_id=revision.assignment_id,
-            lock=True,
+        attempt, _, _, _, _ = await TMAAttemptService._locked_active_attempt(
+            db, student=student, attempt_id=attempt_id
         )
         if attempt.status != TMAAttemptStatus.IN_PROGRESS:
             raise ConflictException("Assignment already submitted.")
@@ -360,17 +373,8 @@ class TMAAttemptService:
         attempt_id: uuid.UUID,
         payload: TMAAnswerSaveRequest,
     ) -> TMAAnswerSaveResponse:
-        attempt, _, revision = await TMAAttemptService._load_owned_attempt(
-            db,
-            student=student,
-            attempt_id=attempt_id,
-            lock=True,
-        )
-        await TMAAttemptService._active_assignment(
-            db,
-            student=student,
-            assignment_id=revision.assignment_id,
-            lock=True,
+        attempt, _, revision, _, _ = await TMAAttemptService._locked_active_attempt(
+            db, student=student, attempt_id=attempt_id
         )
         if attempt.status != TMAAttemptStatus.IN_PROGRESS:
             raise ConflictException("Submitted answers cannot be changed.")
@@ -419,26 +423,26 @@ class TMAAttemptService:
         student: Student,
         attempt_id: uuid.UUID,
     ) -> TMASubmitResponse:
-        attempt, _, revision = await TMAAttemptService._load_owned_attempt(
-            db,
-            student=student,
-            attempt_id=attempt_id,
-            lock=True,
+        # A read-only replay remains idempotent; first submission must acquire
+        # assignment SHARE before locking the individual attempt.
+        observed, _, revision = await TMAAttemptService._load_owned_attempt(
+            db, student=student, attempt_id=attempt_id
         )
-        if attempt.status == TMAAttemptStatus.SUBMITTED:
+        if observed.status == TMAAttemptStatus.SUBMITTED:
             return await TMAAttemptService.get_submission_result(
                 db,
                 student=student,
-                attempt_id=attempt.id,
+                attempt_id=observed.id,
             )
-        assignment, active_revision, enrollment = await TMAAttemptService._active_assignment(
-            db,
-            student=student,
-            assignment_id=revision.assignment_id,
-            lock=True,
+        attempt, _, revision, assignment, enrollment = (
+            await TMAAttemptService._locked_active_attempt(
+                db, student=student, attempt_id=attempt_id
+            )
         )
-        if active_revision.id != revision.id:
-            raise ConflictException("This is not the current published revision.")
+        if attempt.status == TMAAttemptStatus.SUBMITTED:
+            return await TMAAttemptService.get_submission_result(
+                db, student=student, attempt_id=attempt.id
+            )
         questions = await TMAQuestionRepository.list_for_revision_with_options(
             db,
             student.tenant_id,
