@@ -1165,3 +1165,23 @@ class TMACancellationRun(BaseModel):
             "status IN ('pending','failed','completed')", name="ck_tma_cancellation_status"
         ),
     )
+
+
+class TMADraftMediaCleanup(BaseModel):
+    """Durable object-storage cleanup for permanently deleted unpublished TMAs.
+
+    The assignment is intentionally not referenced by an FK: database deletion
+    must not discard the object key before remote storage cleanup succeeds.
+    """
+
+    __tablename__ = "tma_draft_media_cleanup"
+
+    assignment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    object_key: Mapped[str] = mapped_column(Text, nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "object_key", name="uq_tma_draft_media_cleanup_object"),
+        Index("ix_tma_draft_media_cleanup_created", "created_at"),
+    )

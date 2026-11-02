@@ -12,6 +12,7 @@ export const tmaService = {
   create: (body) => api.post("/tma/assignments", body),
   get: (id) => read(path(id)),
   update: (id, body) => api.patch(path(id), body),
+  deleteDraft: (id) => api.delete(path(id)),
   questions: (id) => read(path(id, "/questions")),
   addQuestion: (id, body) => api.post(path(id, "/questions"), body),
   updateQuestion: (id, question, body) =>

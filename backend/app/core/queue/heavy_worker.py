@@ -38,6 +38,7 @@ from app.modules.tma.cancellation_service import TMACancellationService  # noqa:
 from app.modules.tma.models import TMACancellationRun  # noqa: E402
 from app.modules.tma.expiration_service import TMAExpirationService  # noqa: E402
 from app.modules.tma.deadline_zero_service import TMADeadlineZeroService  # noqa: E402
+from app.modules.tma.draft_deletion_service import TMADraftDeletionService  # noqa: E402
 from app.modules.student_academics.session_closure_service import (  # noqa: E402
     SessionClosureService,
 )
@@ -246,6 +247,13 @@ async def poll_tma_deadlines(ctx: dict[str, Any]) -> dict[str, int]:
         return {**closed, **graded}
 
 
+async def poll_tma_draft_media_cleanup(ctx: dict[str, Any]) -> dict[str, int]:
+    """Retry media cleanup after successful database deletion."""
+    _ = ctx
+    async with AsyncSessionLocal() as db:
+        return await TMADraftDeletionService.cleanup_media(db)
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     """Initialize optional monitoring for this worker process."""
 
@@ -279,6 +287,14 @@ class WorkerSettings:
         process_tma_cancellation_job,
     ]
     cron_jobs = [
+        cron(
+            poll_tma_draft_media_cleanup,
+            minute={1, 6, 11, 16, 21, 26, 31, 36, 41, 46, 51, 56},
+            run_at_startup=True,
+            unique=True,
+            timeout=120,
+            max_tries=1,
+        ),
         cron(
             poll_tma_deadlines,
             minute=set(range(0, 60)),

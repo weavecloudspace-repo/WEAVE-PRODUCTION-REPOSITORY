@@ -542,6 +542,13 @@ export default function TmaPage({ role }) {
                     }),
                 },
                 {
+                  label: "Delete draft assignment",
+                  icon: Trash2,
+                  danger: true,
+                  visible: canManage && editable && assignment?.current_revision_number === 1 && !assignment?.activated_at,
+                  onClick: () => setDialog("deleteAssignment"),
+                },
+                {
                   label: "Close assignment",
                   icon: XCircle,
                   visible: canManage && assignment?.status === "active",
@@ -1074,7 +1081,7 @@ export default function TmaPage({ role }) {
           }
         />
         <Modal
-          open={["activate", "reopen", "close", "cancel", "delete"].includes(dialog)}
+          open={["activate", "reopen", "close", "cancel", "delete", "deleteAssignment"].includes(dialog)}
           title={
             {
               activate: "Publish assignment?",
@@ -1082,6 +1089,7 @@ export default function TmaPage({ role }) {
               close: "Close assignment?",
               cancel: "Cancel assignment?",
               delete: "Delete question?",
+              deleteAssignment: "Permanently delete draft assignment?",
             }[dialog] || "Confirm"
           }
           onClose={() => !busy && setDialog(null)}
@@ -1099,6 +1107,8 @@ export default function TmaPage({ role }) {
                   cancel:
                     "Cancellation reverses verified TMA-owned draft scores. Modified or submitted academic results require reconciliation. A worker completes this operation.",
                   delete: "This question will be removed from the draft.",
+                  deleteAssignment:
+                    "This permanently removes this unpublished assignment, its questions, answer options, and images. It cannot be undone. AI credit usage remains in transaction history.",
                 }[dialog]
               }
             </p>
@@ -1126,6 +1136,13 @@ export default function TmaPage({ role }) {
                   if (dialog === "close") await service.close(assignmentId);
                   if (dialog === "cancel")
                     await service.cancel(assignmentId, reason);
+                  if (dialog === "deleteAssignment") {
+                    await service.deleteDraft(assignmentId);
+                    showSuccess("Draft assignment deleted.");
+                    setDialog(null);
+                    navigate(base, { replace: true });
+                    return;
+                  }
                   if (dialog === "delete") {
                     await service.deleteQuestion(assignmentId, deleteTarget.id);
                     if (draft?.id === deleteTarget.id) setDraft(null);
@@ -1141,7 +1158,7 @@ export default function TmaPage({ role }) {
                 })
               }
             >
-              Confirm
+              {dialog === "deleteAssignment" ? "Delete assignment permanently" : "Confirm"}
             </Button>
           </div>
         </Modal>
