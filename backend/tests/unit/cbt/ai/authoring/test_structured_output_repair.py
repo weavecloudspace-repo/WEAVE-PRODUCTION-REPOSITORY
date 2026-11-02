@@ -19,6 +19,8 @@ def _single_question(prompt: str = "Which particle has a positive charge?") -> d
         "options": [
             {"text": "Proton", "image": None, "is_correct": True},
             {"text": "Electron", "image": None, "is_correct": False},
+            {"text": "Neutron", "image": None, "is_correct": False},
+            {"text": "Photon", "image": None, "is_correct": False},
         ],
     }
 

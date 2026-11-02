@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
+from typing import Any
 
 from pydantic import BaseModel
 
 from app.modules.cbt.ai.authoring.schemas import (
     AIQuestionBatchDraft,
     AIRegeneratedQuestionDraft,
+    MIN_OPTIONS_PER_QUESTION,
 )
 
 
@@ -24,6 +26,14 @@ coverage, or other content guidance.
 - Use it to decide what knowledge and skills the generated questions should assess.
 - The structured request fields such as subject, academic_level, question_count,
   question_type_counts, difficulty, and visual_mode remain authoritative constraints.
+- The application may internally generate a large request as several smaller
+  batches. When `batch_index`/`batch_count` are present, return ONLY the
+  number of questions specified by THIS request's `question_count`, not
+  a number mentioned in the original teacher brief. Keep the same subject,
+  syllabus, level, and difficulty across batches. Vary the concepts covered.
+- When `avoid_question_prompts` is provided, do not repeat or lightly
+  rephrase any of those earlier questions. Use other concepts within the
+  teacher's topic. This field is context, not candidate-facing text.
 - `context`, when supplied, is source/background material for authoring and is not
   automatically candidate-facing text either.
 """.strip()
@@ -112,24 +122,39 @@ When visual_mode is "text_only":
 - The question-level `image` field must be null.
 - Every answer option `image` field must be null.
 
-When visual_mode is "auto":
+When visual_mode is "auto" ("Allow images" in CBT):
 
-- The generated batch must contain at least one question that genuinely
-  uses a visual.
-- Text-only questions must remain dominant. When generating three or more
-  questions, the number of visual-bearing questions must be lower than the
-  number of text-only questions.
-- For a two-question batch, one visual-bearing question and one text-only
-  question is acceptable.
+- For BATCH generation, aim for roughly 60% text-only and 40% genuinely
+  visual-bearing questions. The application supplies an exact
+  `visual_question_target` in the generation request; during repair read
+  it from `original_request.visual_question_target`. Generate EXACTLY
+  that many visual-bearing questions, not just one.
+- If no explicit target is available, round 40% of the requested batch
+  count to the nearest integer (minimum one), and cap it below half for
+  batches of three or more so text-only questions remain in the majority.
+- For a two-question batch, produce one visual and one text-only question.
 - For a one-question batch, the single question must contain a meaningful
   visual directive.
-- Do not attach decorative or irrelevant images just to satisfy the rule.
-  Instead, formulate visual questions where the image has real assessment
-  value for the supplied subject, authoring brief, level, and context.
+- Spread meaningful image-based identification and interpretation questions
+  across the batch; do not concentrate all images in adjacent questions.
+- Do not attach decorative or irrelevant images merely to hit the target:
+  construct fair, answerable visual-assessment questions from the subject
+  and teacher's brief, such as identifying or comparing stitches and seams.
+- NEVER request a labelled image whose heading, caption, annotation, or
+  diagram title reveals the correct answer to the question. When asking
+  candidates to identify an object or sewing technique, request an
+  unlabelled examination image instead of a tutorial with its name printed.
+- The image generation_prompt must explicitly forbid rendering the name of
+  the correct option or an equivalent answer-revealing label.
 - A question counts as visual-bearing when the question itself or at least
-  one answer option contains an image directive.
-- Every question or answer option that depends on a visual must contain the
-  corresponding complete image directive.
+  one answer option contains an image directive. Multiple option images
+  in the SAME question count as only ONE visual-bearing question.
+- Prefer a SINGLE question-level image directive per visual question, with
+  ordinary text answer options. Add option-level image directives ONLY when
+  comparing several different pictures is essential to assess the concept.
+  Do not duplicate the same picture in the question and its options.
+- Every question or answer option that depends on a visual must contain
+  the corresponding complete image directive.
 - Never refer to a missing visual.
 
 An image directive describes a visual that will be resolved later by the
@@ -138,22 +163,26 @@ or file paths.
 
 For every image directive:
 
-- `requirement` is the detailed semantic description of the visual the
-  question actually needs. Be precise here.
-- `search_query` is NOT an image-generation prompt. It is a strict keyword
-  retrieval query for web-image search. Use only 2 to 4 concrete, noun-heavy
-  content keywords that are likely to exist in image titles, descriptions,
-  or tags. Keep it broad enough to retrieve candidates for later visual
-  evaluation.
-- Do not pad `search_query` with generic words such as "clear", "educational",
-  "study", "biology", "science", "image", "picture", "illustration", or
-  "diagram" unless that word is essential to the subject itself.
-- Prefer `search_query` values like "tree rings", "animal cell", or
-  "human skeleton" over descriptive phrases like "clear educational biology
-  diagram showing a tree trunk cross section with annual rings".
-- `generation_prompt` inside an image directive may be detailed and descriptive
-  because it is used only when web retrieval cannot supply a suitable image.
-  This image-directive field is distinct from the request-level `generation_prompt`.
+- `requirement` describes the exact object, anatomical structure, experiment,
+  mathematical figure, process, or evidence that candidates must interpret.
+  Use the syllabus and examination level to ensure factual correctness.
+- `generation_prompt` is MANDATORY for new visual questions. Write a precise,
+  self-contained visual specification for a direct image generator, including
+  correct shape, proportions, spatial arrangement, essential components,
+  viewpoint, visual style, and acceptable neutral reference markers.
+- The image generator cannot infer the intended visual from vague terms like
+  "biology diagram", "clear educational picture", or "draw an organ". Be specific.
+- Generate scientifically and technically accurate images: no invented organs,
+  incorrect equipment, impossible procedures, inconsistent proportions,
+  spurious arrows, or confusing duplicated structures.
+- NEVER ask for the correct answer, organ name, solution, question text,
+  explanatory captions, titles, headings, answer labels, or watermarks to be
+  written inside the image. Usually request NO text at all.
+- When identification questions require labels, permit ONLY neutral marker
+  letters/numbers at the correct positions, without accompanying names.
+- `search_query` is deprecated and must be omitted. Image search is disabled;
+  images are generated directly through Qwen Image and never retrieved.
+- Every generated visual must genuinely be needed to answer its question.
 """.strip()
 
 
@@ -185,7 +214,8 @@ Rules:
 - A multiple_choice question must have at least two options where
   is_correct is true and at least one option where is_correct is false.
 
-- Every question must have at least two answer options.
+- Every question must have at least {MIN_OPTIONS_PER_QUESTION} answer options.
+- Use four distinct, plausible alternatives by default; include more only when necessary.
 
 - Every answer option must contain text, an image directive, or both.
 
@@ -205,6 +235,12 @@ Rules:
 {DIFFICULTY_RULES}
 
 {VISUAL_POLICY_RULES}
+
+The top-level JSON object MUST contain a `questions` property whose value is
+an array of question objects. Never put the array under `data`, `response`,
+`items`, or any other wrapper key. For each question obey the exact fields
+specified in RESPONSE JSON SCHEMA. Do not return an individual `question`
+object for a batch request.
 
 Return only JSON matching the supplied response schema.
 Do not return markdown, code fences, commentary, or additional text.
@@ -232,7 +268,8 @@ Rules:
 - A multiple_choice question must have at least two options where
   is_correct is true and at least one option where is_correct is false.
 
-- Every question must have at least two answer options.
+- Every question must have at least {MIN_OPTIONS_PER_QUESTION} answer options.
+- Use four distinct, plausible alternatives by default; include more only when necessary.
 
 - Every answer option must contain text, an image directive, or both.
 
@@ -282,6 +319,9 @@ Rules:
 - Keep candidate-facing `instruction` separate from the actual question `prompt`
   according to the field rules below.
 - Return the complete repaired batch, not a patch or diff.
+- Every repaired question must contain at least {MIN_OPTIONS_PER_QUESTION} distinct
+  answer options, including when the invalid input contains fewer.
+- Keep the requested question count and question-type distribution unchanged.
 - Follow the same response schema.
 - If `invalid_questions` is empty because the previous provider response could
   not be parsed as structured JSON, regenerate the complete batch once from
@@ -345,3 +385,68 @@ def build_question_regeneration_prompt() -> str:
 def build_question_repair_prompt() -> str:
     """Build the provider-neutral repair contract."""
     return f"{QUESTION_REPAIR_RULES}\n\nRESPONSE JSON SCHEMA:\n{question_generation_schema_text()}"
+
+
+def openrouter_question_response_format(*, single_question: bool = False) -> dict[str, Any]:
+    """OpenRouter-compatible strict output schema for GPT-OSS.
+
+    Keep this smaller than the complete Pydantic JSON Schema: provider support
+    for discriminator, defaults and validation keywords varies. Pydantic remains
+    the authoritative validator for correctness, counts, and assessment policy.
+    All fields are required, nullable where appropriate, and extra keys forbidden.
+    """
+    image_schema: dict[str, Any] = {
+        "anyOf": [
+            {
+                "type": "object",
+                "properties": {
+                    "requirement": {"type": "string"},
+                    "generation_prompt": {"type": "string"},
+                },
+                "required": ["requirement", "generation_prompt"],
+                "additionalProperties": False,
+            },
+            {"type": "null"},
+        ]
+    }
+    option_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "text": {"type": ["string", "null"]},
+            "image": image_schema,
+            "is_correct": {"type": "boolean"},
+        },
+        "required": ["text", "image", "is_correct"],
+        "additionalProperties": False,
+    }
+    question_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "question_type": {"type": "string", "enum": ["single_choice", "multiple_choice"]},
+            "prompt": {"type": "string"},
+            "instruction": {"type": ["string", "null"]},
+            "image": image_schema,
+            "options": {"type": "array", "items": option_schema},
+        },
+        "required": ["question_type", "prompt", "instruction", "image", "options"],
+        "additionalProperties": False,
+    }
+    field = "question" if single_question else "questions"
+    value_schema = (
+        question_schema if single_question else {"type": "array", "items": question_schema}
+    )
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "weave_cbt_regenerated_question"
+            if single_question
+            else "weave_cbt_question_batch",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {field: value_schema},
+                "required": [field],
+                "additionalProperties": False,
+            },
+        },
+    }

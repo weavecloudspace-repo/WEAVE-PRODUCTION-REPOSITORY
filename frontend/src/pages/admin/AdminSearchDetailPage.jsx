@@ -10,8 +10,10 @@ import {
 } from "lucide-react";
 
 import DashboardLayout from "../../components/layout/DashboardLayout";
+import { PersonIdentity } from "../../components/people/PeopleDirectory";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
+import { getAvatarSrcFromRecord } from "../../utils/user";
 
 const SEARCH_STORAGE_PREFIX = "weave:admin-search:";
 
@@ -29,7 +31,7 @@ const getStoredSearchResult = (resultKey) => {
 const visibleDetailEntries = (item) =>
   Object.entries(item || {})
     .filter(([, value]) => value !== undefined && value !== null && value !== "")
-    .filter(([key]) => !["href"].includes(key))
+    .filter(([key]) => !["href", "passport_photo_url"].includes(key))
     .map(([key, value]) => ({
       key,
       label: key.replace(/_/g, " "),
@@ -90,10 +92,15 @@ function AdminSearchDetailPage() {
                   <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">
                     {item.role || item.type || item.category || "Search result"}
                   </p>
-                  <h2 className="mt-2 break-words text-2xl font-semibold leading-tight text-text">
-                    {item.label || item.title || item.name || "Untitled record"}
-                  </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-text-muted">
+                  <div className="mt-3">
+                    <PersonIdentity
+                      name={item.label || item.title || item.name || "Untitled record"}
+                      meta={item.admission_number || item.staff_id || item.email || item.metadata}
+                      avatarSrc={getAvatarSrcFromRecord(item)}
+                      size="large"
+                    />
+                  </div>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-text-muted sm:pl-20">
                     This page keeps search context in one place before you open the record's owning workspace.
                   </p>
                 </div>

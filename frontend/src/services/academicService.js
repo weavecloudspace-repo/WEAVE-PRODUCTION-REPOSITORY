@@ -336,6 +336,11 @@ export const academicService = {
       payload,
     ),
 
+  listResultSubjectOptions: (params, requestOptions) =>
+    api.get(
+      `/tenant-admin/academics/results/subject-options${queryString(params)}`,
+      requestOptions,
+    ),
   listAdminResults: (params, requestOptions) =>
     api.get(
       `/tenant-admin/academics/results${queryString(params)}`,

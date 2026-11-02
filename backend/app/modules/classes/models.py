@@ -93,6 +93,11 @@ class AcademicLevel(BaseModel):
 
     __table_args__ = (
         UniqueConstraint(
+            "tenant_id",
+            "id",
+            name="uq_academic_levels_tenant_id",
+        ),
+        UniqueConstraint(
             "tenant_id", "normalized_name", name="uq_academic_levels_tenant_normalized_name"
         ),
         UniqueConstraint(
@@ -333,6 +338,11 @@ class ClassRoom(BaseModel):
         return f"{self.academic_level_name} {self.arm_label}".strip()
 
     __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            name="uq_classes_tenant_id",
+        ),
         UniqueConstraint(
             "tenant_id",
             "academic_level_id",

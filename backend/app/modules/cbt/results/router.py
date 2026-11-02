@@ -13,7 +13,7 @@ from app.core.dependencies.route_guards import (
     get_current_superadmin,
     get_current_tenant_admin,
 )
-from app.modules.cbt.dependencies import CurrentCBTServer
+from app.modules.cbt.dependencies import CurrentCBTServer, CurrentCBTActor
 from app.modules.cbt.enums import (
     CBTResultIngestionOutcome,
     CBTResultIngestionStatus,
@@ -28,6 +28,13 @@ from app.modules.cbt.results.schemas import (
     CBTResultIngestionItemListResponse,
 )
 from app.modules.cbt.results.service import CBTResultIngestionService
+from app.modules.cbt.results.rollback_service import CBTResultRollbackService
+from app.modules.cbt.results.rollback_schemas import (
+    CBTResultRollbackRequest,
+    CBTResultRollbackResponse,
+)
+from app.core.queue.arq import get_arq_redis_settings, HEAVY_QUEUE_NAME
+from arq import create_pool
 from app.modules.superadmin.models import SuperAdmin
 from app.modules.tenant_admins.models import TenantAdmin
 
@@ -112,6 +119,55 @@ async def ingest_results(
         server=current_server,
         payload=payload,
     )
+
+
+@router.post(
+    "/rollbacks", response_model=CBTResultRollbackResponse, status_code=status.HTTP_202_ACCEPTED
+)
+async def request_result_rollback(
+    db: DbSession,
+    current_server: CurrentCBTServer,
+    current_actor: CurrentCBTActor,
+    payload: CBTResultRollbackRequest,
+    response: Response,
+) -> CBTResultRollbackResponse:
+    """Persist the authorized request before queuing; Redis loss is recoverable."""
+    response.headers["Cache-Control"] = "no-store"
+    operation = await CBTResultRollbackService.register(
+        db, server=current_server, actor=current_actor, payload=payload
+    )
+    if operation.status in ("pending", "processing"):
+        try:
+            redis = await create_pool(get_arq_redis_settings(), default_queue_name=HEAVY_QUEUE_NAME)
+            try:
+                saved = await CBTResultRollbackService.get_operation(
+                    db, server=current_server, operation_id=operation.operation_id
+                )
+                await redis.enqueue_job(
+                    "process_cbt_result_rollback_job",
+                    str(saved.id),
+                    _queue_name=HEAVY_QUEUE_NAME,
+                )
+            finally:
+                await redis.close()
+        except Exception:
+            # Periodic heavy-worker sweeps recover operations committed to PostgreSQL.
+            pass
+    return operation
+
+
+@router.get("/rollbacks/{operation_id}", response_model=CBTResultRollbackResponse)
+async def get_result_rollback(
+    operation_id: UUID,
+    db: DbSession,
+    current_server: CurrentCBTServer,
+    response: Response,
+) -> CBTResultRollbackResponse:
+    response.headers["Cache-Control"] = "no-store"
+    operation = await CBTResultRollbackService.get_operation(
+        db, server=current_server, operation_id=operation_id
+    )
+    return await CBTResultRollbackService.response(db, operation)
 
 
 @tenant_admin_router.get(

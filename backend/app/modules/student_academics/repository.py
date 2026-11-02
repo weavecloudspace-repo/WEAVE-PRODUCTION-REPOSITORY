@@ -925,6 +925,33 @@ class StudentAcademicRepository:
         )
         return list(rows), int(total)
 
+    @staticmethod
+    async def list_result_subject_options(
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        *,
+        class_id: uuid.UUID,
+        academic_session_id: uuid.UUID,
+        academic_term_id: uuid.UUID,
+    ) -> list[dict]:
+        """Distinct subjects recorded in this class and period, independent of staffing."""
+        rows = (
+            await db.execute(
+                select(Subject.id, Subject.name, Subject.code)
+                .join(StudentSubjectResult, StudentSubjectResult.subject_id == Subject.id)
+                .where(
+                    StudentSubjectResult.tenant_id == tenant_id,
+                    Subject.tenant_id == tenant_id,
+                    StudentSubjectResult.class_id == class_id,
+                    StudentSubjectResult.academic_session_id == academic_session_id,
+                    StudentSubjectResult.academic_term_id == academic_term_id,
+                )
+                .distinct()
+                .order_by(Subject.name.asc(), Subject.id.asc())
+            )
+        ).all()
+        return [{"id": row.id, "name": row.name, "code": row.code} for row in rows]
+
     # ------------------------------------------------------------------
     # Teacher assignments
     # ------------------------------------------------------------------
@@ -977,6 +1004,36 @@ class StudentAcademicRepository:
         if lock:
             query = query.with_for_update()
         return (await db.execute(query)).scalar_one_or_none()
+
+    @staticmethod
+    async def get_teacher_assignments_for_subjects_on_date(
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        class_ids: set[uuid.UUID],
+        curriculum_subject_ids: set[uuid.UUID],
+        effective_date: date,
+    ) -> list[TeacherAssignment]:
+        """Read current ownership for a whole listing/configuration in one query."""
+        if not class_ids or not curriculum_subject_ids:
+            return []
+        return list(
+            (
+                await db.execute(
+                    select(TeacherAssignment).where(
+                        TeacherAssignment.tenant_id == tenant_id,
+                        TeacherAssignment.class_id.in_(class_ids),
+                        TeacherAssignment.curriculum_subject_id.in_(curriculum_subject_ids),
+                        TeacherAssignment.effective_from <= effective_date,
+                        or_(
+                            TeacherAssignment.effective_to.is_(None),
+                            TeacherAssignment.effective_to >= effective_date,
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
 
     @staticmethod
     async def get_teacher_assignments_for_classes_on_date(

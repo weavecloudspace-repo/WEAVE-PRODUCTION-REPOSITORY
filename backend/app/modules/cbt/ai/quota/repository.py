@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import date, datetime
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -261,6 +261,30 @@ class AIWeeklyQuotaRepository:
         )
         return list(result.scalars().all())
 
+    @staticmethod
+    async def lock_many_buckets(
+        db: AsyncSession, *, keys: set[tuple[uuid.UUID, uuid.UUID, date]]
+    ) -> list[AIWeeklyQuota]:
+        if not keys:
+            return []
+        rows = await db.execute(
+            select(AIWeeklyQuota)
+            .where(
+                tuple_(
+                    AIWeeklyQuota.tenant_id,
+                    AIWeeklyQuota.quota_account_id,
+                    AIWeeklyQuota.week_start,
+                ).in_(keys)
+            )
+            .order_by(
+                AIWeeklyQuota.tenant_id,
+                AIWeeklyQuota.quota_account_id,
+                AIWeeklyQuota.week_start,
+            )
+            .with_for_update()
+        )
+        return list(rows.scalars().all())
+
 
 class AIExtraCreditBalanceRepository:
     """Database operations for persistent actor top-up balances."""
@@ -315,6 +339,28 @@ class AIExtraCreditBalanceRepository:
             )
         )
         return list(result.scalars().all())
+
+    @staticmethod
+    async def lock_many_buckets(
+        db: AsyncSession, *, keys: set[tuple[uuid.UUID, uuid.UUID]]
+    ) -> list[AIExtraCreditBalance]:
+        if not keys:
+            return []
+        rows = await db.execute(
+            select(AIExtraCreditBalance)
+            .where(
+                tuple_(
+                    AIExtraCreditBalance.tenant_id,
+                    AIExtraCreditBalance.quota_account_id,
+                ).in_(keys)
+            )
+            .order_by(
+                AIExtraCreditBalance.tenant_id,
+                AIExtraCreditBalance.quota_account_id,
+            )
+            .with_for_update()
+        )
+        return list(rows.scalars().all())
 
 
 class AITenantCreditBalanceRepository:
@@ -396,12 +442,18 @@ class AICreditReservationRepository:
         *,
         as_of: datetime,
         limit: int = 100,
+        tenant_ids: set[uuid.UUID] | None = None,
     ) -> list[AICreditReservation]:
         """Lock a batch of stale reservations without blocking other workers."""
 
         result = await db.execute(
             select(AICreditReservation)
             .where(
+                *(
+                    [AICreditReservation.tenant_id.in_(tenant_ids)]
+                    if tenant_ids is not None
+                    else []
+                ),
                 AICreditReservation.status == AICreditReservationStatus.PENDING,
                 AICreditReservation.expires_at <= as_of,
             )
@@ -725,7 +777,10 @@ class AIQuotaPurchaseRepository:
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[tuple[AIQuotaPurchase, TenantAdmin]], int]:
-        filters = [AIQuotaPurchase.tenant_id == tenant_id]
+        filters = [
+            AIQuotaPurchase.tenant_id == tenant_id,
+            AIQuotaPurchase.initiated_by_admin_id.is_not(None),
+        ]
         if status is not None:
             filters.append(AIQuotaPurchase.status == status)
 
@@ -749,6 +804,42 @@ class AIQuotaPurchaseRepository:
             .limit(limit)
         )
         return [tuple(row) for row in result.all()], total
+
+    @staticmethod
+    async def list_for_teacher(
+        db: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        membership_id: uuid.UUID,
+        status: AIQuotaPurchaseStatus | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[AIQuotaPurchase], int]:
+        filters = [
+            AIQuotaPurchase.tenant_id == tenant_id,
+            AIQuotaPurchase.initiated_by_teacher_membership_id == membership_id,
+        ]
+        if status is not None:
+            filters.append(AIQuotaPurchase.status == status)
+        total = int(
+            (
+                await db.execute(select(func.count()).select_from(AIQuotaPurchase).where(*filters))
+            ).scalar_one()
+        )
+        rows = (
+            (
+                await db.execute(
+                    select(AIQuotaPurchase)
+                    .where(*filters)
+                    .order_by(AIQuotaPurchase.created_at.desc(), AIQuotaPurchase.id.desc())
+                    .offset(offset)
+                    .limit(limit)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return list(rows), total
 
 
 class AICreditLedgerRepository:

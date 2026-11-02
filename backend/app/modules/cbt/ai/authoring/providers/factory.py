@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 from app.config.settings import settings
-from app.modules.cbt.ai.authoring.contact_sheet_resolver import ContactSheetImageResolver
-from app.modules.cbt.ai.authoring.image_resolver import ImageResolver
-from app.modules.cbt.ai.authoring.preview_materializer import PreviewImageMaterializer
+from app.modules.cbt.ai.authoring.generation_only_resolver import GenerationOnlyImageResolver
 from app.modules.cbt.ai.authoring.providers.base import (
     BaseImageEvaluationProvider,
     BaseImageGenerationProvider,
     BaseImageSearchProvider,
     BaseQuestionGenerationProvider,
 )
-from app.modules.cbt.ai.authoring.providers.combined_search import CombinedImageSearchProvider
 from app.modules.cbt.ai.authoring.providers.gemini import (
     GeminiImageGenerationProvider,
     GeminiQuestionGenerationProvider,
@@ -27,8 +24,12 @@ from app.modules.cbt.ai.authoring.providers.minimax import (
 from app.modules.cbt.ai.authoring.providers.minimax_contact_sheet import (
     MiniMaxContactSheetImageEvaluationProvider,
 )
-from app.modules.cbt.ai.authoring.providers.openverse import OpenverseImageSearchProvider
-from app.modules.cbt.ai.authoring.providers.wikimedia import WikimediaCommonsImageSearchProvider
+from app.modules.cbt.ai.authoring.providers.ddgs import DDGSImageSearchProvider
+from app.modules.cbt.ai.authoring.providers.openrouter import (
+    OpenRouterQuestionGenerationProvider,
+    OpenRouterImageGenerationProvider,
+    OpenRouterImageEvaluationProvider,
+)
 
 
 class CBTProviderFactoryError(RuntimeError):
@@ -45,15 +46,19 @@ class CBTProviderFactory:
             return GeminiQuestionGenerationProvider()
         if provider == "minimax":
             return MiniMaxQuestionGenerationProvider()
+        if provider == "openrouter":
+            return OpenRouterQuestionGenerationProvider()
         raise CBTProviderFactoryError(f"Unsupported CBT AI question provider: {provider!r}")
 
     @staticmethod
     def get_image_evaluation_provider() -> BaseImageEvaluationProvider:
-        provider = settings.CBT_AI_QUESTION_PROVIDER
+        provider = settings.CBT_AI_IMAGE_EVALUATION_PROVIDER
         if provider == "gemini":
             return GeminiContactSheetImageEvaluationProvider()
         if provider == "minimax":
             return MiniMaxContactSheetImageEvaluationProvider()
+        if provider == "openrouter":
+            return OpenRouterImageEvaluationProvider()
         raise CBTProviderFactoryError(f"Unsupported CBT AI image evaluation provider: {provider!r}")
 
     @staticmethod
@@ -63,29 +68,19 @@ class CBTProviderFactory:
             return GeminiImageGenerationProvider()
         if provider == "minimax":
             return MiniMaxImageGenerationProvider()
+        if provider == "openrouter":
+            return OpenRouterImageGenerationProvider()
         raise CBTProviderFactoryError(f"Unsupported CBT AI image generation provider: {provider!r}")
 
     @staticmethod
     def get_image_search_provider() -> BaseImageSearchProvider:
         provider = settings.CBT_AI_IMAGE_SEARCH_PROVIDER
-        if provider == "openverse":
-            # Keep the existing configuration value for backward compatibility,
-            # but treat it as the free online-search bundle. Wikimedia goes first
-            # so educational Commons results get the first slot during interleave;
-            # Openverse still contributes broader Flickr/Wellcome/NASA coverage.
-            return CombinedImageSearchProvider(
-                providers=(
-                    WikimediaCommonsImageSearchProvider(),
-                    OpenverseImageSearchProvider(),
-                )
-            )
+        if provider == "ddgs":
+            return DDGSImageSearchProvider()
         raise CBTProviderFactoryError(f"Unsupported CBT AI image search provider: {provider!r}")
 
     @classmethod
-    def get_image_resolver(cls) -> ImageResolver:
-        return ContactSheetImageResolver(
-            search_provider=cls.get_image_search_provider(),
-            evaluation_provider=cls.get_image_evaluation_provider(),
-            generation_provider=cls.get_image_generation_provider(),
-            materializer=PreviewImageMaterializer(),
+    def get_image_resolver(cls) -> GenerationOnlyImageResolver:
+        return GenerationOnlyImageResolver(
+            generation_provider=OpenRouterImageGenerationProvider(),
         )

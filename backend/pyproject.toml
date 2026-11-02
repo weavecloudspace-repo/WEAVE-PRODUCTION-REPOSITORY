@@ -35,6 +35,7 @@ dependencies = [
     "debugpy==1.8.20",
     "decorator==5.3.1",
     "distro==1.9.0",
+    "ddgs==9.16.1",
     "dnspython==2.8.0",
     "ecdsa==0.19.2",
     "email-validator==2.3.0",

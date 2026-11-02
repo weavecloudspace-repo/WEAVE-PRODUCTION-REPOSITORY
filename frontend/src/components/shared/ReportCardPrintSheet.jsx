@@ -104,30 +104,26 @@ function ReportCardPrintSheet({ card, onAfterPrint }) {
             .rc-title p { margin: 5px 0 0; color: #667085; font-size: 10px; }
             .rc-student {
               display: grid;
-              grid-template-columns: 78px 1fr;
-              gap: 14px;
-              margin-top: 16px;
+              grid-template-columns: 86px minmax(0, 1fr);
+              gap: 18px;
+              margin-top: 18px;
               border: 1px solid #cbd5e1;
               border-radius: 14px;
               background: #f8fafc;
-              padding: 14px;
+              padding: 16px;
               break-inside: avoid;
             }
             .rc-student-photo {
-              width: 74px;
-              height: 88px;
+              width: 82px;
+              height: 98px;
               object-fit: cover;
+              object-position: center;
               border: 1px solid #cbd5e1;
               border-radius: 9px;
               background: #ffffff;
             }
             .rc-photo-placeholder {
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              color: #667085;
-              font-size: 9px;
-              text-align: center;
+              box-sizing: border-box;
             }
             .rc-student-name { margin: 0 0 8px; font-size: 19px; }
             .rc-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
@@ -188,7 +184,11 @@ function ReportCardPrintSheet({ card, onAfterPrint }) {
           {studentPhoto ? (
             <img className="rc-student-photo" src={studentPhoto} alt="Student passport" />
           ) : (
-            <div className="rc-student-photo rc-photo-placeholder">No photo</div>
+            <div
+              className="rc-student-photo rc-photo-placeholder"
+              role="img"
+              aria-label="Student photo not provided"
+            />
           )}
           <div>
             <h2 className="rc-student-name">

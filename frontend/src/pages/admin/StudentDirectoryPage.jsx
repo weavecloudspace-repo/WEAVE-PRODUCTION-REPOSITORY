@@ -46,7 +46,7 @@ import {
 } from "../../services/academicsService";
 import { parseApiError } from "../../services/api";
 import { studentService } from "../../services/studentService";
-import { displayName } from "../../utils/user";
+import { displayName, getAvatarSrcFromRecord } from "../../utils/user";
 
 const PAGE_SIZE = 24;
 const STUDENT_STATUSES = [
@@ -488,6 +488,7 @@ function StudentCard({ student, expanded, onExpandedChange, ...actions }) {
         <PersonIdentity
           name={displayName(student)}
           meta={`${student.admission_number || "No admission number"} · ${studentClassLabel(student)}`}
+          avatarSrc={getAvatarSrcFromRecord(student)}
         />
         <div className="flex flex-col items-end gap-2">
           <Badge variant={student.status === "active" ? "success" : "default"}>
@@ -1248,6 +1249,7 @@ function StudentDirectoryPage() {
                   <PersonIdentity
                     name={displayName(student)}
                     meta={student.admission_number || "No admission number"}
+                    avatarSrc={getAvatarSrcFromRecord(student)}
                   />
                 </td>
                 <td className="px-4 py-3.5 align-middle">

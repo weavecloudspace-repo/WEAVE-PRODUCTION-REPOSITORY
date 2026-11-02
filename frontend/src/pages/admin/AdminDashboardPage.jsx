@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import AnalyticsBarChart from "../../components/charts/AnalyticsBarChart";
+import AIUsageDashboardCard from "../../features/ai/AIUsageDashboardCard";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import LoadingState from "../../components/shared/LoadingState";
 import Button from "../../components/ui/Button";
@@ -246,6 +247,7 @@ function AdminDashboardPage() {
             />
           </section>
 
+          <AIUsageDashboardCard role="admin" />
           <section className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             <DashboardCalendarPanel role="admin" admin actorId={user?.id || user?.email || ""} membershipId={user?.membership_id || ""} tenantId={user?.tenant_id || calendarScope} />
             <DashboardListCard

@@ -17,6 +17,7 @@ class OutputBase(BaseModel):
 class TenantSearchResult(OutputBase):
     label: str
     role: str
+    passport_photo_url: str | None = None
     metadata: str | None = None
     admission_number: str | None = None
     staff_id: str | None = None

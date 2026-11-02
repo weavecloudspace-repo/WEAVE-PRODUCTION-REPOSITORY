@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.cbt.ai.quota.cache import invalidate_quota_cache
 from app.modules.cbt.ai.quota.models import (
     AICreditAllocation,
     AICreditLedger,
@@ -181,6 +182,7 @@ class AIQuotaService:
         try:
             await AIQuotaRequestRepository.create(db, request)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -248,6 +250,7 @@ class AIQuotaService:
             request.cancelled_at = cls._now()
             await AIQuotaRequestRepository.save(db, request)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -473,6 +476,7 @@ class AIQuotaService:
             request.admin_note = cls._clean_note(note)
             await AIQuotaRequestRepository.save(db, request)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -512,6 +516,7 @@ class AIQuotaService:
             request.admin_note = cls._clean_note(note)
             await AIQuotaRequestRepository.save(db, request)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -572,6 +577,7 @@ class AIQuotaService:
                 extra_balance=extra,
             )
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -662,6 +668,7 @@ class AIQuotaService:
             ):
                 response = cls._purchase_response(existing)
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
                 return response
             raise AIQuotaConflictError("A different quota purchase already uses this reference.")
         purchase = AIQuotaPurchase(
@@ -675,10 +682,88 @@ class AIQuotaService:
         try:
             await AIQuotaPurchaseRepository.create(db, purchase)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
         return cls._purchase_response(purchase)
+
+    @classmethod
+    async def create_pending_teacher_purchase(
+        cls,
+        db: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        teacher_membership_id: uuid.UUID,
+        credits: int,
+        amount_kobo: int,
+        reference: str,
+    ) -> AIQuotaPurchaseResponse:
+        """Create a personal purchase without touching the school reserve."""
+        cls._require_positive_credits(credits)
+        if type(amount_kobo) is not int or amount_kobo <= 0:
+            raise ValueError("amount_kobo must be a positive integer.")
+        normalized = reference.strip()
+        if not normalized:
+            raise ValueError("reference cannot be blank.")
+        await cls._ensure_quota_account(
+            db,
+            tenant_id=tenant_id,
+            actor_type=AIQuotaActorType.TEACHER,
+            actor_id=teacher_membership_id,
+        )
+        existing = await AIQuotaPurchaseRepository.get_by_reference(
+            db,
+            reference=normalized,
+        )
+        if existing is not None:
+            if (
+                existing.tenant_id == tenant_id
+                and existing.initiated_by_teacher_membership_id == teacher_membership_id
+                and existing.credits == credits
+                and existing.amount_kobo == amount_kobo
+            ):
+                return cls._purchase_response(existing)
+            raise AIQuotaConflictError("A different quota purchase uses this reference.")
+        purchase = AIQuotaPurchase(
+            tenant_id=tenant_id,
+            initiated_by_teacher_membership_id=teacher_membership_id,
+            credits=credits,
+            amount_kobo=amount_kobo,
+            reference=normalized,
+            status=AIQuotaPurchaseStatus.PENDING,
+        )
+        try:
+            await AIQuotaPurchaseRepository.create(db, purchase)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+        return cls._purchase_response(purchase)
+
+    @classmethod
+    async def list_teacher_purchases(
+        cls,
+        db: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        teacher_membership_id: uuid.UUID,
+        status: AIQuotaPurchaseStatus | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> AIQuotaPurchaseListResponse:
+        rows, total = await AIQuotaPurchaseRepository.list_for_teacher(
+            db,
+            tenant_id=tenant_id,
+            membership_id=teacher_membership_id,
+            status=status,
+            offset=offset,
+            limit=limit,
+        )
+        return AIQuotaPurchaseListResponse(
+            items=[cls._purchase_response(item) for item in rows],
+            total=total,
+        )
 
     @classmethod
     async def credit_verified_purchase(
@@ -698,7 +783,20 @@ class AIQuotaService:
         )
         if purchase_preview is None or purchase_preview.tenant_id != tenant_id:
             raise AIQuotaNotFoundError("Quota purchase was not found.")
-        await cls._ensure_tenant_balance(db, tenant_id=tenant_id)
+        if getattr(purchase_preview, "initiated_by_teacher_membership_id", None) is not None:
+            account = await cls._ensure_quota_account(
+                db,
+                tenant_id=tenant_id,
+                actor_type=AIQuotaActorType.TEACHER,
+                actor_id=getattr(purchase_preview, "initiated_by_teacher_membership_id", None),
+            )
+            await cls._ensure_extra_balance(
+                db,
+                tenant_id=tenant_id,
+                quota_account_id=account.id,
+            )
+        else:
+            await cls._ensure_tenant_balance(db, tenant_id=tenant_id)
         try:
             purchase = await AIQuotaPurchaseRepository.get_by_reference(
                 db,
@@ -711,35 +809,63 @@ class AIQuotaService:
                 response = cls._purchase_response(purchase)
                 if commit:
                     await db.commit()
+                    await invalidate_quota_cache(tenant_id)
                 return response
             if purchase.status != AIQuotaPurchaseStatus.PENDING:
                 raise AIQuotaConflictError("Only pending quota purchases can be credited.")
-            tenant_balance = await AITenantCreditBalanceRepository.get_for_tenant(
-                db,
-                tenant_id=tenant_id,
-                lock=True,
-            )
-            if tenant_balance is None:
-                raise AIQuotaConflictError("Tenant credit balance is missing.")
-            tenant_balance.available_credits += purchase.credits
+            if getattr(purchase, "initiated_by_teacher_membership_id", None) is not None:
+                account = await AIQuotaAccountRepository.get_by_teacher_membership(
+                    db,
+                    tenant_id=tenant_id,
+                    teacher_membership_id=purchase.initiated_by_teacher_membership_id,
+                    lock=True,
+                )
+                if account is None:
+                    raise AIQuotaConflictError("Teacher AI quota account is missing.")
+                extra = await AIExtraCreditBalanceRepository.get_for_account(
+                    db,
+                    tenant_id=tenant_id,
+                    quota_account_id=account.id,
+                    lock=True,
+                )
+                if extra is None:
+                    raise AIQuotaConflictError("Teacher top-up balance is missing.")
+                extra.available_credits += purchase.credits
+                await AIExtraCreditBalanceRepository.save(db, extra)
+                bucket = AICreditLedgerBucket.TOP_UP
+                quota_account_id = account.id
+                description = "Teacher AI credit purchase credited."
+            else:
+                tenant_balance = await AITenantCreditBalanceRepository.get_for_tenant(
+                    db,
+                    tenant_id=tenant_id,
+                    lock=True,
+                )
+                if tenant_balance is None:
+                    raise AIQuotaConflictError("Tenant credit balance is missing.")
+                tenant_balance.available_credits += purchase.credits
+                await AITenantCreditBalanceRepository.save(db, tenant_balance)
+                bucket = AICreditLedgerBucket.TENANT_RESERVE
+                quota_account_id = None
+                description = "Tenant AI credit purchase credited."
             purchase.status = AIQuotaPurchaseStatus.SUCCESS
             purchase.credited_at = cls._now()
-            await AITenantCreditBalanceRepository.save(db, tenant_balance)
             await AIQuotaPurchaseRepository.save(db, purchase)
             await AICreditLedgerRepository.create(
                 db,
                 AICreditLedger(
                     tenant_id=tenant_id,
-                    quota_account_id=None,
-                    bucket=AICreditLedgerBucket.TENANT_RESERVE,
+                    quota_account_id=quota_account_id,
+                    bucket=bucket,
                     event_type=AICreditLedgerEventType.PURCHASE,
                     credit_delta=purchase.credits,
                     purchase_id=purchase.id,
-                    description="Tenant AI credit purchase credited.",
+                    description=description,
                 ),
             )
             if commit:
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -766,12 +892,14 @@ class AIQuotaService:
             if purchase.status == AIQuotaPurchaseStatus.FAILED:
                 response = cls._purchase_response(purchase)
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
                 return response
             if purchase.status != AIQuotaPurchaseStatus.PENDING:
                 raise AIQuotaConflictError("Only pending quota purchases can be marked failed.")
             purchase.status = AIQuotaPurchaseStatus.FAILED
             await AIQuotaPurchaseRepository.save(db, purchase)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -799,12 +927,14 @@ class AIQuotaService:
             if purchase.status == AIQuotaPurchaseStatus.CANCELLED:
                 response = cls._purchase_response(purchase)
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
                 return response
             if purchase.status != AIQuotaPurchaseStatus.PENDING:
                 raise AIQuotaConflictError("Only pending quota purchases can be cancelled.")
             purchase.status = AIQuotaPurchaseStatus.CANCELLED
             await AIQuotaPurchaseRepository.save(db, purchase)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -959,6 +1089,7 @@ class AIQuotaService:
             )
             await AICreditReservationRepository.create(db, reservation)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -989,6 +1120,7 @@ class AIQuotaService:
             if reservation.status == AICreditReservationStatus.SETTLED:
                 response = cls._settlement_response(reservation)
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
                 return response
             if reservation.status in {
                 AICreditReservationStatus.RELEASED,
@@ -1004,6 +1136,7 @@ class AIQuotaService:
                     released_at=now,
                 )
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
                 raise AIQuotaReservationExpiredError(
                     "Credit reservation expired before settlement."
                 )
@@ -1075,6 +1208,7 @@ class AIQuotaService:
                 )
             await AICreditLedgerRepository.create_many(db, ledger_entries)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except AIQuotaReservationExpiredError:
             raise
         except Exception:
@@ -1107,6 +1241,7 @@ class AIQuotaService:
             }:
                 response = cls._reservation_response(reservation)
                 await db.commit()
+                await invalidate_quota_cache(tenant_id)
                 return response
             if reservation.status == AICreditReservationStatus.SETTLED:
                 raise AIQuotaConflictError("A settled credit reservation cannot be released.")
@@ -1117,6 +1252,7 @@ class AIQuotaService:
                 released_at=cls._now(),
             )
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
         except Exception:
             await db.rollback()
             raise
@@ -1129,6 +1265,7 @@ class AIQuotaService:
         *,
         as_of: datetime | None = None,
         limit: int = 100,
+        tenant_ids: set[uuid.UUID] | None = None,
     ) -> int:
         """Recover expired pending reservations for a worker/maintenance job."""
 
@@ -1140,15 +1277,47 @@ class AIQuotaService:
                 db,
                 as_of=now,
                 limit=limit,
+                **({"tenant_ids": tenant_ids} if tenant_ids is not None else {}),
             )
+            weekly_rows = await AIWeeklyQuotaRepository.lock_many_buckets(
+                db,
+                keys={
+                    (r.tenant_id, r.quota_account_id, cls._reservation_week_start(r))
+                    for r in reservations
+                },
+            )
+            extra_rows = await AIExtraCreditBalanceRepository.lock_many_buckets(
+                db,
+                keys={
+                    (r.tenant_id, r.quota_account_id)
+                    for r in reservations
+                    if r.reserved_extra_credits
+                },
+            )
+            weekly_by_key = {
+                (r.tenant_id, r.quota_account_id, r.week_start): r for r in weekly_rows
+            }
+            extra_by_key = {(r.tenant_id, r.quota_account_id): r for r in extra_rows}
             for reservation in reservations:
                 await cls._release_locked_reservation(
                     db,
                     reservation=reservation,
                     expired=True,
                     released_at=now,
+                    preloaded_buckets=(
+                        weekly_by_key.get(
+                            (
+                                reservation.tenant_id,
+                                reservation.quota_account_id,
+                                cls._reservation_week_start(reservation),
+                            )
+                        ),
+                        extra_by_key.get((reservation.tenant_id, reservation.quota_account_id)),
+                    ),
                 )
             await db.commit()
+            for affected_tenant in {reservation.tenant_id for reservation in reservations}:
+                await invalidate_quota_cache(affected_tenant)
         except Exception:
             await db.rollback()
             raise
@@ -1218,35 +1387,58 @@ class AIQuotaService:
         reservation: AICreditReservation,
         expired: bool,
         released_at: datetime,
+        preloaded_buckets: tuple[AIWeeklyQuota | None, AIExtraCreditBalance | None] | None = None,
     ) -> None:
         """Release bucket holds for an already-locked pending reservation."""
 
-        weekly = await cls._locked_weekly_for_reservation(
-            db,
-            reservation=reservation,
+        weekly = (
+            preloaded_buckets[0]
+            if preloaded_buckets is not None
+            else await cls._locked_weekly_for_reservation(db, reservation=reservation)
         )
+        if weekly is None:
+            raise AIQuotaConflictError("Weekly quota backing this reservation is missing.")
+        if reservation.weekly_quota_id is not None and weekly.id != reservation.weekly_quota_id:
+            raise AIQuotaConflictError("Reservation weekly-quota reference is inconsistent.")
         if weekly.reserved_credits < reservation.reserved_free_credits:
             raise AIQuotaConflictError("Weekly reserved-credit state is inconsistent.")
         weekly.reserved_credits -= reservation.reserved_free_credits
-        await AIWeeklyQuotaRepository.save(db, weekly)
+        if preloaded_buckets is None:
+            await AIWeeklyQuotaRepository.save(db, weekly)
         if reservation.reserved_extra_credits:
-            extra = await AIExtraCreditBalanceRepository.get_for_account(
-                db,
-                tenant_id=reservation.tenant_id,
-                quota_account_id=reservation.quota_account_id,
-                lock=True,
+            extra = (
+                preloaded_buckets[1]
+                if preloaded_buckets is not None
+                else await AIExtraCreditBalanceRepository.get_for_account(
+                    db,
+                    tenant_id=reservation.tenant_id,
+                    quota_account_id=reservation.quota_account_id,
+                    lock=True,
+                )
             )
             if extra is None:
                 raise AIQuotaConflictError("Reserved extra-credit balance is missing.")
             if extra.reserved_credits < reservation.reserved_extra_credits:
                 raise AIQuotaConflictError("Extra reserved-credit state is inconsistent.")
             extra.reserved_credits -= reservation.reserved_extra_credits
-            await AIExtraCreditBalanceRepository.save(db, extra)
+            if preloaded_buckets is None:
+                await AIExtraCreditBalanceRepository.save(db, extra)
         reservation.status = (
             AICreditReservationStatus.EXPIRED if expired else AICreditReservationStatus.RELEASED
         )
         reservation.released_at = released_at
-        await AICreditReservationRepository.save(db, reservation)
+        if preloaded_buckets is None:
+            await AICreditReservationRepository.save(db, reservation)
+
+    @classmethod
+    def _reservation_week_start(cls, reservation: AICreditReservation) -> date:
+        created_at = reservation.created_at
+        created_date = (
+            created_at.astimezone(timezone.utc).date()
+            if created_at.tzinfo is not None
+            else created_at.date()
+        )
+        return cls._week_start(created_date)
 
     @classmethod
     async def _locked_weekly_for_reservation(
@@ -1257,16 +1449,11 @@ class AIQuotaService:
     ) -> AIWeeklyQuota:
         """Load the exact weekly bucket that funded a reservation."""
 
-        created_at = reservation.created_at
-        if created_at.tzinfo is not None:
-            created_date = created_at.astimezone(timezone.utc).date()
-        else:
-            created_date = created_at.date()
         weekly = await AIWeeklyQuotaRepository.get_for_account_week(
             db,
             tenant_id=reservation.tenant_id,
             quota_account_id=reservation.quota_account_id,
-            week_start=cls._week_start(created_date),
+            week_start=cls._reservation_week_start(reservation),
             lock=True,
         )
         if weekly is None:
@@ -1334,6 +1521,7 @@ class AIQuotaService:
         try:
             await AIQuotaAccountRepository.create(db, account)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
             return account
         except IntegrityError:
             await db.rollback()
@@ -1396,6 +1584,7 @@ class AIQuotaService:
         try:
             await AIWeeklyQuotaRepository.create(db, quota)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
             return quota
         except IntegrityError:
             await db.rollback()
@@ -1433,6 +1622,7 @@ class AIQuotaService:
         try:
             await AIExtraCreditBalanceRepository.create(db, balance)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
             return balance
         except IntegrityError:
             await db.rollback()
@@ -1465,6 +1655,7 @@ class AIQuotaService:
         try:
             await AITenantCreditBalanceRepository.create(db, balance)
             await db.commit()
+            await invalidate_quota_cache(tenant_id)
             return balance
         except IntegrityError:
             await db.rollback()
@@ -1571,6 +1762,9 @@ class AIQuotaService:
             reference=purchase.reference,
             status=purchase.status,
             initiated_by_admin_id=purchase.initiated_by_admin_id,
+            initiated_by_teacher_membership_id=getattr(
+                purchase, "initiated_by_teacher_membership_id", None
+            ),
             initiated_by_email=initiated_by_email,
             created_at=purchase.created_at,
             credited_at=purchase.credited_at,

@@ -301,6 +301,24 @@ async def teacher_assignment_subject_availability(
 
 
 @router.get(
+    "/students/{student_id}/terms/{academic_term_id}/subjects",
+    response_model=list[ResolvedClassSubjectResponse],
+)
+async def resolved_student_subjects_for_admin(
+    student_id: uuid.UUID,
+    academic_term_id: uuid.UUID,
+    db: DbSession,
+    current_admin: CurrentTenantAdmin,
+):
+    return await AcademicCurriculumService.resolved_student_subject_responses(
+        db,
+        tenant_id=current_admin.tenant_id,
+        student_id=student_id,
+        academic_term_id=academic_term_id,
+    )
+
+
+@router.get(
     "/classes/{class_id}/terms/{academic_term_id}/subjects",
     response_model=list[ResolvedClassSubjectResponse],
 )

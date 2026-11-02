@@ -15,6 +15,7 @@ from app.modules.cbt.ai.authoring.schemas import (
     AIRegeneratedQuestionDraft,
     AIVisualMode,
 )
+from app.modules.cbt.ai.authoring.visual_policy import target_visual_question_count
 
 
 SUPPORTED_QUESTION_TYPES = frozenset(
@@ -127,7 +128,7 @@ def _question_fingerprint(question: AIQuestionDraft) -> tuple[Any, ...]:
         if option.image is not None:
             image_fingerprint = (
                 _normalized_text(option.image.requirement),
-                _normalized_text(option.image.search_query),
+                _normalized_text(option.image.generation_prompt or option.image.requirement),
             )
         option_fingerprints.append(
             (
@@ -140,7 +141,7 @@ def _question_fingerprint(question: AIQuestionDraft) -> tuple[Any, ...]:
     if question.image is not None:
         question_image = (
             _normalized_text(question.image.requirement),
-            _normalized_text(question.image.search_query),
+            _normalized_text(question.image.generation_prompt or question.image.requirement),
         )
     return (
         question.question_type,
@@ -326,7 +327,57 @@ def _validate_batch_visual_policy(
                     ),
                 )
             )
+    target = target_visual_question_count(len(questions))
+    if visual_count != target:
+        issues.append(
+            AIValidationIssue(
+                path="questions",
+                code="visual_distribution_mismatch",
+                message=(
+                    f"Allow-images mode requires exactly {target} visual-bearing "
+                    f"question(s) and {len(questions) - target} text-only question(s) "
+                    f"in a {len(questions)}-question batch; received "
+                    f"{visual_count} visual-bearing question(s)."
+                ),
+            )
+        )
     return issues
+
+
+def _normalize_known_inert_fields(raw_questions: Sequence[Any]) -> list[Any]:
+    """Remove only explicitly approved, no-effect provider artifacts.
+
+    Never silently drop arbitrary extra keys: they may represent lost question
+    meaning or an incorrect answer. A false binary_review_enabled flag has no
+    meaning in the WEAVE option contract and caused a real production failure.
+    Do not mutate the original provider response or change any answer key.
+    """
+    normalized: list[Any] = []
+    for raw_question in raw_questions:
+        if not isinstance(raw_question, Mapping):
+            normalized.append(raw_question)
+            continue
+        options = raw_question.get("options")
+        if not isinstance(options, list):
+            normalized.append(raw_question)
+            continue
+        cleaned_options: list[Any] = []
+        changed = False
+        for option in options:
+            if isinstance(option, Mapping) and option.get("binary_review_enabled") is False:
+                cleaned = dict(option)
+                cleaned.pop("binary_review_enabled")
+                cleaned_options.append(cleaned)
+                changed = True
+            else:
+                cleaned_options.append(option)
+        if changed:
+            question = dict(raw_question)
+            question["options"] = cleaned_options
+            normalized.append(question)
+        else:
+            normalized.append(raw_question)
+    return normalized
 
 
 def validate_generated_question_batch(
@@ -359,7 +410,7 @@ def validate_generated_question_batch(
                 )
             ],
         )
-    raw_list = list(raw_questions)
+    raw_list = _normalize_known_inert_fields(raw_questions)
     try:
         batch = AIQuestionBatchDraft.model_validate({"questions": raw_list})
     except ValidationError as exc:
@@ -409,7 +460,8 @@ def validate_regenerated_question(
             ],
         )
     try:
-        envelope = AIRegeneratedQuestionDraft.model_validate({"question": dict(raw_question)})
+        normalized_question = _normalize_known_inert_fields([raw_question])[0]
+        envelope = AIRegeneratedQuestionDraft.model_validate({"question": normalized_question})
     except ValidationError as exc:
         raise AIResponseValidationError(
             "AI-regenerated question failed schema validation.",

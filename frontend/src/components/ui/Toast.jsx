@@ -73,7 +73,7 @@ export default function ToastHost() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="pointer-events-auto fixed inset-x-3 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-[90] flex max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom)-env(safe-area-inset-top))] flex-col-reverse gap-3 overflow-y-auto overscroll-contain sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[24rem] sm:max-h-[calc(100dvh-3rem-env(safe-area-inset-top))] md:bottom-6">
+    <div className="pointer-events-auto fixed inset-x-3 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-[150] flex max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom)-env(safe-area-inset-top))] flex-col-reverse gap-3 overflow-y-auto overscroll-contain sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[24rem] sm:max-h-[calc(100dvh-3rem-env(safe-area-inset-top))] md:bottom-6">
       {toasts.map((toast) => (
         <ToastCard key={toast.id} toast={toast} onClose={closeToast} />
       ))}

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from time import perf_counter
 from uuid import UUID
 
-from fastapi import APIRouter, Header, Query
+from fastapi import APIRouter, Header, Query, Request
 
 from app.core.dependencies.db import DbSession
+from app.modules.cbt.ai.authoring.trace_logging import trace_event, trace_request
 from app.modules.cbt.ai.idempotency.service import CBTAIIdempotentAuthoringService
 from app.modules.cbt.ai.quota.models import AIQuotaPurchaseStatus, AIQuotaRequestStatus
 from app.modules.cbt.ai.quota.payment_schemas import (
@@ -37,6 +39,7 @@ from app.modules.cbt.ai.schemas import (
 )
 from app.modules.cbt.ai.service import CBTAIService
 from app.modules.cbt.ai.transport import CBTGZipRoute
+from app.modules.cbt.ai.teacher_purchase_service import AITeacherPurchaseService
 from app.modules.cbt.dependencies import CurrentCBTActor
 
 
@@ -52,14 +55,47 @@ async def generate_questions(
     payload: AIGenerateQuestionsRequest,
     db: DbSession,
     current_actor: CurrentCBTActor,
+    request: Request,
     idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=1, max_length=128),
 ) -> AIGenerateQuestionsResponse:
-    return await CBTAIIdempotentAuthoringService.generate_questions(
-        db,
-        actor=current_actor,
-        request=payload,
+    with trace_request(
         idempotency_key=idempotency_key,
-    )
+        operation="generate",
+        request_id=getattr(request.state, "request_id", None),
+    ):
+        started = perf_counter()
+        trace_event(
+            "request.accepted",
+            question_count=payload.question_count,
+            visual_mode=payload.visual_mode,
+            question_type_single=(payload.question_type_counts or {}).get("single_choice", 0),
+            question_type_multiple=(payload.question_type_counts or {}).get("multiple_choice", 0),
+        )
+        try:
+            result = await CBTAIIdempotentAuthoringService.generate_questions(
+                db,
+                actor=current_actor,
+                request=payload,
+                idempotency_key=idempotency_key,
+            )
+        except Exception as exc:
+            trace_event(
+                "request.failed",
+                duration_ms=(perf_counter() - started) * 1000,
+                error_type=type(exc).__name__,
+                http_status=getattr(exc, "status_code", None),
+                reason=getattr(exc, "payload", {}).get("code")
+                if isinstance(getattr(exc, "payload", None), dict)
+                else None,
+            )
+            raise
+        trace_event(
+            "request.completed",
+            duration_ms=(perf_counter() - started) * 1000,
+            actual_count=len(result.questions),
+            credits_charged=result.charge.credits_charged,
+        )
+        return result
 
 
 @router.post("/questions/regenerate", response_model=AIRegenerateQuestionResponse)
@@ -67,14 +103,38 @@ async def regenerate_question(
     payload: AIRegenerateQuestionRequest,
     db: DbSession,
     current_actor: CurrentCBTActor,
+    request: Request,
     idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=1, max_length=128),
 ) -> AIRegenerateQuestionResponse:
-    return await CBTAIIdempotentAuthoringService.regenerate_question(
-        db,
-        actor=current_actor,
-        request=payload,
+    with trace_request(
         idempotency_key=idempotency_key,
-    )
+        operation="regenerate",
+        request_id=getattr(request.state, "request_id", None),
+    ):
+        started = perf_counter()
+        trace_event("request.accepted", question_count=1, visual_mode=payload.visual_mode)
+        try:
+            result = await CBTAIIdempotentAuthoringService.regenerate_question(
+                db,
+                actor=current_actor,
+                request=payload,
+                idempotency_key=idempotency_key,
+            )
+        except Exception as exc:
+            trace_event(
+                "request.failed",
+                duration_ms=(perf_counter() - started) * 1000,
+                error_type=type(exc).__name__,
+                http_status=getattr(exc, "status_code", None),
+            )
+            raise
+        trace_event(
+            "request.completed",
+            duration_ms=(perf_counter() - started) * 1000,
+            actual_count=1,
+            credits_charged=result.charge.credits_charged,
+        )
+        return result
 
 
 @router.get("/quota", response_model=AIQuotaStatusResponse)
@@ -289,4 +349,72 @@ async def get_credit_purchase(
         db,
         actor=current_actor,
         purchase_id=purchase_id,
+    )
+
+
+# Additive teacher checkout routes; existing admin and generation routes are unchanged.
+@router.post("/teacher/purchases/quote", response_model=AIQuotaPurchaseQuote)
+async def quote_teacher_credit_purchase(
+    payload: AIQuotaTopUpRequest,
+    current_actor: CurrentCBTActor,
+) -> AIQuotaPurchaseQuote:
+    CBTAIService._require_teacher(current_actor)
+    return AITeacherPurchaseService.quote(payload.credits)
+
+
+@router.post(
+    "/teacher/purchases/checkout",
+    response_model=AIQuotaPurchaseCheckoutResponse,
+)
+async def checkout_teacher_credits(
+    payload: AIQuotaTopUpRequest,
+    db: DbSession,
+    current_actor: CurrentCBTActor,
+) -> AIQuotaPurchaseCheckoutResponse:
+    membership_id = CBTAIService._require_teacher(current_actor)
+    return await AITeacherPurchaseService.checkout(
+        db,
+        tenant_id=current_actor.tenant_id,
+        membership_id=membership_id,
+        credits=payload.credits,
+    )
+
+
+@router.post(
+    "/teacher/purchases/{reference}/verify",
+    response_model=AIQuotaPurchaseResponse,
+)
+async def verify_teacher_credits(
+    reference: str,
+    db: DbSession,
+    current_actor: CurrentCBTActor,
+) -> AIQuotaPurchaseResponse:
+    membership_id = CBTAIService._require_teacher(current_actor)
+    return await AITeacherPurchaseService.verify(
+        db,
+        tenant_id=current_actor.tenant_id,
+        membership_id=membership_id,
+        reference=reference,
+    )
+
+
+@router.get(
+    "/teacher/purchases",
+    response_model=AIQuotaPurchaseListResponse,
+)
+async def list_teacher_credit_purchases(
+    db: DbSession,
+    current_actor: CurrentCBTActor,
+    purchase_status: AIQuotaPurchaseStatus | None = Query(default=None, alias="status"),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> AIQuotaPurchaseListResponse:
+    membership_id = CBTAIService._require_teacher(current_actor)
+    return await AITeacherPurchaseService.list_purchases(
+        db,
+        tenant_id=current_actor.tenant_id,
+        membership_id=membership_id,
+        status=purchase_status,
+        offset=offset,
+        limit=limit,
     )

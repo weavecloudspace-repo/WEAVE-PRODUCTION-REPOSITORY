@@ -15,14 +15,14 @@ export default function AICreditCompletePage() {
           AI credits
         </p>
         <h1 id="ai-credit-completion-title" className="text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">
-          Return to Weave CBT
+          Return to Weave
         </h1>
         <div className="mx-auto mt-4 max-w-xs text-base leading-7 text-slate-600 dark:text-slate-300">
-          <p>Check your AI credits in Weave CBT.</p>
+          <p>Return to your Weave tab to check your AI credits.</p>
           <p className="mt-2">Your balance may take a few moments to update.</p>
         </div>
         <p className="mt-8 border-t border-slate-100 pt-5 text-xs font-medium text-blue-600 dark:border-slate-800 dark:text-blue-400">
-          You can close this tab and return to Weave CBT.
+          You can close this tab and return to Weave.
         </p>
       </section>
     </main>

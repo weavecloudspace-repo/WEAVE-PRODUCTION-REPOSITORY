@@ -1,6 +1,7 @@
 import {
   Activity,
   BarChart3,
+  BrainCircuit,
   BookOpen,
   Building2,
   Cpu,
@@ -93,6 +94,8 @@ export const navGroups = {
       label: "Academics",
       items: [
         { label: "Academic Hub", to: "/admin/academic", icon: ClipboardList },
+        { label: "TMA", to: "/admin/tma", icon: FileText },
+        { label: "AI Usage", to: "/admin/ai-usage", icon: BrainCircuit },
         { label: "Students", to: "/admin/students", icon: GraduationCap },
         { label: "Teachers", to: "/admin/teachers", icon: Users },
         { label: "Parents", to: "/admin/parents", icon: Users },
@@ -163,6 +166,8 @@ export const navGroups = {
           icon: GraduationCap,
         },
         { label: "Assigned Subjects", to: "/teacher/subjects", icon: BookOpen },
+        { label: "TMA", to: "/teacher/tma", icon: FileText },
+        { label: "AI Usage", to: "/teacher/ai-usage", icon: BrainCircuit },
         { label: "Results", to: "/teacher/results", icon: ClipboardList },
         { label: "Calendar", to: "/teacher/calendar", icon: CalendarDays },
         {
