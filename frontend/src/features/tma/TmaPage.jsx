@@ -65,6 +65,8 @@ function Configuration({
     assignment?.assessment_component_id || "",
   );
   const [closing, setClosing] = useState(dateInput(assignment?.closes_at));
+  const deadlineTime = closing ? new Date(closing).getTime() : NaN;
+  const validDeadline = Number.isFinite(deadlineTime) && deadlineTime > Date.now();
   const [lead, setLead] = useState(assignment?.lead_teacher_membership_id || "");
   const locked = Boolean(assignment) && !scopeEditable;
   const levels = [
@@ -87,12 +89,13 @@ function Configuration({
         e.preventDefault();
         if (
           busy ||
+          !validDeadline ||
           (!locked &&
             (!validScope || !component || (!assignment && !config.term_open)))
         )
           return;
         const closingPayload = {
-          closes_at: closing ? new Date(closing).toISOString() : null,
+          closes_at: new Date(deadlineTime).toISOString(),
           ...(isAdmin && assignment?.status !== "closed"
             ? { lead_teacher_membership_id: lead || null }
             : {}),
@@ -206,22 +209,27 @@ function Configuration({
         </p>
       )}
       <label className="grid gap-1.5 text-sm font-medium">
-        Submission deadline (optional)
+        Submission deadline (required)
         <input
           type="datetime-local"
           className={field}
+          required
+          min={dateInput(new Date())}
+          aria-invalid={Boolean(closing) && !validDeadline}
           value={closing}
           onChange={(e) => setClosing(e.target.value)}
         />
       </label>
       <p className="text-xs text-text-muted">
-        Students cannot start, save, or submit after this time. The assignment
-        automatically changes to Closed. Manual closing remains available.
+        Choose a future deadline. Students cannot start, save, or submit after it.
+        The assignment automatically closes and missed submissions receive zero.
+        Manual closing remains available; missed-deadline grading follows the deadline.
       </p>
       <Button
         type="submit"
         disabled={
           busy ||
+          !validDeadline ||
           (!locked &&
             (!validScope || !component || (!assignment && !config.term_open)))
         }
