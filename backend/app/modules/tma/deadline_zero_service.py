@@ -182,7 +182,11 @@ class TMADeadlineZeroService:
                     TMAAssignment.closes_at.is_not(None),
                     TMAAssignment.closes_at <= current,
                 )
-                .order_by(TMAAssignment.zero_grading_requested_at, TMAAssignment.id)
+                .order_by(
+                    TMAAssignment.zero_grading_error.is_not(None),
+                    TMAAssignment.zero_grading_requested_at,
+                    TMAAssignment.id,
+                )
                 .limit(1)
                 .with_for_update(skip_locked=True)
             )
@@ -225,7 +229,8 @@ class TMADeadlineZeroService:
                 )
                 for row in students:
                     if not row["is_currently_eligible"] or row["participation_status"] in {
-                        "submitted", "missed"
+                        "submitted",
+                        "missed",
                     }:
                         continue
                     try:
@@ -238,7 +243,12 @@ class TMADeadlineZeroService:
                                 total_questions=len(questions),
                                 current=current,
                             )
-                    except (ConflictException, BadRequestException, ForbiddenException, IntegrityError) as exc:
+                    except (
+                        ConflictException,
+                        BadRequestException,
+                        ForbiddenException,
+                        IntegrityError,
+                    ) as exc:
                         blocked += 1
                         error = str(exc)[:500]
                         logger.warning(
@@ -268,9 +278,11 @@ class TMADeadlineZeroService:
                 )[:1500]
             await db.commit()
             await flush_cache_invalidation_events(db)
-            return {"zeroed": processed, "blocked": blocked, "pending": int(
-                assignment.zero_grading_completed_at is None
-            )}
+            return {
+                "zeroed": processed,
+                "blocked": blocked,
+                "pending": int(assignment.zero_grading_completed_at is None),
+            }
         except Exception as exc:
             assignment_id = assignment.id
             tenant_id = assignment.tenant_id

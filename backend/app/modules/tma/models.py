@@ -955,9 +955,7 @@ class TMAAttempt(BaseModel):
     score_reversed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    auto_zeroed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    auto_zeroed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         # Ensure the participant belongs to the same tenant.
