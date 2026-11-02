@@ -704,6 +704,11 @@
   min-width: 120px;
   max-width: 100%;
 }
+.tma-ai-difficulty{display:grid;gap:8px;margin:0 0 16px}
+.tma-ai-difficulty label{font-size:12px;font-weight:600;color:rgb(var(--color-text))}
+.tma-ai-difficulty input[type="range"]{width:100%;accent-color:rgb(var(--color-primary));cursor:pointer}
+.tma-ai-difficulty input[type="range"]:disabled{opacity:.5;cursor:default}
+.tma-ai-difficulty-labels{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:rgb(var(--color-text-muted))}
 .tma-ai-choices {
   display: flex;
   flex-wrap: wrap;

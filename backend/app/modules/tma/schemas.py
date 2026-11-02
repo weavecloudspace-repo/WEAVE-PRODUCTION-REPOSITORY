@@ -12,7 +12,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.modules.tma.models import (
     TMAActorType,
@@ -83,7 +83,7 @@ class TMAAssignmentCreate(TMAInput):
     academic_session_id: uuid.UUID
     academic_term_id: uuid.UUID
     assessment_component_id: uuid.UUID
-    closes_at: AwareDatetime | None = None
+    closes_at: AwareDatetime
     lead_teacher_membership_id: uuid.UUID | None = None
 
 
@@ -97,6 +97,13 @@ class TMAAssignmentUpdate(TMAInput):
     assessment_component_id: uuid.UUID | None = None
     closes_at: AwareDatetime | None = None
     lead_teacher_membership_id: uuid.UUID | None = None
+
+    @field_validator("closes_at")
+    @classmethod
+    def reject_missing_deadline(cls, value: AwareDatetime | None) -> AwareDatetime:
+        if value is None:
+            raise ValueError("Submission deadline cannot be cleared.")
+        return value
 
 
 class TMAAssignmentResponse(TMAOutput):

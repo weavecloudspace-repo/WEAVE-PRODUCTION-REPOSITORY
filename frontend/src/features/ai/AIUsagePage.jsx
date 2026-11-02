@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BarChart3, Check, CreditCard, History, RefreshCw, Users, Wallet, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BarChart3, Check, CreditCard, History, RefreshCw, Search, Users, Wallet, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
@@ -10,6 +10,10 @@ import { canRequestAICredits } from "../tma/aiCredits";
 import "./ai-usage.css";
 
 const PAGE_SIZE = 20;
+const matchesTeacher = (query, ...values) => {
+  const term = query.trim().toLocaleLowerCase();
+  return !term || values.some((value) => String(value ?? "").toLocaleLowerCase().includes(term));
+};
 const number = (value) => Number(value || 0).toLocaleString("en-NG");
 const money = (value) => new Intl.NumberFormat("en-NG", {
   style: "currency", currency: "NGN",
@@ -50,6 +54,8 @@ export default function AIUsagePage({ role }) {
   const { showError, showSuccess } = useToast();
   const admin = role === "admin";
   const [tab, setTab] = useState("overview");
+  const [staffSearch, setStaffSearch] = useState("");
+  const [requestSearch, setRequestSearch] = useState("");
   const [page, setPage] = useState(0);
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -152,7 +158,10 @@ export default function AIUsagePage({ role }) {
   const quota = data.quota;
   const summary = data.summary;
   const actors = data.actors?.items || [];
-  const pending = (data.requests?.items || []).filter((item) => item.status === "pending");
+  const requests = data.requests?.items || [];
+  const pending = requests.filter((item) => item.status === "pending");
+  const filteredActors = actors.filter((item) => matchesTeacher(staffSearch, item.display_name, item.email));
+  const filteredRequests = requests.filter((item) => matchesTeacher(requestSearch, item.requester_name, item.requester_email));
   const weekly = quota?.weekly;
   const staffUsage = actors.reduce((sum, item) => sum + Number(item.weekly_used_credits || 0), 0);
   const staffUsageLimited = Number(data.actors?.total || 0) > actors.length;
@@ -202,15 +211,20 @@ export default function AIUsagePage({ role }) {
             <Button variant="outline" size="sm" onClick={() => openAction("request")}>Request credits</Button>}
         </div>
         {admin ? <>
+          <label className="ai-usage-search"><Search size={16} aria-hidden="true" />
+            <input type="search" aria-label="Search staff AI credits" placeholder="Search staff by name or email"
+              value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} />
+          </label>
           <div className="ai-usage-table-wrap"><table className="ai-usage-table"><thead><tr>
             <th>Staff member</th><th>Used this week</th><th>Available</th><th>Action</th>
-          </tr></thead><tbody>{actors.map((item) => <tr key={item.quota_account_id}>
+          </tr></thead><tbody>{filteredActors.map((item) => <tr key={item.quota_account_id}>
             <td><strong>{item.display_name}</strong><small>{item.email || item.actor_type}</small></td>
             <td>{number(item.weekly_used_credits)}</td><td>{number(item.total_available_credits)}</td>
             <td><Button variant="outline" size="sm" disabled={busy || summary?.tenant_reserve_credits === 0}
               onClick={() => openAction("allocate", item)}>Allocate</Button></td>
           </tr>)}</tbody></table></div>
           {!actors.length && <p className="ai-usage-empty">No AI accounts found yet.</p>}
+          {actors.length > 0 && !filteredActors.length && <p className="ai-usage-empty">No matching staff in loaded results.</p>}
           {data.actors?.total > 100 && <p className="text-xs text-text-muted">Showing the first 100 staff accounts.</p>}
         </> : <>
           <div className="ai-usage-weekly">
@@ -248,9 +262,13 @@ export default function AIUsagePage({ role }) {
     {!loading && tab === "requests" && admin && <section className="ai-usage-panel">
       <div className="ai-usage-panel-heading"><div><h2>Teacher credit requests</h2>
         <p>Review requests before transferring credits from your reserve.</p></div></div>
+      <label className="ai-usage-search"><Search size={16} aria-hidden="true" />
+        <input type="search" aria-label="Search teacher credit requests" placeholder="Search requests by teacher or email"
+          value={requestSearch} onChange={(event) => setRequestSearch(event.target.value)} />
+      </label>
       <div className="ai-usage-table-wrap"><table className="ai-usage-table"><thead>
         <tr><th>Teacher</th><th>Requested</th><th>Created</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody>{(data.requests?.items || []).map((item) => <tr key={item.id}>
+        <tbody>{filteredRequests.map((item) => <tr key={item.id}>
           <td>{item.requester_name || item.requester_email || "Teacher"}</td>
           <td>{number(item.requested_credits)}</td><td>{date(item.created_at)}</td>
           <td><Status value={item.status} /></td><td>{item.status === "pending" &&
@@ -259,7 +277,9 @@ export default function AIUsagePage({ role }) {
               <Button size="sm" variant="outline" disabled={busy} onClick={() => openAction("reject", item)}>
                 <X size={14} /> Reject</Button></div>}</td>
         </tr>)}</tbody></table></div>
-      {!data.requests?.items?.length && <p className="ai-usage-empty">No teacher requests found.</p>}
+      {!requests.length && <p className="ai-usage-empty">No teacher requests found.</p>}
+      {requests.length > 0 && !filteredRequests.length && <p className="ai-usage-empty">No matching teacher requests in loaded results.</p>}
+      {Number(data.requests?.total || 0) > requests.length && <p className="text-xs text-text-muted">Search filters the first {requests.length} requests shown.</p>}
     </section>}
     {!loading && tab === "transactions" && <section className="ai-usage-panel">
       <div className="ai-usage-panel-heading"><div><h2>Payment history</h2>

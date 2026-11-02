@@ -122,7 +122,16 @@ test("subject choices follow the separate level selector and changing level clea
   select(tree, "Subject").props.onChange("math1");
   select(tree, "Assessment component").props.onChange("ca1");
   tree = view.render();
+  const deadline = nodes(tree).find((node) => node.type === "input" && node.props.type === "datetime-local");
+  assert.equal(deadline.props.required, true);
+  assert.equal(nodes(tree).find((node) => node.type === "Button").props.disabled, true);
   tree.props.onSubmit({ preventDefault() {} });
+  assert.equal(view.saved(), undefined);
+  deadline.props.onChange({ target: { value: "2099-02-02T12:30" } });
+  tree = view.render();
+  assert.equal(nodes(tree).find((node) => node.type === "Button").props.disabled, false);
+  tree.props.onSubmit({ preventDefault() {} });
+  assert.equal(view.saved().closes_at, new Date("2099-02-02T12:30").toISOString());
   assert.equal(view.saved().academic_level_id, "ss1");
   assert.equal(view.saved().curriculum_subject_id, "math1");
   select(tree, "Academic level").props.onChange("ss2");

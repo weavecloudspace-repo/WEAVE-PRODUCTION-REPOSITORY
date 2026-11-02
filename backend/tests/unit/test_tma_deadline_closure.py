@@ -143,7 +143,7 @@ async def test_reopening_expired_assignment_requires_new_deadline(monkeypatch):
     monkeypatch.setattr(
         lifecycle.TMAAuthorizationService, "require_assignment_management", lambda *_: None
     )
-    with pytest.raises(ConflictException, match="Extend or clear"):
+    with pytest.raises(ConflictException, match="Extend the passed deadline"):
         await lifecycle.TMALifecycleService.reopen_assignment(
             db, actor=owner, assignment_id=assignment.id
         )

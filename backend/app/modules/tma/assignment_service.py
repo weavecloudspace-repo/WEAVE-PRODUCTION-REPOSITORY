@@ -106,6 +106,8 @@ class TMAAssignmentService:
         actor: TMAAuthor,
         payload: TMAAssignmentCreate,
     ) -> TMAAssignment:
+        if payload.closes_at <= datetime.now(timezone.utc):
+            raise BadRequestException("Submission deadline must be in the future.")
         try:
             await TMAAssignmentService._validate_scope(
                 db,
@@ -248,14 +250,18 @@ class TMAAssignmentService:
         TMAAuthorizationService.require_assignment_management(actor, assignment)
         if "lead_teacher_membership_id" in changes and not isinstance(actor, TenantAdmin):
             raise ForbiddenException("Only an administrator can assign or change the lead teacher.")
-        if "closes_at" in changes and assignment.status == TMAAssignmentStatus.ACTIVE:
+        if "closes_at" in changes:
             current = datetime.now(timezone.utc)
-            if assignment.closes_at is not None and assignment.closes_at <= current:
+            if (
+                assignment.status == TMAAssignmentStatus.ACTIVE
+                and assignment.closes_at is not None
+                and assignment.closes_at <= current
+            ):
                 raise ConflictException(
                     "The deadline has passed. Close, cancel and revise this assignment instead."
                 )
-            if changes["closes_at"] is not None and changes["closes_at"] <= current:
-                raise ConflictException("An active assignment requires a future deadline.")
+            if changes["closes_at"] <= current:
+                raise ConflictException("Submission deadline must be in the future.")
         # Published deadlines are binding; draft academic scope remains editable.
         if assignment.status not in (
             TMAAssignmentStatus.DRAFT,
@@ -303,9 +309,12 @@ class TMAAssignmentService:
                 raise ConflictException("Cannot change academic scope after questions exist.")
             effective = TMAAssignmentCreate.model_validate(
                 {
-                    field: scope_changes.get(field, getattr(assignment, field))
-                    for field in TMAAssignmentCreate.model_fields
-                    if field not in {"closes_at", "lead_teacher_membership_id"}
+                    **{
+                        field: scope_changes.get(field, getattr(assignment, field))
+                        for field in TMAAssignmentCreate.model_fields
+                        if field not in {"closes_at", "lead_teacher_membership_id"}
+                    },
+                    "closes_at": changes.get("closes_at", assignment.closes_at),
                 }
             )
             await TMAAssignmentService._validate_scope(

@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -124,6 +125,7 @@ async def test_assignment_scope_enforces_component_eligibility(
         academic_session_id=uuid4(),
         academic_term_id=uuid4(),
         assessment_component_id=uuid4(),
+        closes_at=datetime.now(timezone.utc) + timedelta(days=3),
     )
     scheme = SimpleNamespace(id=uuid4(), status=AssessmentSchemeStatus.ACTIVE)
     monkeypatch.setattr(

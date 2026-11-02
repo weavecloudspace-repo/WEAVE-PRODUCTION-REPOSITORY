@@ -1,7 +1,7 @@
 """Reopening preserves published work and enforces lifecycle authorization."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -24,6 +24,7 @@ def context(monkeypatch):
         current_revision_number=1,
         activated_at=datetime.now(timezone.utc),
         closed_at=datetime.now(timezone.utc),
+        closes_at=datetime.now(timezone.utc) + timedelta(days=3),
         created_by_actor_type=TMAActorType.TEACHER,
         created_by_actor_id=uuid.uuid4(),
     )

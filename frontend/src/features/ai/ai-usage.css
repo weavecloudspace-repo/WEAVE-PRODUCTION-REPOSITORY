@@ -36,6 +36,9 @@
 .ai-usage-alert,.ai-usage-message{border-radius:12px;padding:13px 16px;font-size:13px;border:1px solid rgb(var(--color-error) / .25);background:rgb(var(--color-error) / .07);color:rgb(var(--color-error))}
 .ai-usage-message{background:rgb(var(--color-primary) / .05);color:rgb(var(--color-primary));border-color:rgb(var(--color-primary) / .2)}
 .ai-usage-pager{display:flex;gap:15px;justify-content:space-between;align-items:center;margin-top:14px;font-size:12px;color:rgb(var(--color-text-muted))}
+.ai-usage-search{display:flex;align-items:center;gap:.5rem;width:min(100%,320px);min-height:40px;padding:.5rem .75rem;margin:0 0 .75rem;border:1px solid rgb(var(--color-border));border-radius:.75rem;background:rgb(var(--color-surface));color:rgb(var(--color-text-muted))}
+.ai-usage-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:rgb(var(--color-text));font-size:.875rem}
+.ai-usage-search:focus-within{outline:2px solid rgb(var(--color-primary));outline-offset:2px}
 .ai-credit-compact-modal{max-width:450px!important}
 @media(max-width:1100px){.ai-usage-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:750px){.ai-usage-columns{grid-template-columns:minmax(0,1fr)}}

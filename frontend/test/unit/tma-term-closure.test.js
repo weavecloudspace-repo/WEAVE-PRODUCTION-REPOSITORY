@@ -39,6 +39,6 @@ test("teacher and admin overview share the active-term default and historical te
 });
 
 test("deadline is described as enforced, not informational", () => {
-  assert.match(tmaPage, /Submission deadline \(optional\)/);
+  assert.match(tmaPage, /Submission deadline \(required\)/);
   assert.match(view, /closes automatically at this time/);
 });

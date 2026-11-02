@@ -56,10 +56,10 @@ class TMALifecycleService:
             raise ConflictException(
                 "Missed-deadline zeros have been recorded; cancel and create a corrected revision instead."
             )
-        if getattr(
-            assignment, "closes_at", None
-        ) is not None and assignment.closes_at <= datetime.now(timezone.utc):
-            raise ConflictException("Extend or clear the passed deadline before reopening.")
+        if getattr(assignment, "closes_at", None) is None:
+            raise ConflictException("Set a future submission deadline before reopening.")
+        if assignment.closes_at <= datetime.now(timezone.utc):
+            raise ConflictException("Extend the passed deadline before reopening.")
         errors = await TMALifecycleService._readiness_errors(db, assignment)
         if errors:
             raise ConflictException("TMA cannot be reopened: " + "; ".join(errors))
@@ -80,6 +80,11 @@ class TMALifecycleService:
     @staticmethod
     async def _readiness_errors(db: AsyncSession, assignment: TMAAssignment) -> list[str]:
         errors: list[str] = []
+        deadline = getattr(assignment, "closes_at", None)
+        if deadline is None:
+            errors.append("Set a submission deadline before publishing this TMA.")
+        elif deadline <= datetime.now(timezone.utc):
+            errors.append("Set a future submission deadline before publishing this TMA.")
         session = await StudentAcademicRepository.get_academic_session_by_id(
             db,
             assignment.tenant_id,
@@ -232,12 +237,8 @@ class TMALifecycleService:
         )
         TMAAuthorizationService.require_assignment_management(actor, assignment)
         TMAAuthorizationService.require_draft_assignment(assignment)
-        if getattr(
-            assignment, "closes_at", None
-        ) is not None and assignment.closes_at <= datetime.now(timezone.utc):
-            raise ConflictException(
-                "Set a future deadline or clear the deadline before publishing."
-            )
+        if assignment.closes_at is None or assignment.closes_at <= datetime.now(timezone.utc):
+            raise ConflictException("Set a future submission deadline before publishing.")
         errors = await TMALifecycleService._readiness_errors(db, assignment)
         if errors:
             raise ConflictException("TMA is not ready: " + "; ".join(errors))
