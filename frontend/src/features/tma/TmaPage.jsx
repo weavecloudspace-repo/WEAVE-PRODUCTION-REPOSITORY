@@ -66,7 +66,8 @@ function Configuration({
   );
   const [closing, setClosing] = useState(dateInput(assignment?.closes_at));
   const deadlineTime = closing ? new Date(closing).getTime() : NaN;
-  const validDeadline = Number.isFinite(deadlineTime) && deadlineTime > Date.now();
+  const validDeadline = Number.isFinite(deadlineTime);
+  const [deadlineError, setDeadlineError] = useState("");
   const [lead, setLead] = useState(assignment?.lead_teacher_membership_id || "");
   const locked = Boolean(assignment) && !scopeEditable;
   const levels = [
@@ -94,6 +95,10 @@ function Configuration({
             (!validScope || !component || (!assignment && !config.term_open)))
         )
           return;
+        if (deadlineTime <= Date.now()) {
+          setDeadlineError("Submission deadline must be in the future.");
+          return;
+        }
         const closingPayload = {
           closes_at: new Date(deadlineTime).toISOString(),
           ...(isAdmin && assignment?.status !== "closed"
@@ -214,12 +219,15 @@ function Configuration({
           type="datetime-local"
           className={field}
           required
-          min={dateInput(new Date())}
           aria-invalid={Boolean(closing) && !validDeadline}
           value={closing}
-          onChange={(e) => setClosing(e.target.value)}
+          onChange={(e) => {
+            setClosing(e.target.value);
+            setDeadlineError("");
+          }}
         />
       </label>
+      {deadlineError && <p role="alert" className="text-xs text-error">{deadlineError}</p>}
       <p className="text-xs text-text-muted">
         Choose a future deadline. Students cannot start, save, or submit after it.
         The assignment automatically closes and missed submissions receive zero.

@@ -112,11 +112,13 @@ def test_schemas_require_aware_deadline_and_reject_explicit_clear() -> None:
         _scope_payload(closes_at=None)
     assert TMAAssignmentUpdate().model_dump(exclude_unset=True) == {}
     with pytest.raises(ValidationError):
-        TMAAssignmentCreate.model_validate({
-            field: getattr(_scope_payload(), field)
-            for field in TMAAssignmentCreate.model_fields
-            if field != "closes_at"
-        })
+        TMAAssignmentCreate.model_validate(
+            {
+                field: getattr(_scope_payload(), field)
+                for field in TMAAssignmentCreate.model_fields
+                if field != "closes_at"
+            }
+        )
 
 
 @pytest.mark.parametrize("klass", [TMAAssignmentCreate, TMAAssignmentUpdate])
@@ -447,9 +449,7 @@ async def test_active_deadline_cannot_rewrite_historical_eligibility(
             AsyncMock(),
             actor=actor,
             assignment_id=assignment.id,
-            payload=TMAAssignmentUpdate(
-                closes_at=_date(new_deadline)
-            ),
+            payload=TMAAssignmentUpdate(closes_at=_date(new_deadline)),
         )
     save.assert_not_awaited()
 
@@ -461,14 +461,20 @@ async def test_publish_rejects_legacy_draft_without_deadline(monkeypatch) -> Non
     actor = _actor()
     assignment = _assignment(actor, TMAAssignmentStatus.DRAFT)
     assignment.closes_at = None
-    monkeypatch.setattr(mod.TMAAssignmentRepository, "get_by_id", AsyncMock(return_value=assignment))
+    monkeypatch.setattr(
+        mod.TMAAssignmentRepository, "get_by_id", AsyncMock(return_value=assignment)
+    )
     monkeypatch.setattr(mod.TMAAuthorizationService, "require_assignment_access", AsyncMock())
-    monkeypatch.setattr(mod.TMAAuthorizationService, "require_assignment_management", lambda *_: None)
+    monkeypatch.setattr(
+        mod.TMAAuthorizationService, "require_assignment_management", lambda *_: None
+    )
     readiness = AsyncMock(return_value=[])
     monkeypatch.setattr(mod.TMALifecycleService, "_readiness_errors", readiness)
     db = AsyncMock()
     with pytest.raises(ConflictException, match="future submission deadline"):
-        await mod.TMALifecycleService.activate_assignment(db, actor=actor, assignment_id=assignment.id)
+        await mod.TMALifecycleService.activate_assignment(
+            db, actor=actor, assignment_id=assignment.id
+        )
     readiness.assert_not_awaited()
     db.commit.assert_not_awaited()
 
@@ -494,7 +500,9 @@ async def test_draft_update_rejects_past_deadline(monkeypatch) -> None:
     actor, save, _ = _setup(monkeypatch, assignment)
     with pytest.raises(ConflictException, match="future"):
         await mod.TMAAssignmentService.update_draft_assignment(
-            AsyncMock(), actor=actor, assignment_id=assignment.id,
+            AsyncMock(),
+            actor=actor,
+            assignment_id=assignment.id,
             payload=TMAAssignmentUpdate(closes_at=_date(-1)),
         )
     save.assert_not_awaited()

@@ -127,7 +127,7 @@ test("subject choices follow the separate level selector and changing level clea
   assert.equal(nodes(tree).find((node) => node.type === "Button").props.disabled, true);
   tree.props.onSubmit({ preventDefault() {} });
   assert.equal(view.saved(), undefined);
-  deadline.props.onChange("2099-02-02T12:30");
+  deadline.props.onChange({ target: { value: "2099-02-02T12:30" } });
   tree = view.render();
   assert.equal(nodes(tree).find((node) => node.type === "Button").props.disabled, false);
   tree.props.onSubmit({ preventDefault() {} });
