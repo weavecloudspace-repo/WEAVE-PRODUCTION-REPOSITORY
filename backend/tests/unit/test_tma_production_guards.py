@@ -118,8 +118,7 @@ async def test_student_cannot_start_or_submit_if_class_loses_subject_teacher(mon
     )
     owners = AsyncMock(return_value={})
     monkeypatch.setattr(
-        mod.StudentAcademicRepository,
-        "get_teacher_assignments_for_classes_on_date", owners
+        mod.StudentAcademicRepository, "get_teacher_assignments_for_classes_on_date", owners
     )
     with pytest.raises(ConflictException, match="no subject teacher"):
         await mod.TMAAuthorizationService.require_student_eligibility(
