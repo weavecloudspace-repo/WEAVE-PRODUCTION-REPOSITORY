@@ -136,7 +136,7 @@ test("CLI groups cover everyday tasks with complete usage details", () => {
 });
 
 test("CLI reference covers every reviewed command and explains destructive recovery", () => {
-  const expected = ["--help","install","start","stop","restart","reinstall","self-update","status","tls","logs","doctor","release","update","rollback","uninstall","network status","network setup","network trust","network refresh","network remove","network url","network doctor","network dns status","network dns setup","network dns remove"];
+  const expected = ["--help","install","start","stop","restart","reinstall","self-update","status","tls","logs","doctor","release","update","rollback","uninstall","network status","network setup","network trust","network refresh","network remove","network url","network doctor","network dns status","network dns setup","network dns remove","network mode status","network mode plan","network mode set","network ngrok status","network ngrok auth","network ngrok enable","network ngrok disable","network ngrok logs"];
   assert.deepEqual(CLI_COMMANDS.map((item) => item.command.replace(/^weave /, "")).sort(), expected.sort());
   for (const name of ["reinstall", "rollback", "uninstall"]) {
     const command = CLI_COMMANDS.find((item) => item.command === `weave ${name}`);
@@ -155,12 +155,14 @@ test("documented example flags match the reviewed CBT CLI command signatures", (
     "network status": ["--json"], "network setup": ["--auto", "--listen-address", "--client-subnet", "--yes"],
     "network trust": ["--interface", "--yes"], "network refresh": [], "network remove": ["--yes"],
     "network url": ["--json"], "network doctor": [],
+    "network mode status": [], "network mode plan": ["--preferred"], "network mode set": ["--maintenance", "--yes", "--client-verified"],
+    "network ngrok status": [], "network ngrok auth": [], "network ngrok enable": ["--yes"], "network ngrok disable": ["--yes"], "network ngrok logs": [],
     "network dns status": ["--json"], "network dns setup": ["--interface"], "network dns remove": ["--yes"],
     tls: ["--dry-run", "--renew", "--activate"], "self-update": ["--check", "--yes", "-y"], update: ["--yes", "--image"],
   };
   for (const item of CLI_COMMANDS) {
     for (const example of item.examples) {
-      const [, name] = example.command.match(/(?:sudo )?weave (network dns \S+|network \S+|\S+)/);
+      const [, name] = example.command.match(/(?:sudo )?weave (network (?:dns|mode|ngrok) \S+|network \S+|\S+)/);
       if (name === "--help") continue;
       assert.ok(Object.hasOwn(supported, name), `Unsupported command: ${name}`);
       const flags = example.command.match(/--[a-z-]+|(?<=\s)-[a-z](?=\s|$)/g) || [];

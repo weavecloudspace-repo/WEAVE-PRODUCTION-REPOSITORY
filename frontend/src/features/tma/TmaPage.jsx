@@ -24,6 +24,7 @@ import TmaAuthoringWorkspace from "./TmaAuthoringWorkspace";
 import TmaAIComposer from "./TmaAIComposer";
 import TmaQuestionEditor from "./TmaQuestionEditor";
 import TmaQuestionList from "./TmaQuestionList";
+import TmaDeadlinePicker from "./TmaDeadlinePicker";
 
 const field =
   "min-h-11 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text";
@@ -213,20 +214,18 @@ function Configuration({
           Only the lead teacher or administrator can update these settings.
         </p>
       )}
-      <label className="grid gap-1.5 text-sm font-medium">
-        Submission deadline (required)
-        <input
-          type="datetime-local"
-          className={field}
-          required
-          aria-invalid={Boolean(closing) && !validDeadline}
+      <div className="grid gap-1.5 text-sm font-medium">
+        <span>Submission deadline (required)</span>
+        <TmaDeadlinePicker
           value={closing}
-          onChange={(e) => {
-            setClosing(e.target.value);
+          invalid={Boolean(closing) && !validDeadline}
+          onChange={(value) => {
+            setClosing(value);
             setDeadlineError("");
           }}
+          disabled={busy}
         />
-      </label>
+      </div>
       {deadlineError && <p role="alert" className="text-xs text-error">{deadlineError}</p>}
       <p className="text-xs text-text-muted">
         Choose a future deadline. Students cannot start, save, or submit after it.
