@@ -47,6 +47,11 @@ import {
 import { parseApiError } from "../../services/api";
 import { studentService } from "../../services/studentService";
 import { displayName, getAvatarSrcFromRecord } from "../../utils/user";
+import {
+  canPlaceStudentInClass,
+  eligibleInitialPlacementClasses,
+  needsInitialClassPlacement,
+} from "./studentInitialPlacement";
 
 const PAGE_SIZE = 24;
 const STUDENT_STATUSES = [
@@ -621,6 +626,18 @@ function StudentDirectoryPage() {
     [sessions],
   );
   const currentSession = sessions.find((item) => item.is_current) || sessions[0] || null;
+  const initialPlacementSession =
+    sessions.find(
+      (item) =>
+        item.is_current && String(item.status || "").toLowerCase() === "open",
+    ) || null;
+  const initialPlacementClassOptions = useMemo(
+    () =>
+      eligibleInitialPlacementClasses(classes, editState?.student?.academic_level_id).map(
+        (item) => ({ value: item.id, label: classLabel(item) }),
+      ),
+    [classes, editState?.student?.academic_level_id],
+  );
   const currentTerm =
     terms.find(
       (item) =>
@@ -689,6 +706,7 @@ function StudentDirectoryPage() {
     setFieldErrors({});
     setEditState({
       student,
+      initialClassId: "",
       form: {
         first_name: student.first_name || "",
         last_name: student.last_name || "",
@@ -702,20 +720,60 @@ function StudentDirectoryPage() {
   const submitEdit = async (event) => {
     event.preventDefault();
     if (!editState) return;
-    setBusyId(editState.student.id);
-    setFieldErrors({});
+    const { student, initialClassId } = editState;
     const payload = Object.fromEntries(
       Object.entries(editState.form).map(([key, value]) => [key, value === "" ? null : value]),
     );
+    const profileChanged = Object.entries(payload).some(
+      ([field, value]) => value !== (student[field] ?? null),
+    );
+
+    if (initialClassId) {
+      if (!canPlaceStudentInClass(student, initialPlacementSession)) {
+        showWarning("Initial class placement requires an eligible student and an open current session.");
+        return;
+      }
+      if (!initialPlacementClassOptions.some((item) => item.value === initialClassId)) {
+        setFieldErrors({ target_class_id: "Choose an active class in this student's academic level." });
+        return;
+      }
+    }
+    if (!profileChanged && !initialClassId) {
+      showWarning("No changes to save.");
+      return;
+    }
+
+    setBusyId(student.id);
+    setFieldErrors({});
+    let profileSaved = false;
     try {
-      await studentService.updateAdminStudent(editState.student.id, payload);
-      showSuccess("Student profile updated.");
+      if (profileChanged) {
+        await studentService.updateAdminStudent(student.id, payload);
+        profileSaved = true;
+        setEditState((current) =>
+          current ? { ...current, student: { ...current.student, ...payload } } : current,
+        );
+      }
+      if (initialClassId) {
+        await studentService.placeStudents({
+          academic_session_id: initialPlacementSession.id,
+          academic_level_id: student.academic_level_id,
+          target_class_id: initialClassId,
+          student_ids: [student.id],
+        });
+      }
+      showSuccess(initialClassId ? "Initial class placement saved." : "Student profile updated.");
       setEditState(null);
       await refresh();
     } catch (requestError) {
-      const parsed = parseApiError(requestError, "Failed to update student.");
+      const parsed = parseApiError(requestError, "Failed to save student changes.");
       setFieldErrors(parsed.fieldErrors || {});
-      showError(parsed.message);
+      if (profileSaved && initialClassId) {
+        showWarning(`Profile details were saved, but class placement failed: ${parsed.message}`);
+        await refresh();
+      } else {
+        showError(parsed.message);
+      }
     } finally {
       setBusyId("");
     }
@@ -1342,7 +1400,7 @@ function StudentDirectoryPage() {
       <Modal
         open={Boolean(editState)}
         title="Edit student profile"
-        description="Update profile fields. Placement changes are managed separately so history remains immutable."
+        description="Update profile details and, for unassigned students, choose an initial class. Later placement changes use the separate reassignment workflow."
         onClose={() => !busyId && setEditState(null)}
         closeOnOverlay={!busyId}
       >
@@ -1395,6 +1453,47 @@ function StudentDirectoryPage() {
                 }
               />
             </div>
+            {needsInitialClassPlacement(editState.student) ? (
+              <div className="space-y-3 rounded-xl border border-border/70 bg-surface-muted/25 p-4">
+                <div>
+                  <p className="flex items-center gap-2 text-sm font-semibold text-text">
+                    <School className="h-4 w-4" /> Initial class placement
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-text-muted">
+                    This student is enrolled in{" "}
+                    <span className="font-semibold text-text-soft">
+                      {levelOptions.find((item) => item.value === editState.student.academic_level_id)?.label ||
+                        editState.student.academic_level_name ||
+                        "their current academic level"}
+                    </span>
+                    {" "}but has no class yet. Select an active class in that level to assign one.
+                  </p>
+                </div>
+                <SelectField
+                  label="Assign class (optional)"
+                  value={editState.initialClassId}
+                  options={initialPlacementClassOptions}
+                  disabled={!canPlaceStudentInClass(editState.student, initialPlacementSession) || Boolean(busyId)}
+                  error={fieldErrors.target_class_id}
+                  onChange={(value) =>
+                    setEditState((current) => ({ ...current, initialClassId: value }))
+                  }
+                />
+                {!canPlaceStudentInClass(editState.student, initialPlacementSession) ? (
+                  <p className="text-xs text-warning">
+                    {!initialPlacementSession
+                      ? "Initial placement requires the current academic session to be open."
+                      : editState.student.upcoming_enrollment
+                        ? "Manage the student's scheduled enrollment before placing them."
+                        : "Only active or suspended, non-archived students can be placed."}
+                  </p>
+                ) : initialPlacementClassOptions.length === 0 ? (
+                  <p className="text-xs text-warning">
+                    No active classes are available in this level. Create or activate a class first.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" disabled={Boolean(busyId)} onClick={() => setEditState(null)}>
                 Cancel
