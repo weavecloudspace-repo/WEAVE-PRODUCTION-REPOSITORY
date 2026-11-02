@@ -401,10 +401,12 @@ async def test_verified_tma_score_is_reversed_without_touching_other_components(
         mod.StudentAcademicRepository,
         "list_result_component_scores_batch",
         AsyncMock(
-            return_value={result.id: [
-                (SimpleNamespace(), None),
-                (SimpleNamespace(), other_score),
-            ]}
+            return_value={
+                result.id: [
+                    (SimpleNamespace(), None),
+                    (SimpleNamespace(), other_score),
+                ]
+            }
         ),
     )
     response = await TMACancellationService.process(
