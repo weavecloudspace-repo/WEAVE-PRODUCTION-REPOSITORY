@@ -162,7 +162,7 @@ test("documented example flags match the reviewed CBT CLI command signatures", (
   };
   for (const item of CLI_COMMANDS) {
     for (const example of item.examples) {
-      const [, name] = example.command.match(/(?:sudo )?weave (network dns \S+|network \S+|\S+)/);
+      const [, name] = example.command.match(/(?:sudo )?weave (network (?:dns|mode|ngrok) \S+|network \S+|\S+)/);
       if (name === "--help") continue;
       assert.ok(Object.hasOwn(supported, name), `Unsupported command: ${name}`);
       const flags = example.command.match(/--[a-z-]+|(?<=\s)-[a-z](?=\s|$)/g) || [];
