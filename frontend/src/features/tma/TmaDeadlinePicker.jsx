@@ -5,7 +5,7 @@ import "./tma-deadline-picker.css";
 const days = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const pad = (n) => String(n).padStart(2, "0");
 const initialMonth = (value) => {
-  const match = /^(\\d{4})-(\\d{2})-/.exec(value || "");
+  const match = /^(\d{4})-(\d{2})-/.exec(value || "");
   if (match) return { year: Number(match[1]), month: Number(match[2]) - 1 };
   const today = new Date();
   return { year: today.getFullYear(), month: today.getMonth() };
