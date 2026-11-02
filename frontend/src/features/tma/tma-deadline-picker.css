@@ -1,0 +1,19 @@
+.tma-deadline-picker{position:relative;max-width:460px;min-width:0}
+.tma-deadline-trigger{width:100%;display:flex;align-items:center;gap:12px;min-height:48px;border:1px solid rgb(var(--color-border));background:rgb(var(--color-surface));border-radius:13px;padding:10px 14px;color:rgb(var(--color-text));text-align:left;transition:border-color .15s,box-shadow .15s}
+.tma-deadline-trigger>span{flex:1}
+.tma-deadline-trigger[aria-invalid="true"]{border-color:rgb(var(--color-error))}
+.tma-deadline-trigger:focus-visible,.tma-deadline-popover button:focus-visible,.tma-deadline-popover select:focus-visible{outline:2px solid rgb(var(--color-primary));outline-offset:2px}
+.tma-deadline-popover{position:absolute;z-index:30;top:calc(100% + 8px);left:0;width:min(342px,calc(100vw - 46px));padding:16px;background:rgb(var(--color-surface));border:1px solid rgb(var(--color-border));box-shadow:0 18px 48px rgb(0 0 0 / .15);border-radius:17px;color:rgb(var(--color-text))}
+.tma-deadline-month{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.tma-deadline-month button{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:rgb(var(--color-surface-muted))}
+.tma-deadline-month strong{font-size:14px}
+.tma-deadline-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+.tma-deadline-grid>button,.tma-deadline-weekday{display:grid;place-items:center;height:36px;font-size:12px;border-radius:9px}
+.tma-deadline-weekday{color:rgb(var(--color-text-muted));font-weight:700}
+.tma-deadline-grid>button:hover{background:rgb(var(--color-primary) / .08)}
+.tma-deadline-grid>button.is-selected{background:rgb(var(--color-primary));color:white;font-weight:700}
+.tma-deadline-time{display:flex;justify-content:center;align-items:end;gap:8px;border-top:1px solid rgb(var(--color-border));padding:14px 0;margin-top:12px}
+.tma-deadline-time label{display:grid;gap:5px;flex:1;color:rgb(var(--color-text-muted));font-size:12px}
+.tma-deadline-time select{appearance:none;background:rgb(var(--color-surface-muted));border:1px solid rgb(var(--color-border));border-radius:9px;padding:9px 12px;color:rgb(var(--color-text));font-size:14px;font-weight:650;text-align:center}
+.tma-deadline-done{width:100%;border-radius:10px;padding:10px;background:rgb(var(--color-primary));color:white;font-weight:700;font-size:13px}
+@media(max-width:450px){.tma-deadline-popover{left:0}}
