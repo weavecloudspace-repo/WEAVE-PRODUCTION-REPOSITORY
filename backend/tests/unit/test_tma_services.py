@@ -250,7 +250,9 @@ async def test_submit_does_not_finalize_if_score_write_fails(monkeypatch) -> Non
     monkeypatch.setattr(
         mod.TMAAttemptService,
         "_locked_active_attempt",
-        AsyncMock(return_value=(attempt, SimpleNamespace(), revision, assignment, SimpleNamespace())),
+        AsyncMock(
+            return_value=(attempt, SimpleNamespace(), revision, assignment, SimpleNamespace())
+        ),
     )
     monkeypatch.setattr(
         mod.TMAQuestionRepository,

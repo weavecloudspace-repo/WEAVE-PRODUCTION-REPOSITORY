@@ -132,7 +132,9 @@ class TMALifecycleService:
                         ClassRoom.archived_at.is_(None),
                     )
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
         if not classrooms:
             errors.append("No active classroom exists for this academic level.")
@@ -145,7 +147,8 @@ class TMALifecycleService:
                 skip_unresolvable=True,
             )
             eligible = {
-                room.id for room in classrooms
+                room.id
+                for room in classrooms
                 if any(
                     item.curriculum_subject_id == assignment.curriculum_subject_id
                     for item in curriculum.get(room.id, [])
@@ -154,9 +157,14 @@ class TMALifecycleService:
             if not eligible:
                 errors.append("No classroom offers this subject in the selected term.")
             else:
-                teachers = await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
-                    db, assignment.tenant_id, eligible,
-                    assignment.curriculum_subject_id, date.today(),
+                teachers = (
+                    await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
+                        db,
+                        assignment.tenant_id,
+                        eligible,
+                        assignment.curriculum_subject_id,
+                        date.today(),
+                    )
                 )
                 for room_id in sorted(eligible.difference(teachers), key=str):
                     errors.append(

@@ -246,7 +246,15 @@ async def test_answer_from_another_question_is_rejected(monkeypatch) -> None:
     monkeypatch.setattr(
         mod.TMAAttemptService,
         "_locked_active_attempt",
-        AsyncMock(return_value=(attempt, SimpleNamespace(), revision, SimpleNamespace(), SimpleNamespace())),
+        AsyncMock(
+            return_value=(
+                attempt,
+                SimpleNamespace(),
+                revision,
+                SimpleNamespace(),
+                SimpleNamespace(),
+            )
+        ),
     )
     monkeypatch.setattr(
         mod.TMAQuestionRepository,
@@ -301,7 +309,9 @@ async def test_student_submission_commits_score_and_attempt_once(monkeypatch) ->
     monkeypatch.setattr(
         mod.TMAAttemptService,
         "_locked_active_attempt",
-        AsyncMock(return_value=(attempt, SimpleNamespace(), revision, assignment, SimpleNamespace())),
+        AsyncMock(
+            return_value=(attempt, SimpleNamespace(), revision, assignment, SimpleNamespace())
+        ),
     )
     monkeypatch.setattr(
         mod.TMAQuestionRepository,

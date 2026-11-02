@@ -179,8 +179,11 @@ class TMAAuthorizationService:
         # Teacher reassignment may change after publication. Catch missing
         # grading ownership before a learner starts or submits, not after.
         teachers = await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
-            db, student.tenant_id, {enrollment.class_id},
-            assignment.curriculum_subject_id, date.today(),
+            db,
+            student.tenant_id,
+            {enrollment.class_id},
+            assignment.curriculum_subject_id,
+            date.today(),
         )
         if enrollment.class_id not in teachers:
             raise ConflictException(

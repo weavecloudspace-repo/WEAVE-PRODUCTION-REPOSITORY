@@ -153,13 +153,16 @@ class TMAAttemptService:
             )
             is_open = assignment.status == TMAAssignmentStatus.ACTIVE and not expired
             if is_open and assignment.curriculum_subject_id not in teacher_ready:
-                teachers = await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
-                    db, student.tenant_id, {enrollment.class_id},
-                    assignment.curriculum_subject_id, date.today(),
+                teachers = (
+                    await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
+                        db,
+                        student.tenant_id,
+                        {enrollment.class_id},
+                        assignment.curriculum_subject_id,
+                        date.today(),
+                    )
                 )
-                teacher_ready[assignment.curriculum_subject_id] = (
-                    enrollment.class_id in teachers
-                )
+                teacher_ready[assignment.curriculum_subject_id] = enrollment.class_id in teachers
             missing_teacher = is_open and not teacher_ready.get(
                 assignment.curriculum_subject_id, True
             )
@@ -179,7 +182,8 @@ class TMAAttemptService:
                     and (attempt is None or attempt.status == TMAAttemptStatus.IN_PROGRESS),
                     availability_issue=(
                         "No subject teacher is assigned to your classroom. Contact school management."
-                        if missing_teacher else None
+                        if missing_teacher
+                        else None
                     ),
                     component_maximum_score=component.maximum_score,
                 )
