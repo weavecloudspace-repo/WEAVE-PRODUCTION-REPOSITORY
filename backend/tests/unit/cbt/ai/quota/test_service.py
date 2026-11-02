@@ -411,6 +411,8 @@ async def test_stale_reservation_recovery_releases_every_locked_item(monkeypatch
         "list_expired_pending_for_recovery",
         AsyncMock(return_value=reservations),
     )
+    monkeypatch.setattr(AIWeeklyQuotaRepository,"lock_many_buckets",AsyncMock(return_value=[]))
+    monkeypatch.setattr(AIExtraCreditBalanceRepository,"lock_many_buckets",AsyncMock(return_value=[]))
     release = AsyncMock()
     monkeypatch.setattr(AIQuotaService, "_release_locked_reservation", release)
     count = await AIQuotaService.expire_stale_reservations(db, limit=10)

@@ -9,41 +9,31 @@ from app.modules.tma import configuration_service as mod
 
 
 @pytest.mark.asyncio
-async def test_configuration_excludes_scopes_denied_by_existing_authorization(monkeypatch):
+async def test_configuration_excludes_scopes_without_current_teaching_access(monkeypatch):
+    from app.modules.teachers.models import TeacherMembership, TeacherMembershipStatus
     tenant_id, term_id, session_id = uuid4(), uuid4(), uuid4()
-    term = SimpleNamespace(
-        id=term_id,
-        academic_session_id=session_id,
-        name=SimpleNamespace(value="first_term"),
-        status=SimpleNamespace(value="open"),
-    )
-    monkeypatch.setattr(
-        mod.StudentAcademicRepository, "get_current_term", AsyncMock(return_value=term)
-    )
-    monkeypatch.setattr(mod.AssessmentRepository, "get_active_scheme", AsyncMock(return_value=None))
-    allowed = (
-        SimpleNamespace(id=uuid4(), name="SS1"),
-        SimpleNamespace(id=uuid4()),
-        SimpleNamespace(name="Maths"),
-    )
-    denied = (
-        SimpleNamespace(id=uuid4(), name="SS2"),
-        SimpleNamespace(id=uuid4()),
-        SimpleNamespace(name="Physics"),
-    )
-    result = MagicMock()
-    result.all.return_value = [allowed, denied]
-    db = SimpleNamespace(execute=AsyncMock(return_value=result))
-    guard = AsyncMock(side_effect=[None, ForbiddenException("Not assigned")])
-    monkeypatch.setattr(mod.TMAAuthorizationService, "require_authoring_access", guard)
-    config = await mod.get_authoring_configuration(db, SimpleNamespace(tenant_id=tenant_id))
-    assert len(config["scopes"]) == 1
-    assert config["scopes"][0]["curriculum_subject_id"] == allowed[1].id
-    assert config["academic_term_id"] == term_id
-    assert config["term_open"] is True
-    assert guard.call_args_list[0].kwargs["academic_term_id"] == term_id
-    statement = db.execute.call_args_list[0].args[0].compile()
-    assert set(statement.params.values()) == {tenant_id}
+    term = SimpleNamespace(id=term_id,academic_session_id=session_id,
+        name=SimpleNamespace(value="first_term"),status=SimpleNamespace(value="open"))
+    actor=TeacherMembership(id=uuid4(),tenant_id=tenant_id,status=TeacherMembershipStatus.ACTIVE)
+    monkeypatch.setattr(mod.StudentAcademicRepository,"get_current_term",AsyncMock(return_value=term))
+    monkeypatch.setattr(mod.AssessmentRepository,"get_active_scheme",AsyncMock(return_value=None))
+    allowed=(SimpleNamespace(id=uuid4(),name="SS1"),SimpleNamespace(id=uuid4()),SimpleNamespace(name="Maths"))
+    denied=(SimpleNamespace(id=uuid4(),name="SS2"),SimpleNamespace(id=uuid4()),SimpleNamespace(name="Physics"))
+    rooms=[SimpleNamespace(id=uuid4(),academic_level_id=row[0].id,display_name=row[0].name+" A") for row in [allowed,denied]]
+    candidates=MagicMock(); candidates.all.return_value=[allowed,denied]
+    classrooms=MagicMock(); classrooms.scalars.return_value.all.return_value=rooms
+    db=SimpleNamespace(execute=AsyncMock(side_effect=[candidates,classrooms]))
+    resolver=AsyncMock(return_value={rooms[0].id:[SimpleNamespace(curriculum_subject_id=allowed[1].id)],rooms[1].id:[SimpleNamespace(curriculum_subject_id=denied[1].id)]})
+    monkeypatch.setattr(mod.CurriculumResolutionService,"resolve_classes_subjects",resolver)
+    owners=AsyncMock(return_value=[SimpleNamespace(class_id=rooms[0].id,curriculum_subject_id=allowed[1].id,teacher_membership_id=actor.id)])
+    monkeypatch.setattr(mod.StudentAcademicRepository,"get_teacher_assignments_for_subjects_on_date",owners)
+    config=await mod.get_authoring_configuration(db,actor)
+    assert len(config["scopes"])==1
+    assert config["scopes"][0]["curriculum_subject_id"]==allowed[1].id
+    assert config["academic_term_id"]==term_id and config["term_open"] is True
+    resolver.assert_awaited_once()
+    owners.assert_awaited_once()
+    assert db.execute.await_count==2
 
 
 @pytest.mark.asyncio

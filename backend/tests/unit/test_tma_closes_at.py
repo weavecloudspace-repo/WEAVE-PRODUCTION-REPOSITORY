@@ -379,8 +379,8 @@ async def test_student_list_keeps_expired_tma_visible_but_disables_attempts(
     )
     monkeypatch.setattr(
         mod.TMARevisionRepository,
-        "get_by_number",
-        AsyncMock(return_value=revision),
+        "get_many_by_number",
+        AsyncMock(return_value={assignment.id: revision}),
     )
     monkeypatch.setattr(
         mod.AssessmentRepository,
@@ -389,8 +389,8 @@ async def test_student_list_keeps_expired_tma_visible_but_disables_attempts(
     )
     monkeypatch.setattr(
         mod.AssessmentRepository,
-        "get_component",
-        AsyncMock(return_value=component),
+        "get_components_by_ids",
+        AsyncMock(return_value={assignment.assessment_component_id: component}),
     )
     items = await mod.TMAAttemptService.list_available_assignments(
         AsyncMock(),

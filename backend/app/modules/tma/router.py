@@ -83,27 +83,13 @@ async def authoring_configuration(db: DbSession, actor: Author):
             await get_authoring_configuration(db, actor)
         ).model_dump(mode="json")
 
-    response = TMAAuthoringConfiguration.model_validate(
+    if isinstance(actor, TeacherMembership):
+        # A fresh bulk query enforces current membership and teaching scope;
+        # rechecking cached scopes individually caused an authorization N+1.
+        return TMAAuthoringConfiguration.model_validate(await fetch())
+    return TMAAuthoringConfiguration.model_validate(
         await cached_staff_read(actor, "configuration", fetch, ttl=60)
     )
-    if TMAAuthorizationService.actor_type(actor).value == "teacher":
-        visible = []
-        for scope in response.scopes:
-            try:
-                await TMAAuthorizationService.require_authoring_access(
-                    db,
-                    actor=actor,
-                    academic_level_id=scope.academic_level_id,
-                    curriculum_subject_id=scope.curriculum_subject_id,
-                    academic_term_id=response.academic_term_id,
-                )
-            except (ForbiddenException, ConflictException, NotFoundException):
-                continue
-            visible.append(scope)
-        response.scopes = visible
-        levels = {scope.academic_level_id for scope in visible}
-        response.classes = [room for room in response.classes if room.academic_level_id in levels]
-    return response
 
 
 def _admin_question(question, options) -> TMAQuestionAdminResponse:

@@ -711,3 +711,51 @@ async def test_term_closure_gate_tracks_pending_zero_work(tma_world, monkeypatch
         w.db, w.tenant.id, w.term.id
     )
     assert after.dependency_counts["tma_pending_zero_grading"] == 0
+
+
+@pytest.mark.asyncio
+async def test_draft_edit_delete_and_manual_close_reopen(tma_world):
+    from app.modules.tma.draft_deletion_service import TMADraftDeletionService
+    from app.modules.tma.lifecycle_service import TMALifecycleService
+    from app.modules.tma.schemas import TMAAssignmentUpdate
+    from app.modules.tma.repository import TMAAssignmentRepository
+    w=tma_world
+    draft,_=await w.assignment(publish=False)
+    await TMAAssignmentService.update_draft_assignment(w.db,actor=w.admin,assignment_id=draft.id,
+        payload=TMAAssignmentUpdate(closes_at=datetime.now(timezone.utc)+timedelta(days=1)))
+    assert draft.status==TMAAssignmentStatus.DRAFT
+    await TMADraftDeletionService.delete_draft(w.db,actor=w.admin,assignment_id=draft.id)
+    assert await TMAAssignmentRepository.get_by_id(w.db,w.tenant.id,draft.id) is None
+    item,_=await w.assignment()
+    with pytest.raises(ConflictException):
+        await TMALifecycleService.activate_assignment(w.db,actor=w.admin,assignment_id=item.id)
+    await TMACancellationService.close(w.db,actor=w.admin,assignment_id=item.id)
+    assert item.status==TMAAssignmentStatus.CLOSED
+    await TMALifecycleService.reopen_assignment(w.db,actor=w.admin,assignment_id=item.id)
+    assert item.status==TMAAssignmentStatus.ACTIVE and item.zero_grading_requested_at is None
+
+
+@pytest.mark.asyncio
+async def test_direct_http_requests_cannot_bypass_revoked_teacher_access(tma_world):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+    from app.core.exception_handlers import register_exception_handlers
+    from app.core.dependencies.db import get_db
+    from app.modules.tma.router import author_router, _current_author
+    w=tma_world
+    item,_=await w.assignment()
+    w.teaching[0].effective_to=date.today()-timedelta(days=1)
+    await w.db.commit()
+    app=FastAPI()
+    register_exception_handlers(app)
+    app.include_router(author_router)
+    async def author(): return w.teachers[0]
+    async def database(): yield w.db
+    app.dependency_overrides[_current_author]=author
+    app.dependency_overrides[get_db]=database
+    async with AsyncClient(transport=ASGITransport(app=app),base_url="http://test") as client:
+        for suffix in ("", "/questions", "/submissions", "/readiness", "/revisions"):
+            response=await client.get(f"/tma/assignments/{item.id}{suffix}")
+            assert response.status_code==403
+        response=await client.get(f"/tma/assignments?academic_term_id={w.term.id}")
+        assert response.status_code==200 and response.json()["total"]==0

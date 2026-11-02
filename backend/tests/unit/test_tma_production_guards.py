@@ -81,12 +81,13 @@ async def test_publish_readiness_flags_every_class_missing_subject_teacher(monke
     )
     row = MagicMock()
     row.scalars.return_value.all.return_value = [
-        SimpleNamespace(id=room_a),
-        SimpleNamespace(id=room_b),
+        SimpleNamespace(id=room_a, display_name="JSS1 A"),
+        SimpleNamespace(id=room_b, display_name="JSS1 B"),
     ]
     db = SimpleNamespace(execute=AsyncMock(return_value=row))
     errors = await mod.TMALifecycleService._readiness_errors(db, assignment)
-    assert any(str(room_b) in err and "teacher" in err for err in errors)
+    assert any("JSS1 B" in err and "teacher" in err for err in errors)
+    assert all(str(room_b) not in err for err in errors)
     assert not any(str(room_a) in err for err in errors)
     owners.assert_awaited_once()
     assert owners.await_args.args[2] == {room_a, room_b}

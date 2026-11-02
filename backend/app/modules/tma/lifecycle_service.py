@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from app.core.cache.events import flush_cache_invalidation_events
 
 from app.core.exceptions import ConflictException, NotFoundException
@@ -125,7 +126,10 @@ class TMALifecycleService:
         classrooms = list(
             (
                 await db.execute(
-                    select(ClassRoom).where(
+                    select(ClassRoom).options(
+                        selectinload(ClassRoom.academic_level),
+                        selectinload(ClassRoom.arm_label_ref),
+                    ).where(
                         ClassRoom.tenant_id == assignment.tenant_id,
                         ClassRoom.academic_level_id == assignment.academic_level_id,
                         ClassRoom.is_active.is_(True),
@@ -166,9 +170,10 @@ class TMALifecycleService:
                         date.today(),
                     )
                 )
+                room_names = {room.id: getattr(room, "display_name", "This classroom") for room in classrooms}
                 for room_id in sorted(eligible.difference(teachers), key=str):
                     errors.append(
-                        f"Classroom {room_id} has no assigned subject teacher. "
+                        f"{room_names[room_id]} has no assigned subject teacher. "
                         "Assign a teacher before publishing this TMA."
                     )
         questions = await TMAQuestionRepository.list_for_revision_with_options(

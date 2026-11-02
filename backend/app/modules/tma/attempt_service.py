@@ -125,24 +125,28 @@ class TMAAttemptService:
         )
         revisions = {participant.revision_id: participant for participant in history}
         scheme = await AssessmentRepository.get_active_scheme(db, student.tenant_id)
-        teacher_ready: dict[uuid.UUID, bool] = {}
+        revision_by_assignment = await TMARevisionRepository.get_many_by_number(
+            db, student.tenant_id, {(row.id, row.current_revision_number) for row in rows}
+        )
+        component_by_id = await AssessmentRepository.get_components_by_ids(
+            db, student.tenant_id, {row.assessment_component_id for row in rows}
+        ) if scheme else {}
+        current = datetime.now(timezone.utc)
+        open_subject_ids = {row.curriculum_subject_id for row in rows
+                            if row.status == TMAAssignmentStatus.ACTIVE
+                            and (row.closes_at is None or row.closes_at > current)}
+        owners = await StudentAcademicRepository.get_teacher_assignments_for_subjects_on_date(
+            db, student.tenant_id, {enrollment.class_id}, open_subject_ids, date.today(),
+        ) if open_subject_ids else []
+        teacher_ready = {owner.curriculum_subject_id for owner in owners}
         items = []
         for assignment in rows:
             if assignment.curriculum_subject_id not in allowed:
                 continue
-            revision = await TMARevisionRepository.get_by_number(
-                db,
-                student.tenant_id,
-                assignment.id,
-                assignment.current_revision_number,
-            )
+            revision = revision_by_assignment.get(assignment.id)
             if revision is None or revision.published_at is None or revision.invalidated_at:
                 continue
-            component = await AssessmentRepository.get_component(
-                db,
-                student.tenant_id,
-                assignment.assessment_component_id,
-            )
+            component = component_by_id.get(assignment.assessment_component_id)
             if component is None or scheme is None or component.assessment_scheme_id != scheme.id:
                 continue
             participant = revisions.get(revision.id)
@@ -152,20 +156,7 @@ class TMAAttemptService:
                 and datetime.now(timezone.utc) >= assignment.closes_at
             )
             is_open = assignment.status == TMAAssignmentStatus.ACTIVE and not expired
-            if is_open and assignment.curriculum_subject_id not in teacher_ready:
-                teachers = (
-                    await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
-                        db,
-                        student.tenant_id,
-                        {enrollment.class_id},
-                        assignment.curriculum_subject_id,
-                        date.today(),
-                    )
-                )
-                teacher_ready[assignment.curriculum_subject_id] = enrollment.class_id in teachers
-            missing_teacher = is_open and not teacher_ready.get(
-                assignment.curriculum_subject_id, True
-            )
+            missing_teacher = is_open and assignment.curriculum_subject_id not in teacher_ready
             items.append(
                 TMAStudentAssignmentResponse(
                     assignment_id=assignment.id,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, select, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache.events import flush_cache_invalidation_events
@@ -13,6 +13,7 @@ from app.core.exceptions import ConflictException, ForbiddenException, NotFoundE
 from app.modules.tenant_admins.models import TenantAdmin
 from app.modules.tma.authorization import TMAAuthor, TMAAuthorizationService
 from app.modules.tma.models import (
+    TMADeadlineEligibility,
     TMAAssignmentStatus,
     TMAAssignmentRevision,
     TMAAttempt,
@@ -35,11 +36,35 @@ class TMAZeroReconciliationService:
             db, actor=actor, assignment=assignment
         )
         TMAAuthorizationService.require_assignment_management(actor, assignment)
+        authorized_classes = await TMAAuthorizationService.authorized_classroom_ids(
+            db, actor=actor, assignment=assignment
+        )
+        scope = []
+        if authorized_classes is not None:
+            revisions = select(TMAAssignmentRevision.id).where(
+                TMAAssignmentRevision.tenant_id == actor.tenant_id,
+                TMAAssignmentRevision.assignment_id == assignment.id,
+                TMAAssignmentRevision.revision_number == assignment.current_revision_number,
+            )
+            students = union(
+                select(TMADeadlineEligibility.student_id).where(
+                    TMADeadlineEligibility.tenant_id == actor.tenant_id,
+                    TMADeadlineEligibility.revision_id.in_(revisions),
+                    TMADeadlineEligibility.class_id.in_(authorized_classes),
+                ),
+                select(TMAParticipant.student_id).where(
+                    TMAParticipant.tenant_id == actor.tenant_id,
+                    TMAParticipant.revision_id.in_(revisions),
+                    TMAParticipant.class_id.in_(authorized_classes),
+                ),
+            )
+            scope.append(TMAZeroGradingFailure.student_id.in_(students))
         return list(
             (
                 await db.execute(
                     select(TMAZeroGradingFailure)
                     .where(
+                        *scope,
                         TMAZeroGradingFailure.tenant_id == actor.tenant_id,
                         TMAZeroGradingFailure.assignment_id == assignment_id,
                         TMAZeroGradingFailure.revision_number == assignment.current_revision_number,

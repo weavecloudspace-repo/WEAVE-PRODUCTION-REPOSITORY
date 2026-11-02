@@ -214,6 +214,18 @@ class TMARevisionRepository:
         ).scalar_one_or_none()
 
     @staticmethod
+    async def get_many_by_number(
+        db: AsyncSession, tenant_id: uuid.UUID, scopes: set[tuple[uuid.UUID, int]],
+    ) -> dict[uuid.UUID, TMAAssignmentRevision]:
+        if not scopes:
+            return {}
+        rows = (await db.execute(select(TMAAssignmentRevision).where(
+            TMAAssignmentRevision.tenant_id == tenant_id,
+            tuple_(TMAAssignmentRevision.assignment_id, TMAAssignmentRevision.revision_number).in_(scopes),
+        ))).scalars().all()
+        return {row.assignment_id: row for row in rows}
+
+    @staticmethod
     async def list_for_assignment(
         db: AsyncSession,
         tenant_id: uuid.UUID,
@@ -399,6 +411,19 @@ class TMAMediaAssetRepository:
                 )
             )
         ).scalar_one_or_none()
+
+    @staticmethod
+    async def get_many_for_assignment(
+        db: AsyncSession, tenant_id: uuid.UUID, assignment_id: uuid.UUID,
+        asset_ids: set[uuid.UUID],
+    ) -> set[uuid.UUID]:
+        if not asset_ids:
+            return set()
+        return set((await db.execute(select(TMAMediaAsset.id).where(
+            TMAMediaAsset.tenant_id == tenant_id,
+            TMAMediaAsset.assignment_id == assignment_id,
+            TMAMediaAsset.id.in_(asset_ids),
+        ))).scalars().all())
 
     @staticmethod
     async def get_by_object_key(

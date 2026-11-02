@@ -257,7 +257,6 @@ export default function TmaPage({ role }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
-  const [readiness, setReadiness] = useState(null);
   const [assets, setAssets] = useState([]);
   const [report, setReport] = useState(null);
   const [search, setSearch] = useState("");
@@ -335,7 +334,6 @@ export default function TmaPage({ role }) {
     setDeleteTarget(null);
     setLeaveTarget(null);
     setDialog(null);
-    setReadiness(null);
     setCancellation(null);
     setCancellationConflicts([]);
     setZeroConflicts([]);
@@ -454,8 +452,7 @@ export default function TmaPage({ role }) {
           position: questions.length + 1,
         });
       setDraft(createAnother ? blank() : null);
-      setReadiness(null);
-      await load({ background: true });
+        await load({ background: true });
     }, "Question saved.");
   const visibleList = list.filter(
     (a) =>
@@ -542,9 +539,19 @@ export default function TmaPage({ role }) {
                         );
                       }
                       const issues = await service.readiness(assignmentId);
-                      setReadiness(issues);
-                      setTab("questions");
-                      if (!issues.length) setDialog("activate");
+                      if (issues.length) {
+                        showError(
+                          <span>
+                            <span className="block font-semibold">Cannot publish this assignment</span>
+                            {issues.map((issue, index) => (
+                              <span key={`${index}-${issue}`} className="mt-1 block">• {issue}</span>
+                            ))}
+                          </span>,
+                          { id: `tma-publish-${assignmentId}` },
+                        );
+                        return;
+                      }
+                      setDialog("activate");
                     }),
                 },
                 {
@@ -817,7 +824,6 @@ export default function TmaPage({ role }) {
                         <Button
                           disabled={busy}
                           onClick={() => {
-                            setReadiness(null);
                             setDraft(blank());
                           }}
                         >
@@ -825,26 +831,6 @@ export default function TmaPage({ role }) {
                         </Button>
                       </div>
                     </div>
-                  )}
-                  {readiness && (
-                    <details
-                      open
-                      className="rounded-xl border border-border bg-surface px-5 py-4"
-                    >
-                      <summary className="cursor-pointer text-sm font-semibold">
-                        Publication checklist Â·{" "}
-                        {readiness.length
-                          ? readiness.length + " items to resolve"
-                          : "Ready to publish"}
-                      </summary>
-                      {readiness.length > 0 && (
-                        <ul className="mt-3 list-disc space-y-2 pl-5 text-xs leading-6 text-text-muted">
-                          {readiness.map((item) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </details>
                   )}
                   {draft ? (
                     <TmaQuestionEditor

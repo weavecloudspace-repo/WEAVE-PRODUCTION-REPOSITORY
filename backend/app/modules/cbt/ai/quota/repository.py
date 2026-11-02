@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import date, datetime
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -261,6 +261,21 @@ class AIWeeklyQuotaRepository:
         )
         return list(result.scalars().all())
 
+    @staticmethod
+    async def lock_many_buckets(
+        db: AsyncSession, *, keys: set[tuple[uuid.UUID, uuid.UUID, date]]
+    ) -> list[AIWeeklyQuota]:
+        if not keys:
+            return []
+        rows = await db.execute(
+            select(AIWeeklyQuota).where(tuple_(
+                AIWeeklyQuota.tenant_id, AIWeeklyQuota.quota_account_id, AIWeeklyQuota.week_start,
+            ).in_(keys)).order_by(
+                AIWeeklyQuota.tenant_id, AIWeeklyQuota.quota_account_id, AIWeeklyQuota.week_start,
+            ).with_for_update()
+        )
+        return list(rows.scalars().all())
+
 
 class AIExtraCreditBalanceRepository:
     """Database operations for persistent actor top-up balances."""
@@ -315,6 +330,21 @@ class AIExtraCreditBalanceRepository:
             )
         )
         return list(result.scalars().all())
+
+    @staticmethod
+    async def lock_many_buckets(
+        db: AsyncSession, *, keys: set[tuple[uuid.UUID, uuid.UUID]]
+    ) -> list[AIExtraCreditBalance]:
+        if not keys:
+            return []
+        rows = await db.execute(
+            select(AIExtraCreditBalance).where(tuple_(
+                AIExtraCreditBalance.tenant_id, AIExtraCreditBalance.quota_account_id,
+            ).in_(keys)).order_by(
+                AIExtraCreditBalance.tenant_id, AIExtraCreditBalance.quota_account_id,
+            ).with_for_update()
+        )
+        return list(rows.scalars().all())
 
 
 class AITenantCreditBalanceRepository:

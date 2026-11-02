@@ -63,10 +63,11 @@ class TMAQuestionService:
         options: list[TMAOptionInput],
     ) -> None:
         assets = {a for a in [question_asset_id, *(opt.image_asset_id for opt in options)] if a}
-        for asset_id in assets:
-            asset = await TMAMediaAssetRepository.get_by_id(db, tenant_id, asset_id)
-            if asset is None or asset.assignment_id != assignment_id:
-                raise BadRequestException("An image does not belong to this TMA.")
+        owned_assets = await TMAMediaAssetRepository.get_many_for_assignment(
+            db, tenant_id, assignment_id, assets
+        )
+        if owned_assets != assets:
+            raise BadRequestException("An image does not belong to this TMA.")
 
     @staticmethod
     async def add_question(
