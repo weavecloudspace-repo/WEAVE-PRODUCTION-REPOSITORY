@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -125,6 +125,7 @@ class TMAAttemptService:
         )
         revisions = {participant.revision_id: participant for participant in history}
         scheme = await AssessmentRepository.get_active_scheme(db, student.tenant_id)
+        teacher_ready: dict[uuid.UUID, bool] = {}
         items = []
         for assignment in rows:
             if assignment.curriculum_subject_id not in allowed:
@@ -151,6 +152,17 @@ class TMAAttemptService:
                 and datetime.now(timezone.utc) >= assignment.closes_at
             )
             is_open = assignment.status == TMAAssignmentStatus.ACTIVE and not expired
+            if is_open and assignment.curriculum_subject_id not in teacher_ready:
+                teachers = await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
+                    db, student.tenant_id, {enrollment.class_id},
+                    assignment.curriculum_subject_id, date.today(),
+                )
+                teacher_ready[assignment.curriculum_subject_id] = (
+                    enrollment.class_id in teachers
+                )
+            missing_teacher = is_open and not teacher_ready.get(
+                assignment.curriculum_subject_id, True
+            )
             items.append(
                 TMAStudentAssignmentResponse(
                     assignment_id=assignment.id,
@@ -163,7 +175,12 @@ class TMAAttemptService:
                     auto_zeroed_at=getattr(attempt, "auto_zeroed_at", None) if attempt else None,
                     closes_at=assignment.closes_at,
                     can_start_or_resume=is_open
+                    and not missing_teacher
                     and (attempt is None or attempt.status == TMAAttemptStatus.IN_PROGRESS),
+                    availability_issue=(
+                        "No subject teacher is assigned to your classroom. Contact school management."
+                        if missing_teacher else None
+                    ),
                     component_maximum_score=component.maximum_score,
                 )
             )

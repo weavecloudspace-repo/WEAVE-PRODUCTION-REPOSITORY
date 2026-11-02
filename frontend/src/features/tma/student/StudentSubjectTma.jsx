@@ -86,8 +86,10 @@ export default function StudentSubjectTma({ subject }) {
                   </span>
                 )}
                 <p className="mt-1 text-xs text-text-muted">
-                  {item.attempt_status === "submitted"
-                    ? item.auto_zeroed_at
+                  {item.availability_issue
+                    ? item.availability_issue
+                    : item.attempt_status === "submitted"
+                      ? item.auto_zeroed_at
                       ? "Missed deadline · zero recorded"
                       : "Submitted · your result is ready"
                     : item.status === "closed"
@@ -106,6 +108,10 @@ export default function StudentSubjectTma({ subject }) {
               >
                 View TMA result <ArrowRight size={16} />
               </Link>
+            ) : item.availability_issue ? (
+              <span className="inline-flex min-h-11 items-center rounded-xl border border-border bg-surface-muted px-4 py-2 text-sm font-semibold text-text-muted">
+                Unavailable
+              </span>
             ) : item.status === "closed" || !item.can_start_or_resume ? (
               <span className="inline-flex min-h-11 items-center rounded-xl border border-border bg-surface-muted px-4 py-2 text-sm font-semibold text-text-muted">
                 Closed

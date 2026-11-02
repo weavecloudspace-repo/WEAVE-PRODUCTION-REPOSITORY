@@ -409,4 +409,5 @@ class TMAStudentAssignmentResponse(TMAOutput):
     auto_zeroed_at: datetime | None = None
     closes_at: datetime | None
     can_start_or_resume: bool
+    availability_issue: str | None = None
     component_maximum_score: Decimal = Field(gt=0, max_digits=5, decimal_places=2)

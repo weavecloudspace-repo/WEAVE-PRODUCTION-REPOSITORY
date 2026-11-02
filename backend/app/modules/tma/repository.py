@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import date
 
 from sqlalchemy import delete, exists, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.classes.models import ClassRoom
+from app.modules.student_academics.models import TeacherAssignment
 from app.modules.tma.models import (
     TMAAnswer,
     TMAAssignment,
@@ -87,12 +90,41 @@ class TMAAssignmentRepository:
         curriculum_subject_id: uuid.UUID | None = None,
         status: TMAAssignmentStatus | None = None,
         statuses: set[TMAAssignmentStatus] | None = None,
+        teacher_membership_id: uuid.UUID | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[TMAAssignment], int]:
         if offset < 0 or not 1 <= limit <= 100:
             raise ValueError("offset must be nonnegative and limit must be 1..100")
         filters = [TMAAssignment.tenant_id == tenant_id]
+        if teacher_membership_id is not None:
+            # Authorization happens before LIMIT/OFFSET: counts and pages
+            # must not include other teachers' assignments.
+            filters.append(
+                exists(
+                    select(TeacherAssignment.id)
+                    .join(
+                        ClassRoom,
+                        ClassRoom.id == TeacherAssignment.class_id,
+                    )
+                    .where(
+                        TeacherAssignment.tenant_id == tenant_id,
+                        TeacherAssignment.teacher_membership_id == teacher_membership_id,
+                        TeacherAssignment.curriculum_subject_id
+                        == TMAAssignment.curriculum_subject_id,
+                        TeacherAssignment.effective_from <= date.today(),
+                        (
+                            (TeacherAssignment.effective_to.is_(None))
+                            | (TeacherAssignment.effective_to >= date.today())
+                        ),
+                        ClassRoom.tenant_id == tenant_id,
+                        ClassRoom.academic_level_id == TMAAssignment.academic_level_id,
+                        ClassRoom.is_active.is_(True),
+                        ClassRoom.archived_at.is_(None),
+                    )
+                    .correlate(TMAAssignment)
+                )
+            )
         if academic_session_id is not None:
             filters.append(TMAAssignment.academic_session_id == academic_session_id)
         if academic_term_id is not None:

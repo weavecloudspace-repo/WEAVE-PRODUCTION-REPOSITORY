@@ -202,10 +202,13 @@ class TMAAssignmentService:
     ) -> tuple[list[TMAAssignment], int]:
         # Administrative listings include all subjects. Teachers see only
         # assignments for which they currently have authoring permission.
+        if isinstance(actor, TeacherMembership) and actor.status != TeacherMembershipStatus.ACTIVE:
+            return [], 0
         rows, total = await TMAAssignmentRepository.list_for_scope(
             db,
             actor.tenant_id,
             academic_term_id=academic_term_id,
+            teacher_membership_id=(actor.id if isinstance(actor, TeacherMembership) else None),
             offset=offset,
             limit=limit,
         )
@@ -228,9 +231,7 @@ class TMAAssignmentService:
                     raise
                 continue
             allowed.append(assignment)
-        # Filtered teacher pagination needs a dedicated future query to return
-        # an exact global count; returning the visible page count is honest.
-        return allowed, len(allowed)
+        return allowed, total
 
     @staticmethod
     async def update_draft_assignment(

@@ -176,6 +176,17 @@ class TMAAuthorizationService:
             subject.curriculum_subject_id for subject in subjects
         }:
             raise ForbiddenException("This assignment is not in your enrolled subjects.")
+        # Teacher reassignment may change after publication. Catch missing
+        # grading ownership before a learner starts or submits, not after.
+        teachers = await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
+            db, student.tenant_id, {enrollment.class_id},
+            assignment.curriculum_subject_id, date.today(),
+        )
+        if enrollment.class_id not in teachers:
+            raise ConflictException(
+                "This assignment cannot be graded: no subject teacher is currently "
+                "assigned to your classroom. Please contact school management."
+            )
         return enrollment
 
     @staticmethod

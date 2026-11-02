@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.cache.events import flush_cache_invalidation_events
 
 from app.core.exceptions import ConflictException, NotFoundException
+from app.modules.classes.models import ClassRoom
+from app.modules.student_academics.curriculum_service import CurriculumResolutionService
 from app.modules.student_academics.assessment_repository import AssessmentRepository
 from app.modules.student_academics.models import AcademicSessionStatus
 from app.modules.student_academics.repository import StudentAcademicRepository
@@ -117,6 +120,49 @@ class TMALifecycleService:
         if revision is None or revision.invalidated_at is not None:
             errors.append("A valid current revision is required.")
             return errors
+        # A TMA covers the entire level. Every classroom offering this
+        # subject must have grading ownership BEFORE the TMA is published.
+        classrooms = list(
+            (
+                await db.execute(
+                    select(ClassRoom).where(
+                        ClassRoom.tenant_id == assignment.tenant_id,
+                        ClassRoom.academic_level_id == assignment.academic_level_id,
+                        ClassRoom.is_active.is_(True),
+                        ClassRoom.archived_at.is_(None),
+                    )
+                )
+            ).scalars().all()
+        )
+        if not classrooms:
+            errors.append("No active classroom exists for this academic level.")
+        else:
+            curriculum = await CurriculumResolutionService.resolve_classes_subjects(
+                db,
+                tenant_id=assignment.tenant_id,
+                class_ids=[room.id for room in classrooms],
+                academic_term_id=assignment.academic_term_id,
+                skip_unresolvable=True,
+            )
+            eligible = {
+                room.id for room in classrooms
+                if any(
+                    item.curriculum_subject_id == assignment.curriculum_subject_id
+                    for item in curriculum.get(room.id, [])
+                )
+            }
+            if not eligible:
+                errors.append("No classroom offers this subject in the selected term.")
+            else:
+                teachers = await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
+                    db, assignment.tenant_id, eligible,
+                    assignment.curriculum_subject_id, date.today(),
+                )
+                for room_id in sorted(eligible.difference(teachers), key=str):
+                    errors.append(
+                        f"Classroom {room_id} has no assigned subject teacher. "
+                        "Assign a teacher before publishing this TMA."
+                    )
         questions = await TMAQuestionRepository.list_for_revision_with_options(
             db,
             assignment.tenant_id,
