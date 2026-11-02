@@ -63,9 +63,7 @@ class TMADraftDeletionService:
             or assignment.closed_at is not None
             or getattr(assignment, "zero_grading_requested_at", None) is not None
         ):
-            raise ConflictException(
-                "Only an original, never-published draft TMA can be deleted."
-            )
+            raise ConflictException("Only an original, never-published draft TMA can be deleted.")
         revisions = list(
             (
                 await db.execute(
@@ -84,9 +82,7 @@ class TMADraftDeletionService:
             or revisions[0].published_at is not None
             or revisions[0].invalidated_at is not None
         ):
-            raise ConflictException(
-                "Assignment revision history cannot be permanently deleted."
-            )
+            raise ConflictException("Assignment revision history cannot be permanently deleted.")
         participant_exists = (
             await db.execute(
                 select(TMAParticipant.id)

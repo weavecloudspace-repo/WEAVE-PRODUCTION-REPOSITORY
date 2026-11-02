@@ -86,9 +86,7 @@ async def test_delete_draft_removes_children_in_dependency_order_and_queues_imag
     keys = ["tenants/one/tma/image-a.png", "tenants/one/tma/image-b.png"]
     db = db_for_delete(revision, assets=keys)
     invalidate, flushed = setup(monkeypatch, assignment)
-    await mod.TMADraftDeletionService.delete_draft(
-        db, actor=admin, assignment_id=assignment.id
-    )
+    await mod.TMADraftDeletionService.delete_draft(db, actor=admin, assignment_id=assignment.id)
 
     assert db.add_all.call_count == 1
     queued = db.add_all.call_args.args[0]
@@ -131,16 +129,18 @@ async def test_protected_assignments_never_delete(monkeypatch, changes):
     setup(monkeypatch, assignment)
     db = db_for_delete(revision)
     with pytest.raises(ConflictException, match="never-published"):
-        await mod.TMADraftDeletionService.delete_draft(
-            db, actor=admin, assignment_id=assignment.id
-        )
+        await mod.TMADraftDeletionService.delete_draft(db, actor=admin, assignment_id=assignment.id)
     db.commit.assert_not_awaited()
     db.add_all.assert_not_called()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("published,invalidated,revision_count", [(True, False, 1), (False, True, 1), (False, False, 2)])
-async def test_historical_revision_is_immutable(monkeypatch, published, invalidated, revision_count):
+@pytest.mark.parametrize(
+    "published,invalidated,revision_count", [(True, False, 1), (False, True, 1), (False, False, 2)]
+)
+async def test_historical_revision_is_immutable(
+    monkeypatch, published, invalidated, revision_count
+):
     admin, assignment, revision = context()
     revision.published_at = "published" if published else None
     revision.invalidated_at = "invalidated" if invalidated else None
@@ -150,9 +150,7 @@ async def test_historical_revision_is_immutable(monkeypatch, published, invalida
         row_result(all_rows=[revision] * revision_count),
     ]
     with pytest.raises(ConflictException, match="revision history"):
-        await mod.TMADraftDeletionService.delete_draft(
-            db, actor=admin, assignment_id=assignment.id
-        )
+        await mod.TMADraftDeletionService.delete_draft(db, actor=admin, assignment_id=assignment.id)
     db.commit.assert_not_awaited()
 
 
@@ -163,9 +161,7 @@ async def test_student_or_cancellation_history_blocks_deletion(monkeypatch, stud
     setup(monkeypatch, assignment)
     db = db_for_delete(revision, student=student, cancellation=cancellation)
     with pytest.raises(ConflictException, match="student or cancellation history"):
-        await mod.TMADraftDeletionService.delete_draft(
-            db, actor=admin, assignment_id=assignment.id
-        )
+        await mod.TMADraftDeletionService.delete_draft(db, actor=admin, assignment_id=assignment.id)
     db.commit.assert_not_awaited()
     db.add_all.assert_not_called()
 
@@ -189,21 +185,27 @@ async def test_unknown_assignment_cannot_be_deleted(monkeypatch):
     monkeypatch.setattr(mod.TMAAssignmentRepository, "get_by_id", AsyncMock(return_value=None))
     db = db_for_delete(revision)
     with pytest.raises(NotFoundException):
-        await mod.TMADraftDeletionService.delete_draft(
-            db, actor=admin, assignment_id=assignment.id
-        )
+        await mod.TMADraftDeletionService.delete_draft(db, actor=admin, assignment_id=assignment.id)
     db.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_media_cleanup_retries_failures_and_deletes_successful_jobs(monkeypatch):
     okay = SimpleNamespace(
-        id=uid(), tenant_id=uid(), assignment_id=uid(),
-        object_key="one", attempts=0, last_error=None
+        id=uid(),
+        tenant_id=uid(),
+        assignment_id=uid(),
+        object_key="one",
+        attempts=0,
+        last_error=None,
     )
     broken = SimpleNamespace(
-        id=uid(), tenant_id=uid(), assignment_id=uid(),
-        object_key="two", attempts=0, last_error=None
+        id=uid(),
+        tenant_id=uid(),
+        assignment_id=uid(),
+        object_key="two",
+        attempts=0,
+        last_error=None,
     )
     storage = SimpleNamespace(delete_object=AsyncMock(side_effect=[None, RuntimeError("offline")]))
     monkeypatch.setattr(mod, "get_media_storage", lambda: storage)

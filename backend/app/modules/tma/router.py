@@ -226,9 +226,7 @@ async def delete_draft_assignment(
 ) -> None:
     from app.modules.tma.draft_deletion_service import TMADraftDeletionService
 
-    await TMADraftDeletionService.delete_draft(
-        db, actor=actor, assignment_id=assignment_id
-    )
+    await TMADraftDeletionService.delete_draft(db, actor=actor, assignment_id=assignment_id)
 
 
 @author_router.get("/assignments/{assignment_id}/readiness", response_model=list[str])
