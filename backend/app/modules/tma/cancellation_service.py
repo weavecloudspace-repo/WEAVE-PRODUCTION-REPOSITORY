@@ -273,36 +273,53 @@ class TMACancellationService:
                 .order_by(TMAAttempt.id)
             )
         ).all()
-        score_ids = {attempt.score_id for attempt, _ in attempts
-                     if attempt.score_reversed_at is None and attempt.score_id is not None}
-        score_rows = (await db.execute(
-            select(StudentAssessmentScore, StudentSubjectResult)
-            .join(StudentSubjectResult, and_(
-                StudentSubjectResult.id == StudentAssessmentScore.student_subject_result_id,
-                StudentSubjectResult.tenant_id == tenant_id,
-            )).where(
-                StudentAssessmentScore.tenant_id == tenant_id,
-                StudentAssessmentScore.id.in_(score_ids),
-                StudentAssessmentScore.assessment_component_id == assignment.assessment_component_id,
-                StudentSubjectResult.academic_session_id == assignment.academic_session_id,
-                StudentSubjectResult.academic_term_id == assignment.academic_term_id,
-                StudentSubjectResult.curriculum_subject_id == assignment.curriculum_subject_id,
-            ).order_by(StudentAssessmentScore.id).with_for_update()
-        )).all() if score_ids else []
-        scores_by_id = {score.id: (score, result) for score, result in score_rows}
-        to_reverse = []
-        seen_scores: set[uuid.UUID] = set()
-        for attempt, participant in attempts:
-            if attempt.score_reversed_at is not None:
-                continue
+        pending_attempts = [
+            (attempt, participant)
+            for attempt, participant in attempts
+            if attempt.score_reversed_at is None
+        ]
+        score_ids = set()
+        for attempt, _ in pending_attempts:
             if attempt.score_id is None or attempt.score_snapshot is None:
                 raise ConflictException(
                     "Cannot safely reverse a historical submission without "
                     "a TMA-owned score link. Manual reconciliation is required."
                 )
-            if attempt.score_id in seen_scores:
+            if attempt.score_id in score_ids:
                 raise ConflictException("Duplicate TMA score ownership detected.")
-            seen_scores.add(attempt.score_id)
+            score_ids.add(attempt.score_id)
+        score_rows = (
+            (
+                await db.execute(
+                    select(StudentAssessmentScore, StudentSubjectResult)
+                    .join(
+                        StudentSubjectResult,
+                        and_(
+                            StudentSubjectResult.id
+                            == StudentAssessmentScore.student_subject_result_id,
+                            StudentSubjectResult.tenant_id == tenant_id,
+                        ),
+                    )
+                    .where(
+                        StudentAssessmentScore.tenant_id == tenant_id,
+                        StudentAssessmentScore.id.in_(score_ids),
+                        StudentAssessmentScore.assessment_component_id
+                        == assignment.assessment_component_id,
+                        StudentSubjectResult.academic_session_id == assignment.academic_session_id,
+                        StudentSubjectResult.academic_term_id == assignment.academic_term_id,
+                        StudentSubjectResult.curriculum_subject_id
+                        == assignment.curriculum_subject_id,
+                    )
+                    .order_by(StudentAssessmentScore.id)
+                    .with_for_update()
+                )
+            ).all()
+            if score_ids
+            else []
+        )
+        scores_by_id = {score.id: (score, result) for score, result in score_rows}
+        to_reverse = []
+        for attempt, participant in pending_attempts:
             row = scores_by_id.get(attempt.score_id)
             if row is None or row[1].student_id != participant.student_id:
                 raise ConflictException("TMA-owned academic score is missing or was moved.")
@@ -333,19 +350,38 @@ class TMACancellationService:
         complete_results = []
         for result in results.values():
             components = components_by_result.get(result.id, [])
-            result.total_score = sum((row.score for _, row in components if row is not None), Decimal("0"))
-            if components and all(component_is_complete(component, row) for component, row in components):
+            result.total_score = sum(
+                (row.score for _, row in components if row is not None), Decimal("0")
+            )
+            if components and all(
+                component_is_complete(component, row) for component, row in components
+            ):
                 complete_results.append(result)
             else:
                 result.grade = result.remark = result.grading_scale_id = None
         if complete_results:
-            scales = (await db.execute(select(GradingScale).where(
-                GradingScale.tenant_id == tenant_id, GradingScale.is_active.is_(True),
-            ))).scalars().all()
+            scales = (
+                (
+                    await db.execute(
+                        select(GradingScale).where(
+                            GradingScale.tenant_id == tenant_id,
+                            GradingScale.is_active.is_(True),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
             for result in complete_results:
-                matches = [scale for scale in scales if scale.min_score <= result.total_score <= scale.max_score]
+                matches = [
+                    scale
+                    for scale in scales
+                    if scale.min_score <= result.total_score <= scale.max_score
+                ]
                 if len(matches) > 1:
-                    raise ConflictException("Overlapping grading scales require academic reconciliation.")
+                    raise ConflictException(
+                        "Overlapping grading scales require academic reconciliation."
+                    )
                 scale = matches[0] if matches else None
                 result.grade = scale.grade if scale else None
                 result.remark = scale.remark if scale else None

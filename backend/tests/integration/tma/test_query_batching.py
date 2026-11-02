@@ -214,3 +214,42 @@ async def test_cbt_ai_expiry_locks_buckets_once_and_preserves_balances(
         .all()
     )
     assert all(r.status == AICreditReservationStatus.EXPIRED for r in rows)
+
+
+@pytest.mark.asyncio
+async def test_cancellation_select_count_is_constant_as_students_grow(
+    tma_world, test_engine, monkeypatch
+):
+    from app.modules.tma.cancellation_service import TMACancellationService
+    from app.modules.tma.deadline_zero_service import TMADeadlineZeroService
+    from .test_production_blockers import due
+
+    w = tma_world
+    monkeypatch.setattr(TMACancellationService, "_enqueue", AsyncMock())
+    counts = []
+    for index, size in enumerate((2, 10)):
+        for _ in range(size - (2 if index else 0)):
+            await w.student()
+        component = await w.add(
+            AssessmentComponent(
+                tenant_id=w.tenant.id,
+                assessment_scheme_id=w.scheme.id,
+                name=f"Cancellation CA {index}",
+                position=index + 2,
+                maximum_score=Decimal("1"),
+                is_examinable=False,
+            )
+        )
+        item, _ = await w.assignment(component_override=component)
+        await due(w, item)
+        await TMADeadlineZeroService.process_pending(w.db, tenant_ids={w.tenant.id})
+        run = await TMACancellationService.cancel(
+            w.db, actor=w.admin, assignment_id=item.id, reason="batch test"
+        )
+        with select_queries(test_engine) as queries:
+            response = await TMACancellationService.process(
+                w.db, tenant_id=w.tenant.id, run_id=run.id
+            )
+        assert response["reversed_scores"] == size
+        counts.append(len(queries))
+    assert counts[1] <= counts[0] + 1
