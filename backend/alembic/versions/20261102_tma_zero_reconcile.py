@@ -28,8 +28,12 @@ def upgrade() -> None:
         sa.Column("resolution", sa.String(length=32), nullable=True),
         sa.Column("resolution_note", sa.Text(), nullable=True),
         sa.Column("resolved_by_actor_id", UUID(as_uuid=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["tenant_id"], ["public.tenants.id"]),
         sa.ForeignKeyConstraint(
             ["tenant_id", "assignment_id"],
@@ -38,14 +42,18 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "assignment_id", "student_id",
+            "tenant_id",
+            "assignment_id",
+            "student_id",
             name="uq_tma_zero_failure_tenant_assignment_student",
         ),
         schema="public",
     )
     op.create_index(
-        "ix_tma_zero_failure_pending", "tma_zero_grading_failures",
-        ["tenant_id", "assignment_id", "resolved_at"], schema="public",
+        "ix_tma_zero_failure_pending",
+        "tma_zero_grading_failures",
+        ["tenant_id", "assignment_id", "resolved_at"],
+        schema="public",
     )
 
 
