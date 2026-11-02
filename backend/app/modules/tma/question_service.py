@@ -98,6 +98,28 @@ class TMAQuestionService:
             payload.image_asset_id,
             payload.options,
         )
+        return await TMAQuestionService._persist_question(
+            db,
+            actor=actor,
+            assignment=assignment,
+            revision=revision,
+            payload=payload,
+            next_position=next_position,
+            commit=commit,
+        )
+
+    @staticmethod
+    async def _persist_question(
+        db: AsyncSession,
+        *,
+        actor: TMAAuthor,
+        assignment,
+        revision,
+        payload: TMAQuestionCreate,
+        next_position: int,
+        commit: bool,
+    ) -> TMAQuestion:
+        """Persist a validated question while the caller holds its draft lock."""
         question = TMAQuestion(
             tenant_id=actor.tenant_id,
             assignment_id=assignment.id,

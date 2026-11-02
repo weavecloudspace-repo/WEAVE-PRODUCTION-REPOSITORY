@@ -50,35 +50,74 @@ async def get_authoring_configuration(db: AsyncSession, actor: TMAAuthor) -> dic
         ]
     scopes, classes, lead_teachers = [], [], []
     if term:
-        rows = (await db.execute(
-            select(AcademicLevel, CurriculumSubject, Subject)
-            .join(Curriculum, (Curriculum.academic_level_id == AcademicLevel.id)
-                  & (Curriculum.tenant_id == actor.tenant_id))
-            .join(CurriculumSubject, (CurriculumSubject.curriculum_id == Curriculum.id)
-                  & (CurriculumSubject.tenant_id == actor.tenant_id))
-            .join(Subject, (Subject.id == CurriculumSubject.subject_id)
-                  & (Subject.tenant_id == actor.tenant_id))
-            .where(AcademicLevel.tenant_id == actor.tenant_id, CurriculumSubject.is_active.is_(True))
-            .order_by(AcademicLevel.position, Subject.name)
-        )).all()
-        classrooms = list((await db.execute(
-            select(ClassRoom).options(selectinload(ClassRoom.academic_level), selectinload(ClassRoom.arm_label_ref))
-            .where(ClassRoom.tenant_id == actor.tenant_id,
-                   ClassRoom.academic_level_id.in_({level.id for level, _, _ in rows}),
-                   ClassRoom.is_active.is_(True), ClassRoom.archived_at.is_(None))
-        )).scalars().all()) if rows else []
+        rows = (
+            await db.execute(
+                select(AcademicLevel, CurriculumSubject, Subject)
+                .join(
+                    Curriculum,
+                    (Curriculum.academic_level_id == AcademicLevel.id)
+                    & (Curriculum.tenant_id == actor.tenant_id),
+                )
+                .join(
+                    CurriculumSubject,
+                    (CurriculumSubject.curriculum_id == Curriculum.id)
+                    & (CurriculumSubject.tenant_id == actor.tenant_id),
+                )
+                .join(
+                    Subject,
+                    (Subject.id == CurriculumSubject.subject_id)
+                    & (Subject.tenant_id == actor.tenant_id),
+                )
+                .where(
+                    AcademicLevel.tenant_id == actor.tenant_id,
+                    CurriculumSubject.is_active.is_(True),
+                )
+                .order_by(AcademicLevel.position, Subject.name)
+            )
+        ).all()
+        classrooms = (
+            list(
+                (
+                    await db.execute(
+                        select(ClassRoom)
+                        .options(
+                            selectinload(ClassRoom.academic_level),
+                            selectinload(ClassRoom.arm_label_ref),
+                        )
+                        .where(
+                            ClassRoom.tenant_id == actor.tenant_id,
+                            ClassRoom.academic_level_id.in_({level.id for level, _, _ in rows}),
+                            ClassRoom.is_active.is_(True),
+                            ClassRoom.archived_at.is_(None),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if rows
+            else []
+        )
         resolved = await CurriculumResolutionService.resolve_classes_subjects(
-            db, tenant_id=actor.tenant_id, class_ids={room.id for room in classrooms},
-            academic_term_id=term.id, skip_unresolvable=True,
+            db,
+            tenant_id=actor.tenant_id,
+            class_ids={room.id for room in classrooms},
+            academic_term_id=term.id,
+            skip_unresolvable=True,
         )
         owners = await StudentAcademicRepository.get_teacher_assignments_for_subjects_on_date(
-            db, actor.tenant_id, {room.id for room in classrooms},
-            {subject.id for _, subject, _ in rows}, date.today(),
+            db,
+            actor.tenant_id,
+            {room.id for room in classrooms},
+            {subject.id for _, subject, _ in rows},
+            date.today(),
         )
         eligible_by_scope = {}
         for room in classrooms:
             for subject in resolved.get(room.id, []):
-                eligible_by_scope.setdefault((room.academic_level_id, subject.curriculum_subject_id), set()).add(room.id)
+                eligible_by_scope.setdefault(
+                    (room.academic_level_id, subject.curriculum_subject_id), set()
+                ).add(room.id)
         teachers_by_scope = {}
         rooms_by_id = {room.id: room for room in classrooms}
         for owner in owners:
@@ -95,30 +134,64 @@ async def get_authoring_configuration(db: AsyncSession, actor: TMAAuthor) -> dic
                 or actor.id not in teachers_by_scope.get(key, set())
             ):
                 continue
-            scopes.append({"academic_level_id": level.id, "curriculum_subject_id": subject.id,
-                           "level_name": level.name, "subject_name": pool.name})
+            scopes.append(
+                {
+                    "academic_level_id": level.id,
+                    "curriculum_subject_id": subject.id,
+                    "level_name": level.name,
+                    "subject_name": pool.name,
+                }
+            )
         visible_levels = {scope["academic_level_id"] for scope in scopes}
-        classes = [{"id": room.id, "name": room.display_name, "academic_level_id": room.academic_level_id}
-                   for room in classrooms if room.academic_level_id in visible_levels]
+        classes = [
+            {"id": room.id, "name": room.display_name, "academic_level_id": room.academic_level_id}
+            for room in classrooms
+            if room.academic_level_id in visible_levels
+        ]
         if isinstance(actor, TenantAdmin):
             teacher_ids = set().union(*teachers_by_scope.values()) if teachers_by_scope else set()
-            memberships = (await db.execute(
-                select(TeacherMembership, TeacherAccount)
-                .join(TeacherAccount, TeacherAccount.id == TeacherMembership.teacher_account_id)
-                .where(TeacherMembership.tenant_id == actor.tenant_id,
-                       TeacherMembership.id.in_(teacher_ids),
-                       TeacherMembership.status == TeacherMembershipStatus.ACTIVE)
-            )).all() if teacher_ids else []
-            teachers = {membership.id: (
-                " ".join(part for part in (account.first_name, account.last_name) if part).strip() or account.email
-            ) for membership, account in memberships}
+            memberships = (
+                (
+                    await db.execute(
+                        select(TeacherMembership, TeacherAccount)
+                        .join(
+                            TeacherAccount,
+                            TeacherAccount.id == TeacherMembership.teacher_account_id,
+                        )
+                        .where(
+                            TeacherMembership.tenant_id == actor.tenant_id,
+                            TeacherMembership.id.in_(teacher_ids),
+                            TeacherMembership.status == TeacherMembershipStatus.ACTIVE,
+                        )
+                    )
+                ).all()
+                if teacher_ids
+                else []
+            )
+            teachers = {
+                membership.id: (
+                    " ".join(
+                        part for part in (account.first_name, account.last_name) if part
+                    ).strip()
+                    or account.email
+                )
+                for membership, account in memberships
+            }
             for scope in scopes:
                 key = (scope["academic_level_id"], scope["curriculum_subject_id"])
-                for teacher_id in sorted(teachers_by_scope.get(key, set()), key=lambda value: (teachers.get(value, "").casefold(), str(value))):
+                for teacher_id in sorted(
+                    teachers_by_scope.get(key, set()),
+                    key=lambda value: (teachers.get(value, "").casefold(), str(value)),
+                ):
                     if teacher_id in teachers:
-                        lead_teachers.append({"teacher_membership_id": teacher_id,
-                            "academic_level_id": key[0], "curriculum_subject_id": key[1],
-                            "display_name": teachers[teacher_id]})
+                        lead_teachers.append(
+                            {
+                                "teacher_membership_id": teacher_id,
+                                "academic_level_id": key[0],
+                                "curriculum_subject_id": key[1],
+                                "display_name": teachers[teacher_id],
+                            }
+                        )
     return {
         "academic_session_id": term.academic_session_id if term else None,
         "academic_term_id": term.id if term else None,

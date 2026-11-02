@@ -128,16 +128,31 @@ class TMAAttemptService:
         revision_by_assignment = await TMARevisionRepository.get_many_by_number(
             db, student.tenant_id, {(row.id, row.current_revision_number) for row in rows}
         )
-        component_by_id = await AssessmentRepository.get_components_by_ids(
-            db, student.tenant_id, {row.assessment_component_id for row in rows}
-        ) if scheme else {}
+        component_by_id = (
+            await AssessmentRepository.get_components_by_ids(
+                db, student.tenant_id, {row.assessment_component_id for row in rows}
+            )
+            if scheme
+            else {}
+        )
         current = datetime.now(timezone.utc)
-        open_subject_ids = {row.curriculum_subject_id for row in rows
-                            if row.status == TMAAssignmentStatus.ACTIVE
-                            and (row.closes_at is None or row.closes_at > current)}
-        owners = await StudentAcademicRepository.get_teacher_assignments_for_subjects_on_date(
-            db, student.tenant_id, {enrollment.class_id}, open_subject_ids, date.today(),
-        ) if open_subject_ids else []
+        open_subject_ids = {
+            row.curriculum_subject_id
+            for row in rows
+            if row.status == TMAAssignmentStatus.ACTIVE
+            and (row.closes_at is None or row.closes_at > current)
+        }
+        owners = (
+            await StudentAcademicRepository.get_teacher_assignments_for_subjects_on_date(
+                db,
+                student.tenant_id,
+                {enrollment.class_id},
+                open_subject_ids,
+                date.today(),
+            )
+            if open_subject_ids
+            else []
+        )
         teacher_ready = {owner.curriculum_subject_id for owner in owners}
         items = []
         for assignment in rows:

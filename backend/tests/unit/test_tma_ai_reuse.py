@@ -124,8 +124,8 @@ async def test_question_import_saves_into_existing_tma_question_service(monkeypa
     )
     monkeypatch.setattr(
         mod.TMAQuestionRepository,
-        "list_for_revision_with_options",
-        AsyncMock(return_value=[(SimpleNamespace(position=3), [])]),
+        "next_position",
+        AsyncMock(return_value=4),
     )
     save = AsyncMock(return_value=SimpleNamespace(id=_id()))
     monkeypatch.setattr(mod.TMAQuestionService, "add_question", save)
@@ -176,8 +176,8 @@ async def test_import_persists_generated_image_via_existing_tma_r2_service(monke
     monkeypatch.setattr(mod.TMAMediaService, "upload_image", upload)
     monkeypatch.setattr(
         mod.TMAQuestionRepository,
-        "list_for_revision_with_options",
-        AsyncMock(return_value=[]),
+        "next_position",
+        AsyncMock(return_value=1),
     )
     save = AsyncMock(return_value=SimpleNamespace(id=_id()))
     monkeypatch.setattr(mod.TMAQuestionService, "add_question", save)

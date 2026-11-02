@@ -373,6 +373,7 @@ async def test_verified_tma_score_is_reversed_without_touching_other_components(
     result = SimpleNamespace(
         id=uid(),
         status=AcademicResultStatus.DRAFT,
+        student_id=student_id,
         total_score=Decimal("24.00"),
         grade="A",
         remark="Good",
@@ -382,7 +383,7 @@ async def test_verified_tma_score_is_reversed_without_touching_other_components(
     db.execute.side_effect = [
         SimpleNamespace(scalar_one_or_none=lambda: run),
         SimpleNamespace(all=lambda: [(attempt, participant)]),
-        SimpleNamespace(one_or_none=lambda: (score, result)),
+        SimpleNamespace(all=lambda: [(score, result)]),
     ]
     monkeypatch.setattr(
         mod.TMAAssignmentRepository,
@@ -398,12 +399,12 @@ async def test_verified_tma_score_is_reversed_without_touching_other_components(
     other_score = SimpleNamespace(score=Decimal("9.00"))
     monkeypatch.setattr(
         mod.StudentAcademicRepository,
-        "list_result_component_scores",
+        "list_result_component_scores_batch",
         AsyncMock(
-            return_value=[
+            return_value={result.id: [
                 (SimpleNamespace(), None),
                 (SimpleNamespace(), other_score),
-            ]
+            ]}
         ),
     )
     response = await TMACancellationService.process(
@@ -450,6 +451,7 @@ async def test_reversal_never_deletes_modified_or_submitted_academic_result(monk
         score_reversed_at=None,
     )
     score = SimpleNamespace(
+        id=score_id,
         score=Decimal("14.00"),
         source_exam_id=None,
         cbt_score=None,
@@ -457,12 +459,13 @@ async def test_reversal_never_deletes_modified_or_submitted_academic_result(monk
     )
     result = SimpleNamespace(
         status=AcademicResultStatus.SUBMITTED,
+        student_id=student_id,
     )
     db = AsyncMock()
     db.execute.side_effect = [
         SimpleNamespace(scalar_one_or_none=lambda: run),
         SimpleNamespace(all=lambda: [(attempt, SimpleNamespace(student_id=student_id))]),
-        SimpleNamespace(one_or_none=lambda: (score, result)),
+        SimpleNamespace(all=lambda: [(score, result)]),
     ]
     monkeypatch.setattr(
         mod.TMAAssignmentRepository,

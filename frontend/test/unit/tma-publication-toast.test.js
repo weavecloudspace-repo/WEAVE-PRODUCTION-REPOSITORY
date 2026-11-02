@@ -41,7 +41,9 @@ test("publication blockers use one dismissible global error toast and prevent co
   assert.equal(h.toasts[0][1].id, "tma-publish-assignment-1");
   const message = h.toasts[0][0];
   assert.equal(message.props.children[1].length, 2);
-  assert.equal(message.props.children[1][0].props.children[1], issues[0]);
+  assert.equal(message.props.children[1][0].props.children.at(-1), issues[0]);
+  assert.equal(message.props.children[1][0].props.children[0], 1);
+  assert.doesNotMatch(source, /\uFFFD/);
   assert.deepEqual(h.dialogs, []);
   assert.doesNotMatch(source, /Publication checklist|setReadiness/);
 });

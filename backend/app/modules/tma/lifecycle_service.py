@@ -126,10 +126,12 @@ class TMALifecycleService:
         classrooms = list(
             (
                 await db.execute(
-                    select(ClassRoom).options(
+                    select(ClassRoom)
+                    .options(
                         selectinload(ClassRoom.academic_level),
                         selectinload(ClassRoom.arm_label_ref),
-                    ).where(
+                    )
+                    .where(
                         ClassRoom.tenant_id == assignment.tenant_id,
                         ClassRoom.academic_level_id == assignment.academic_level_id,
                         ClassRoom.is_active.is_(True),
@@ -170,7 +172,9 @@ class TMALifecycleService:
                         date.today(),
                     )
                 )
-                room_names = {room.id: getattr(room, "display_name", "This classroom") for room in classrooms}
+                room_names = {
+                    room.id: getattr(room, "display_name", "This classroom") for room in classrooms
+                }
                 for room_id in sorted(eligible.difference(teachers), key=str):
                     errors.append(
                         f"{room_names[room_id]} has no assigned subject teacher. "

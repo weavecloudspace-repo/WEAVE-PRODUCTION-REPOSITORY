@@ -54,7 +54,7 @@ class TMAAIService:
         payload: TMAAIBulkImportRequest,
     ) -> int:
         # The assignment lock serializes every import, including response-loss retries.
-        assignment, _ = await TMAQuestionService._draft_context(
+        assignment, revision = await TMAQuestionService._draft_context(
             db, actor=actor, assignment_id=assignment_id
         )
         if assignment.current_revision_number != payload.revision_number:
@@ -82,10 +82,11 @@ class TMAAIService:
         for question in payload.questions:
             TMAAIService._validate_preview(question)
             TMAAIService._validated_images(question)
+        next_position = await TMAQuestionRepository.next_position(db, actor.tenant_id, revision.id)
         uploaded_keys: list[str] = []
         committing = False
         try:
-            for question in payload.questions:
+            for index, question in enumerate(payload.questions):
                 await TMAAIService.import_question(
                     db,
                     actor=actor,
@@ -93,6 +94,7 @@ class TMAAIService:
                     question=question,
                     commit=False,
                     uploaded_keys=uploaded_keys,
+                    _batch_context=(assignment, revision, next_position + index),
                 )
             await AIIdempotencyRepository.create(
                 db,
@@ -259,17 +261,23 @@ class TMAAIService:
         question: AIQuestionResponse,
         commit: bool = True,
         uploaded_keys: list[str] | None = None,
+        _batch_context: tuple | None = None,
     ):
         """Review/accept one generated question; persist its images in R2.
 
         A single-question import avoids partial question-bank batch commits.
         """
         TMAAIService._validate_preview(question)
-        assignment, revision, _, _ = await TMAAIService._context(
-            db,
-            actor=actor,
-            assignment_id=assignment_id,
-        )
+        if _batch_context is None:
+            assignment, revision, _, _ = await TMAAIService._context(
+                db,
+                actor=actor,
+                assignment_id=assignment_id,
+            )
+        else:
+            # import_questions already authorized and locked this draft for the
+            # entire transaction. Reuse that scope instead of reloading it per row.
+            assignment, revision, _ = _batch_context
 
         # Validate every image before writing anything to storage.
         validated = TMAAIService._validated_images(question)
@@ -310,12 +318,11 @@ class TMAAIService:
                 )
                 for i, option in enumerate(question.options, start=1)
             ]
-            existing = await TMAQuestionRepository.list_for_revision_with_options(
-                db,
-                actor.tenant_id,
-                revision.id,
+            next_position = (
+                _batch_context[2]
+                if _batch_context is not None
+                else await TMAQuestionRepository.next_position(db, actor.tenant_id, revision.id)
             )
-            next_position = max((item.position for item, _ in existing), default=0) + 1
             payload = TMAQuestionCreate(
                 position=next_position,
                 question_text="\n\n".join(
@@ -327,6 +334,18 @@ class TMAAIService:
                 image_asset_id=question_image,
                 options=options,
             )
+            if _batch_context is not None:
+                # Every referenced image was just uploaded for this locked
+                # assignment above; there are no client-supplied asset IDs here.
+                return await TMAQuestionService._persist_question(
+                    db,
+                    actor=actor,
+                    assignment=assignment,
+                    revision=revision,
+                    payload=payload,
+                    next_position=next_position,
+                    commit=False,
+                )
             return await TMAQuestionService.add_question(
                 db,
                 actor=actor,

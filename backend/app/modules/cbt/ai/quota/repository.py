@@ -268,11 +268,20 @@ class AIWeeklyQuotaRepository:
         if not keys:
             return []
         rows = await db.execute(
-            select(AIWeeklyQuota).where(tuple_(
-                AIWeeklyQuota.tenant_id, AIWeeklyQuota.quota_account_id, AIWeeklyQuota.week_start,
-            ).in_(keys)).order_by(
-                AIWeeklyQuota.tenant_id, AIWeeklyQuota.quota_account_id, AIWeeklyQuota.week_start,
-            ).with_for_update()
+            select(AIWeeklyQuota)
+            .where(
+                tuple_(
+                    AIWeeklyQuota.tenant_id,
+                    AIWeeklyQuota.quota_account_id,
+                    AIWeeklyQuota.week_start,
+                ).in_(keys)
+            )
+            .order_by(
+                AIWeeklyQuota.tenant_id,
+                AIWeeklyQuota.quota_account_id,
+                AIWeeklyQuota.week_start,
+            )
+            .with_for_update()
         )
         return list(rows.scalars().all())
 
@@ -338,11 +347,18 @@ class AIExtraCreditBalanceRepository:
         if not keys:
             return []
         rows = await db.execute(
-            select(AIExtraCreditBalance).where(tuple_(
-                AIExtraCreditBalance.tenant_id, AIExtraCreditBalance.quota_account_id,
-            ).in_(keys)).order_by(
-                AIExtraCreditBalance.tenant_id, AIExtraCreditBalance.quota_account_id,
-            ).with_for_update()
+            select(AIExtraCreditBalance)
+            .where(
+                tuple_(
+                    AIExtraCreditBalance.tenant_id,
+                    AIExtraCreditBalance.quota_account_id,
+                ).in_(keys)
+            )
+            .order_by(
+                AIExtraCreditBalance.tenant_id,
+                AIExtraCreditBalance.quota_account_id,
+            )
+            .with_for_update()
         )
         return list(rows.scalars().all())
 
@@ -426,12 +442,18 @@ class AICreditReservationRepository:
         *,
         as_of: datetime,
         limit: int = 100,
+        tenant_ids: set[uuid.UUID] | None = None,
     ) -> list[AICreditReservation]:
         """Lock a batch of stale reservations without blocking other workers."""
 
         result = await db.execute(
             select(AICreditReservation)
             .where(
+                *(
+                    [AICreditReservation.tenant_id.in_(tenant_ids)]
+                    if tenant_ids is not None
+                    else []
+                ),
                 AICreditReservation.status == AICreditReservationStatus.PENDING,
                 AICreditReservation.expires_at <= as_of,
             )

@@ -78,8 +78,11 @@ class TMACancellationReconciliationService:
                 )
                 .where(
                     TMAAttempt.tenant_id == actor.tenant_id,
-                    *([TMAParticipant.class_id.in_(authorized_class_ids)]
-                      if authorized_class_ids is not None else []),
+                    *(
+                        [TMAParticipant.class_id.in_(authorized_class_ids)]
+                        if authorized_class_ids is not None
+                        else []
+                    ),
                     TMAAttempt.revision_id == revision.id,
                     TMAAttempt.status == TMAAttemptStatus.SUBMITTED,
                     TMAAttempt.score_reversed_at.is_(None),

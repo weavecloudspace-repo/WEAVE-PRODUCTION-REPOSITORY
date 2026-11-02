@@ -20,6 +20,7 @@ from app.core.exceptions import ConflictException, NotFoundException
 from app.modules.student_academics.hybrid_scores import component_is_complete
 from app.modules.student_academics.models import (
     AcademicResultStatus,
+    GradingScale,
     StudentAssessmentScore,
     StudentSubjectResult,
 )
@@ -272,6 +273,23 @@ class TMACancellationService:
                 .order_by(TMAAttempt.id)
             )
         ).all()
+        score_ids = {attempt.score_id for attempt, _ in attempts
+                     if attempt.score_reversed_at is None and attempt.score_id is not None}
+        score_rows = (await db.execute(
+            select(StudentAssessmentScore, StudentSubjectResult)
+            .join(StudentSubjectResult, and_(
+                StudentSubjectResult.id == StudentAssessmentScore.student_subject_result_id,
+                StudentSubjectResult.tenant_id == tenant_id,
+            )).where(
+                StudentAssessmentScore.tenant_id == tenant_id,
+                StudentAssessmentScore.id.in_(score_ids),
+                StudentAssessmentScore.assessment_component_id == assignment.assessment_component_id,
+                StudentSubjectResult.academic_session_id == assignment.academic_session_id,
+                StudentSubjectResult.academic_term_id == assignment.academic_term_id,
+                StudentSubjectResult.curriculum_subject_id == assignment.curriculum_subject_id,
+            ).order_by(StudentAssessmentScore.id).with_for_update()
+        )).all() if score_ids else []
+        scores_by_id = {score.id: (score, result) for score, result in score_rows}
         to_reverse = []
         seen_scores: set[uuid.UUID] = set()
         for attempt, participant in attempts:
@@ -285,32 +303,8 @@ class TMACancellationService:
             if attempt.score_id in seen_scores:
                 raise ConflictException("Duplicate TMA score ownership detected.")
             seen_scores.add(attempt.score_id)
-            row = (
-                await db.execute(
-                    select(StudentAssessmentScore, StudentSubjectResult)
-                    .join(
-                        StudentSubjectResult,
-                        and_(
-                            StudentSubjectResult.id
-                            == StudentAssessmentScore.student_subject_result_id,
-                            StudentSubjectResult.tenant_id == tenant_id,
-                        ),
-                    )
-                    .where(
-                        StudentAssessmentScore.tenant_id == tenant_id,
-                        StudentAssessmentScore.id == attempt.score_id,
-                        StudentAssessmentScore.assessment_component_id
-                        == assignment.assessment_component_id,
-                        StudentSubjectResult.student_id == participant.student_id,
-                        StudentSubjectResult.academic_session_id == assignment.academic_session_id,
-                        StudentSubjectResult.academic_term_id == assignment.academic_term_id,
-                        StudentSubjectResult.curriculum_subject_id
-                        == assignment.curriculum_subject_id,
-                    )
-                    .with_for_update()
-                )
-            ).one_or_none()
-            if row is None:
+            row = scores_by_id.get(attempt.score_id)
+            if row is None or row[1].student_id != participant.student_id:
                 raise ConflictException("TMA-owned academic score is missing or was moved.")
             score, result = row
             if (
@@ -327,34 +321,35 @@ class TMACancellationService:
             to_reverse.append((attempt, score, result))
 
         now = datetime.now(timezone.utc)
+        results = {}
         for attempt, score, result in to_reverse:
             await db.delete(score)
-            await db.flush()
-            components = await StudentAcademicRepository.list_result_component_scores(
-                db,
-                tenant_id,
-                result,
-            )
-            result.total_score = sum(
-                (row.score for _, row in components if row is not None), Decimal("0")
-            )
-            if components and all(
-                component_is_complete(component, row) for component, row in components
-            ):
-                scale = await StudentAcademicRepository.find_grade_for_score(
-                    db,
-                    tenant_id,
-                    result.total_score,
-                )
+            attempt.score_reversed_at = now
+            results[result.id] = result
+        await db.flush()
+        components_by_result = await StudentAcademicRepository.list_result_component_scores_batch(
+            db, tenant_id, list(results.values())
+        )
+        complete_results = []
+        for result in results.values():
+            components = components_by_result.get(result.id, [])
+            result.total_score = sum((row.score for _, row in components if row is not None), Decimal("0"))
+            if components and all(component_is_complete(component, row) for component, row in components):
+                complete_results.append(result)
+            else:
+                result.grade = result.remark = result.grading_scale_id = None
+        if complete_results:
+            scales = (await db.execute(select(GradingScale).where(
+                GradingScale.tenant_id == tenant_id, GradingScale.is_active.is_(True),
+            ))).scalars().all()
+            for result in complete_results:
+                matches = [scale for scale in scales if scale.min_score <= result.total_score <= scale.max_score]
+                if len(matches) > 1:
+                    raise ConflictException("Overlapping grading scales require academic reconciliation.")
+                scale = matches[0] if matches else None
                 result.grade = scale.grade if scale else None
                 result.remark = scale.remark if scale else None
                 result.grading_scale_id = scale.id if scale else None
-            else:
-                result.grade = None
-                result.remark = None
-                result.grading_scale_id = None
-            attempt.score_reversed_at = now
-            await db.flush()
 
         revision.invalidated_at = now
         revision.invalidated_by_actor_type = run.requested_by_actor_type

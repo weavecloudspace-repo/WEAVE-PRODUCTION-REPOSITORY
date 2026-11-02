@@ -53,11 +53,11 @@ class TMAAssignmentRepository:
             TMAAssignment.id == assignment_id,
         )
         if lock:
-            query = query.with_for_update()
+            query = query.with_for_update().execution_options(populate_existing=True)
         elif shared_lock:
             # PostgreSQL FOR SHARE allows independent student writes while
             # preventing staff from changing assignment state mid-submit.
-            query = query.with_for_update(read=True)
+            query = query.with_for_update(read=True).execution_options(populate_existing=True)
         return (await db.execute(query)).scalar_one_or_none()
 
     @staticmethod
@@ -215,14 +215,27 @@ class TMARevisionRepository:
 
     @staticmethod
     async def get_many_by_number(
-        db: AsyncSession, tenant_id: uuid.UUID, scopes: set[tuple[uuid.UUID, int]],
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        scopes: set[tuple[uuid.UUID, int]],
     ) -> dict[uuid.UUID, TMAAssignmentRevision]:
         if not scopes:
             return {}
-        rows = (await db.execute(select(TMAAssignmentRevision).where(
-            TMAAssignmentRevision.tenant_id == tenant_id,
-            tuple_(TMAAssignmentRevision.assignment_id, TMAAssignmentRevision.revision_number).in_(scopes),
-        ))).scalars().all()
+        rows = (
+            (
+                await db.execute(
+                    select(TMAAssignmentRevision).where(
+                        TMAAssignmentRevision.tenant_id == tenant_id,
+                        tuple_(
+                            TMAAssignmentRevision.assignment_id,
+                            TMAAssignmentRevision.revision_number,
+                        ).in_(scopes),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
         return {row.assignment_id: row for row in rows}
 
     @staticmethod
@@ -258,6 +271,18 @@ class TMARevisionRepository:
 
 class TMAQuestionRepository:
     """Question and option persistence; authorization occurs in services."""
+
+    @staticmethod
+    async def next_position(db: AsyncSession, tenant_id: uuid.UUID, revision_id: uuid.UUID) -> int:
+        maximum = (
+            await db.execute(
+                select(func.max(TMAQuestion.position)).where(
+                    TMAQuestion.tenant_id == tenant_id,
+                    TMAQuestion.revision_id == revision_id,
+                )
+            )
+        ).scalar_one()
+        return int(maximum or 0) + 1
 
     @staticmethod
     async def add_question(db: AsyncSession, question: TMAQuestion) -> TMAQuestion:
@@ -414,16 +439,26 @@ class TMAMediaAssetRepository:
 
     @staticmethod
     async def get_many_for_assignment(
-        db: AsyncSession, tenant_id: uuid.UUID, assignment_id: uuid.UUID,
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        assignment_id: uuid.UUID,
         asset_ids: set[uuid.UUID],
     ) -> set[uuid.UUID]:
         if not asset_ids:
             return set()
-        return set((await db.execute(select(TMAMediaAsset.id).where(
-            TMAMediaAsset.tenant_id == tenant_id,
-            TMAMediaAsset.assignment_id == assignment_id,
-            TMAMediaAsset.id.in_(asset_ids),
-        ))).scalars().all())
+        return set(
+            (
+                await db.execute(
+                    select(TMAMediaAsset.id).where(
+                        TMAMediaAsset.tenant_id == tenant_id,
+                        TMAMediaAsset.assignment_id == assignment_id,
+                        TMAMediaAsset.id.in_(asset_ids),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
 
     @staticmethod
     async def get_by_object_key(
@@ -649,7 +684,9 @@ class TMAAttemptRepository:
             TMAAttempt.id == attempt_id,
         )
         if lock:
-            query = query.with_for_update()
+            # The attempt may already be in this request's identity map from
+            # its initial ownership lookup. Refresh after waiting on the lock.
+            query = query.with_for_update().execution_options(populate_existing=True)
         return (await db.execute(query)).scalar_one_or_none()
 
     @staticmethod
@@ -665,7 +702,9 @@ class TMAAttemptRepository:
             TMAAttempt.participant_id == participant_id,
         )
         if lock:
-            query = query.with_for_update()
+            # The attempt may already be in this request's identity map from
+            # its initial ownership lookup. Refresh after waiting on the lock.
+            query = query.with_for_update().execution_options(populate_existing=True)
         return (await db.execute(query)).scalar_one_or_none()
 
     @staticmethod

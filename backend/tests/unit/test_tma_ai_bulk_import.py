@@ -28,12 +28,13 @@ def context(monkeypatch):
         ]
         * 2,
     )
-    context = AsyncMock(return_value=(assignment, SimpleNamespace()))
+    context = AsyncMock(return_value=(assignment, SimpleNamespace(id=uuid.uuid4())))
     lookup = AsyncMock(return_value=None)
     create = AsyncMock()
     save = AsyncMock()
     storage = SimpleNamespace(delete_object=AsyncMock())
     monkeypatch.setattr(mod.TMAQuestionService, "_draft_context", context)
+    monkeypatch.setattr(mod.TMAQuestionRepository, "next_position", AsyncMock(return_value=1))
     monkeypatch.setattr(mod.AIIdempotencyRepository, "get_by_scope", lookup)
     monkeypatch.setattr(mod.AIIdempotencyRepository, "create", create)
     monkeypatch.setattr(mod.TMAAIService, "import_question", save)

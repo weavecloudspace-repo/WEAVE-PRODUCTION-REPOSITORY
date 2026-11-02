@@ -4,6 +4,7 @@ Existing past deadlines cannot be reconstructed: tracking starts at migration ti
 Deploy with writers stopped; resume only after upgrade completes. Downgrade refuses
 if revision-specific failures would collide and preserves eligibility audit tables.
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
@@ -14,18 +15,37 @@ branch_labels = None
 depends_on = None
 
 TRACKED_TABLES = (
-    "students", "student_enrollments", "student_elective_selections", "classes",
-    "academic_levels", "curricula", "curriculum_subjects", "subjects",
-    "curriculum_subject_departments", "class_term_department_assignments",
-    "academic_level_departments", "departments", "academic_terms",
+    "students",
+    "student_enrollments",
+    "student_elective_selections",
+    "classes",
+    "academic_levels",
+    "curricula",
+    "curriculum_subjects",
+    "subjects",
+    "curriculum_subject_departments",
+    "class_term_department_assignments",
+    "academic_level_departments",
+    "departments",
+    "academic_terms",
 )
 
 
 def upgrade():
-    for column in ("zero_grading_requested_at", "zero_grading_completed_at",
-                   "eligibility_tracking_started_at", "eligibility_captured_at"):
-        op.add_column("tma_assignment_revisions", sa.Column(column, sa.DateTime(timezone=True)), schema="public")
-    op.add_column("tma_assignment_revisions", sa.Column("zero_grading_error", sa.Text()), schema="public")
+    for column in (
+        "zero_grading_requested_at",
+        "zero_grading_completed_at",
+        "eligibility_tracking_started_at",
+        "eligibility_captured_at",
+    ):
+        op.add_column(
+            "tma_assignment_revisions",
+            sa.Column(column, sa.DateTime(timezone=True)),
+            schema="public",
+        )
+    op.add_column(
+        "tma_assignment_revisions", sa.Column("zero_grading_error", sa.Text()), schema="public"
+    )
     op.execute("""
         UPDATE public.tma_assignment_revisions r
         SET eligibility_tracking_started_at = statement_timestamp(),
@@ -36,7 +56,9 @@ def upgrade():
         WHERE r.tenant_id = a.tenant_id AND r.assignment_id = a.id
           AND r.revision_number = a.current_revision_number
     """)
-    op.add_column("tma_zero_grading_failures", sa.Column("revision_number", sa.Integer()), schema="public")
+    op.add_column(
+        "tma_zero_grading_failures", sa.Column("revision_number", sa.Integer()), schema="public"
+    )
     # last_failed_at is the only trustworthy recorded association. Fail migration
     # rather than invent provenance when no revision existed at that instant.
     op.execute("""
@@ -48,13 +70,31 @@ def upgrade():
         )
     """)
     op.alter_column("tma_zero_grading_failures", "revision_number", nullable=False, schema="public")
-    op.create_foreign_key("fk_tma_zero_failure_revision", "tma_zero_grading_failures",
-                         "tma_assignment_revisions", ["tenant_id", "assignment_id", "revision_number"],
-                         ["tenant_id", "assignment_id", "revision_number"], source_schema="public", referent_schema="public")
-    op.drop_constraint("uq_tma_zero_failure_tenant_assignment_student", "tma_zero_grading_failures", schema="public")
-    op.create_unique_constraint("uq_tma_zero_failure_revision_student", "tma_zero_grading_failures",
-                                ["tenant_id", "assignment_id", "revision_number", "student_id"], schema="public")
-    op.add_column("tma_assignments", sa.Column("zero_grading_last_processed_at", sa.DateTime(timezone=True)), schema="public")
+    op.create_foreign_key(
+        "fk_tma_zero_failure_revision",
+        "tma_zero_grading_failures",
+        "tma_assignment_revisions",
+        ["tenant_id", "assignment_id", "revision_number"],
+        ["tenant_id", "assignment_id", "revision_number"],
+        source_schema="public",
+        referent_schema="public",
+    )
+    op.drop_constraint(
+        "uq_tma_zero_failure_tenant_assignment_student",
+        "tma_zero_grading_failures",
+        schema="public",
+    )
+    op.create_unique_constraint(
+        "uq_tma_zero_failure_revision_student",
+        "tma_zero_grading_failures",
+        ["tenant_id", "assignment_id", "revision_number", "student_id"],
+        schema="public",
+    )
+    op.add_column(
+        "tma_assignments",
+        sa.Column("zero_grading_last_processed_at", sa.DateTime(timezone=True)),
+        schema="public",
+    )
     op.create_table(
         "tma_deadline_eligibility",
         sa.Column("tenant_id", UUID(as_uuid=True), nullable=False),
@@ -64,18 +104,28 @@ def upgrade():
         sa.Column("class_id", UUID(as_uuid=True), nullable=False),
         sa.Column("subject_id", UUID(as_uuid=True), nullable=False),
         sa.PrimaryKeyConstraint("tenant_id", "revision_id", "student_id"),
-        sa.ForeignKeyConstraint(["tenant_id", "revision_id"],
-                                ["public.tma_assignment_revisions.tenant_id", "public.tma_assignment_revisions.id"]),
-        sa.ForeignKeyConstraint(["tenant_id", "student_enrollment_id", "student_id", "class_id"],
-                                ["public.student_enrollments.tenant_id", "public.student_enrollments.id",
-                                 "public.student_enrollments.student_id", "public.student_enrollments.class_id"]),
+        sa.ForeignKeyConstraint(
+            ["tenant_id", "revision_id"],
+            ["public.tma_assignment_revisions.tenant_id", "public.tma_assignment_revisions.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id", "student_enrollment_id", "student_id", "class_id"],
+            [
+                "public.student_enrollments.tenant_id",
+                "public.student_enrollments.id",
+                "public.student_enrollments.student_id",
+                "public.student_enrollments.class_id",
+            ],
+        ),
         schema="public",
     )
     op.execute(CAPTURE_SQL)
     op.execute(TRIGGER_SQL)
     for table in TRACKED_TABLES:
-        op.execute(f"CREATE TRIGGER tma_preserve_deadline BEFORE INSERT OR UPDATE OR DELETE ON public.{table} "
-                   "FOR EACH ROW EXECUTE FUNCTION public.tma_preserve_deadline()")
+        op.execute(
+            f"CREATE TRIGGER tma_preserve_deadline BEFORE INSERT OR UPDATE OR DELETE ON public.{table} "
+            "FOR EACH ROW EXECUTE FUNCTION public.tma_preserve_deadline()"
+        )
 
 
 CAPTURE_SQL = r"""
@@ -165,4 +215,6 @@ END $$;
 def downgrade():
     # Audit history is intentionally retained. Rolling application code back to
     # assignment-wide reconciliation is unsafe once more than one revision exists.
-    raise RuntimeError("TMA revision safety requires a forward repair; audit data must be retained.")
+    raise RuntimeError(
+        "TMA revision safety requires a forward repair; audit data must be retained."
+    )

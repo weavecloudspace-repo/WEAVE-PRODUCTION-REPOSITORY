@@ -1265,6 +1265,7 @@ class AIQuotaService:
         *,
         as_of: datetime | None = None,
         limit: int = 100,
+        tenant_ids: set[uuid.UUID] | None = None,
     ) -> int:
         """Recover expired pending reservations for a worker/maintenance job."""
 
@@ -1276,19 +1277,26 @@ class AIQuotaService:
                 db,
                 as_of=now,
                 limit=limit,
+                **({"tenant_ids": tenant_ids} if tenant_ids is not None else {}),
             )
             weekly_rows = await AIWeeklyQuotaRepository.lock_many_buckets(
-                db, keys={
+                db,
+                keys={
                     (r.tenant_id, r.quota_account_id, cls._reservation_week_start(r))
                     for r in reservations
                 },
             )
             extra_rows = await AIExtraCreditBalanceRepository.lock_many_buckets(
-                db, keys={
-                    (r.tenant_id, r.quota_account_id) for r in reservations if r.reserved_extra_credits
+                db,
+                keys={
+                    (r.tenant_id, r.quota_account_id)
+                    for r in reservations
+                    if r.reserved_extra_credits
                 },
             )
-            weekly_by_key = {(r.tenant_id, r.quota_account_id, r.week_start): r for r in weekly_rows}
+            weekly_by_key = {
+                (r.tenant_id, r.quota_account_id, r.week_start): r for r in weekly_rows
+            }
             extra_by_key = {(r.tenant_id, r.quota_account_id): r for r in extra_rows}
             for reservation in reservations:
                 await cls._release_locked_reservation(
@@ -1297,8 +1305,13 @@ class AIQuotaService:
                     expired=True,
                     released_at=now,
                     preloaded_buckets=(
-                        weekly_by_key.get((reservation.tenant_id, reservation.quota_account_id,
-                                           cls._reservation_week_start(reservation))),
+                        weekly_by_key.get(
+                            (
+                                reservation.tenant_id,
+                                reservation.quota_account_id,
+                                cls._reservation_week_start(reservation),
+                            )
+                        ),
                         extra_by_key.get((reservation.tenant_id, reservation.quota_account_id)),
                     ),
                 )
@@ -1378,8 +1391,11 @@ class AIQuotaService:
     ) -> None:
         """Release bucket holds for an already-locked pending reservation."""
 
-        weekly = (preloaded_buckets[0] if preloaded_buckets is not None
-                  else await cls._locked_weekly_for_reservation(db, reservation=reservation))
+        weekly = (
+            preloaded_buckets[0]
+            if preloaded_buckets is not None
+            else await cls._locked_weekly_for_reservation(db, reservation=reservation)
+        )
         if weekly is None:
             raise AIQuotaConflictError("Weekly quota backing this reservation is missing.")
         if reservation.weekly_quota_id is not None and weekly.id != reservation.weekly_quota_id:
@@ -1390,11 +1406,16 @@ class AIQuotaService:
         if preloaded_buckets is None:
             await AIWeeklyQuotaRepository.save(db, weekly)
         if reservation.reserved_extra_credits:
-            extra = (preloaded_buckets[1] if preloaded_buckets is not None
-                     else await AIExtraCreditBalanceRepository.get_for_account(
-                         db, tenant_id=reservation.tenant_id,
-                         quota_account_id=reservation.quota_account_id, lock=True,
-                     ))
+            extra = (
+                preloaded_buckets[1]
+                if preloaded_buckets is not None
+                else await AIExtraCreditBalanceRepository.get_for_account(
+                    db,
+                    tenant_id=reservation.tenant_id,
+                    quota_account_id=reservation.quota_account_id,
+                    lock=True,
+                )
+            )
             if extra is None:
                 raise AIQuotaConflictError("Reserved extra-credit balance is missing.")
             if extra.reserved_credits < reservation.reserved_extra_credits:
@@ -1412,8 +1433,11 @@ class AIQuotaService:
     @classmethod
     def _reservation_week_start(cls, reservation: AICreditReservation) -> date:
         created_at = reservation.created_at
-        created_date = (created_at.astimezone(timezone.utc).date()
-                        if created_at.tzinfo is not None else created_at.date())
+        created_date = (
+            created_at.astimezone(timezone.utc).date()
+            if created_at.tzinfo is not None
+            else created_at.date()
+        )
         return cls._week_start(created_date)
 
     @classmethod

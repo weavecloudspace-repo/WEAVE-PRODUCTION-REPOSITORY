@@ -719,20 +719,25 @@ async def test_draft_edit_delete_and_manual_close_reopen(tma_world):
     from app.modules.tma.lifecycle_service import TMALifecycleService
     from app.modules.tma.schemas import TMAAssignmentUpdate
     from app.modules.tma.repository import TMAAssignmentRepository
-    w=tma_world
-    draft,_=await w.assignment(publish=False)
-    await TMAAssignmentService.update_draft_assignment(w.db,actor=w.admin,assignment_id=draft.id,
-        payload=TMAAssignmentUpdate(closes_at=datetime.now(timezone.utc)+timedelta(days=1)))
-    assert draft.status==TMAAssignmentStatus.DRAFT
-    await TMADraftDeletionService.delete_draft(w.db,actor=w.admin,assignment_id=draft.id)
-    assert await TMAAssignmentRepository.get_by_id(w.db,w.tenant.id,draft.id) is None
-    item,_=await w.assignment()
+
+    w = tma_world
+    draft, _ = await w.assignment(publish=False)
+    await TMAAssignmentService.update_draft_assignment(
+        w.db,
+        actor=w.admin,
+        assignment_id=draft.id,
+        payload=TMAAssignmentUpdate(closes_at=datetime.now(timezone.utc) + timedelta(days=1)),
+    )
+    assert draft.status == TMAAssignmentStatus.DRAFT
+    await TMADraftDeletionService.delete_draft(w.db, actor=w.admin, assignment_id=draft.id)
+    assert await TMAAssignmentRepository.get_by_id(w.db, w.tenant.id, draft.id) is None
+    item, _ = await w.assignment()
     with pytest.raises(ConflictException):
-        await TMALifecycleService.activate_assignment(w.db,actor=w.admin,assignment_id=item.id)
-    await TMACancellationService.close(w.db,actor=w.admin,assignment_id=item.id)
-    assert item.status==TMAAssignmentStatus.CLOSED
-    await TMALifecycleService.reopen_assignment(w.db,actor=w.admin,assignment_id=item.id)
-    assert item.status==TMAAssignmentStatus.ACTIVE and item.zero_grading_requested_at is None
+        await TMALifecycleService.activate_assignment(w.db, actor=w.admin, assignment_id=item.id)
+    await TMACancellationService.close(w.db, actor=w.admin, assignment_id=item.id)
+    assert item.status == TMAAssignmentStatus.CLOSED
+    await TMALifecycleService.reopen_assignment(w.db, actor=w.admin, assignment_id=item.id)
+    assert item.status == TMAAssignmentStatus.ACTIVE and item.zero_grading_requested_at is None
 
 
 @pytest.mark.asyncio
@@ -742,20 +747,143 @@ async def test_direct_http_requests_cannot_bypass_revoked_teacher_access(tma_wor
     from app.core.exception_handlers import register_exception_handlers
     from app.core.dependencies.db import get_db
     from app.modules.tma.router import author_router, _current_author
-    w=tma_world
-    item,_=await w.assignment()
-    w.teaching[0].effective_to=date.today()-timedelta(days=1)
+
+    w = tma_world
+    item, _ = await w.assignment()
+    w.teaching[0].effective_to = date.today() - timedelta(days=1)
     await w.db.commit()
-    app=FastAPI()
+    app = FastAPI()
     register_exception_handlers(app)
     app.include_router(author_router)
-    async def author(): return w.teachers[0]
-    async def database(): yield w.db
-    app.dependency_overrides[_current_author]=author
-    app.dependency_overrides[get_db]=database
-    async with AsyncClient(transport=ASGITransport(app=app),base_url="http://test") as client:
+
+    async def author():
+        return w.teachers[0]
+
+    async def database():
+        yield w.db
+
+    app.dependency_overrides[_current_author] = author
+    app.dependency_overrides[get_db] = database
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         for suffix in ("", "/questions", "/submissions", "/readiness", "/revisions"):
-            response=await client.get(f"/tma/assignments/{item.id}{suffix}")
-            assert response.status_code==403
-        response=await client.get(f"/tma/assignments?academic_term_id={w.term.id}")
-        assert response.status_code==200 and response.json()["total"]==0
+            response = await client.get(f"/tma/assignments/{item.id}{suffix}")
+            assert response.status_code == 403
+        response = await client.get(f"/tma/assignments?academic_term_id={w.term.id}")
+        assert response.status_code == 200 and response.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_cancellation_preserves_unrelated_assessment_component(tma_world, monkeypatch):
+    from app.modules.student_academics.models import StudentSubjectResult
+
+    w = tma_world
+    await w.student()
+    item, _ = await w.assignment()
+    await due(w, item)
+    await TMADeadlineZeroService.process_pending(w.db, tenant_ids={w.tenant.id})
+    result = (
+        await w.db.execute(
+            select(StudentSubjectResult).where(StudentSubjectResult.tenant_id == w.tenant.id)
+        )
+    ).scalar_one()
+    other = await w.add(
+        AssessmentComponent(
+            tenant_id=w.tenant.id,
+            assessment_scheme_id=w.scheme.id,
+            name="Unrelated CA",
+            position=2,
+            maximum_score=Decimal("10"),
+            is_examinable=False,
+        )
+    )
+    unrelated = await w.add(
+        StudentAssessmentScore(
+            tenant_id=w.tenant.id,
+            student_subject_result_id=result.id,
+            assessment_component_id=other.id,
+            score=Decimal("7"),
+        )
+    )
+    unrelated_id = unrelated.id
+    result.total_score = Decimal("7")
+    await w.db.commit()
+    monkeypatch.setattr(TMACancellationService, "_enqueue", AsyncMock())
+    run = await TMACancellationService.cancel(
+        w.db, actor=w.admin, assignment_id=item.id, reason="correct question"
+    )
+    await TMACancellationService.process(w.db, tenant_id=w.tenant.id, run_id=run.id)
+    rows = list(
+        (
+            await w.db.execute(
+                select(StudentAssessmentScore).where(
+                    StudentAssessmentScore.tenant_id == w.tenant.id
+                )
+            )
+        ).scalars()
+    )
+    assert [(row.id, row.score) for row in rows] == [(unrelated_id, Decimal("7"))]
+    assert result.total_score == Decimal("7")
+
+
+@pytest.mark.asyncio
+async def test_simultaneous_student_submissions_create_one_score(tma_committed_world, test_engine):
+    import asyncio
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    w = tma_committed_world
+    student, _ = await w.student()
+    item, _ = await w.assignment()
+    start = await TMAAttemptService.start_or_resume_attempt(
+        w.db, student=student, assignment_id=item.id
+    )
+    attempt_id = start.attempt.id
+
+    async def submit():
+        async with AsyncSession(test_engine, expire_on_commit=False) as db:
+            return await TMAAttemptService.submit_attempt(
+                db, student=student, attempt_id=attempt_id
+            )
+
+    first, second = await asyncio.gather(submit(), submit())
+    assert first.component_score == second.component_score == Decimal("0")
+    assert (
+        await w.db.execute(
+            select(func.count(StudentAssessmentScore.id)).where(
+                StudentAssessmentScore.tenant_id == w.tenant.id
+            )
+        )
+    ).scalar_one() == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_cancellation_and_grading_finish_without_orphaned_scores(
+    tma_committed_world, test_engine, monkeypatch
+):
+    import asyncio
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    w = tma_committed_world
+    await w.student()
+    item, _ = await w.assignment()
+    await due(w, item)
+    monkeypatch.setattr(TMACancellationService, "_enqueue", AsyncMock())
+
+    async def grade():
+        async with AsyncSession(test_engine, expire_on_commit=False) as db:
+            return await TMADeadlineZeroService.process_pending(db, tenant_ids={w.tenant.id})
+
+    async def cancel():
+        async with AsyncSession(test_engine, expire_on_commit=False) as db:
+            return await TMACancellationService.cancel(
+                db, actor=w.admin, assignment_id=item.id, reason="cancel race"
+            )
+
+    _, run = await asyncio.gather(grade(), cancel())
+    await TMACancellationService.process(w.db, tenant_id=w.tenant.id, run_id=run.id)
+    assert (
+        await w.db.execute(
+            select(func.count(StudentAssessmentScore.id)).where(
+                StudentAssessmentScore.tenant_id == w.tenant.id
+            )
+        )
+    ).scalar_one() == 0
