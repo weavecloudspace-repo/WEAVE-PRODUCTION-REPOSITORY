@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -52,6 +53,7 @@ def scope_payload(*, lead=None) -> TMAAssignmentCreate:
         academic_session_id=uid(),
         academic_term_id=uid(),
         assessment_component_id=uid(),
+        closes_at=datetime.now(timezone.utc) + timedelta(days=3),
         lead_teacher_membership_id=lead,
     )
 
@@ -230,7 +232,7 @@ async def test_collaborator_cannot_change_deadline_and_lead_cannot_delegate(monk
             AsyncMock(),
             actor=collaborator,
             assignment_id=row.id,
-            payload=TMAAssignmentUpdate(closes_at=None),
+            payload=TMAAssignmentUpdate(closes_at=datetime.now(timezone.utc) + timedelta(days=3)),
         )
     with pytest.raises(ForbiddenException, match="administrator"):
         await mod.TMAAssignmentService.update_draft_assignment(

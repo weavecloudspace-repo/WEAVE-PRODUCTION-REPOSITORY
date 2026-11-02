@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -36,6 +36,7 @@ def _creation_payload():
         academic_session_id=_id(),
         academic_term_id=_id(),
         assessment_component_id=_id(),
+        closes_at=datetime.now(timezone.utc) + timedelta(days=3),
     )
 
 
@@ -149,6 +150,7 @@ async def test_activation_publishes_revision_only_after_readiness(monkeypatch) -
         tenant_id=admin.tenant_id,
         status=TMAAssignmentStatus.DRAFT,
         activated_at=None,
+        closes_at=datetime.now(timezone.utc) + timedelta(days=3),
     )
     revision = SimpleNamespace(published_at=None, invalidated_at=None)
     monkeypatch.setattr(
