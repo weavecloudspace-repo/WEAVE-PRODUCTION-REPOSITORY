@@ -10,7 +10,7 @@ const initialMonth = (value) => {
   const today = new Date();
   return { year: today.getFullYear(), month: today.getMonth() };
 };
-export const formatDeadlineLocal = (year, month, day, hour, minute) =>
+const formatDeadlineLocal = (year, month, day, hour, minute) =>
   `${year}-${pad(month + 1)}-${pad(day)}T${pad(hour)}:${pad(minute)}`;
 
 export default function TmaDeadlinePicker({ value, onChange, disabled = false, invalid = false }) {
