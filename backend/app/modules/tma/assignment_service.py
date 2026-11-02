@@ -279,6 +279,15 @@ class TMAAssignmentService:
             key != "closes_at" for key in changes
         ):
             raise ConflictException("Closed assignments only allow adjusting the deadline.")
+        if (
+            assignment.status == TMAAssignmentStatus.CLOSED
+            and getattr(assignment, "zero_grading_requested_at", None) is not None
+            and getattr(assignment, "closes_at", None) is not None
+            and assignment.closes_at <= datetime.now(timezone.utc)
+        ):
+            raise ConflictException(
+                "Deadline scoring has begun. Cancel and revise this assignment instead of changing its deadline."
+            )
         if scope_changes:
             TMAAuthorizationService.require_draft_assignment(assignment)
             revision = await TMARevisionRepository.get_by_number(

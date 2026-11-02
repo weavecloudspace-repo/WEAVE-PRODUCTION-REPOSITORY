@@ -37,6 +37,7 @@ from app.modules.student_academics.models import (  # noqa: E402
 from app.modules.tma.cancellation_service import TMACancellationService  # noqa: E402
 from app.modules.tma.models import TMACancellationRun  # noqa: E402
 from app.modules.tma.expiration_service import TMAExpirationService  # noqa: E402
+from app.modules.tma.deadline_zero_service import TMADeadlineZeroService  # noqa: E402
 from app.modules.student_academics.session_closure_service import (  # noqa: E402
     SessionClosureService,
 )
@@ -240,7 +241,9 @@ async def poll_tma_deadlines(ctx: dict[str, Any]) -> dict[str, int]:
     """Persist scheduled TMA closure; write paths enforce the deadline immediately."""
     _ = ctx
     async with AsyncSessionLocal() as db:
-        return await TMAExpirationService.close_due_assignments(db)
+        closed = await TMAExpirationService.close_due_assignments(db)
+        graded = await TMADeadlineZeroService.process_pending(db)
+        return {**closed, **graded}
 
 
 async def startup(ctx: dict[str, Any]) -> None:

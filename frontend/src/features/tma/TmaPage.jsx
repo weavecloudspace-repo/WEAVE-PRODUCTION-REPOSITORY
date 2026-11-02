@@ -701,6 +701,14 @@ export default function TmaPage({ role }) {
               {!draft && <>
               <div className="flex flex-wrap items-center gap-3">
                 <Badge>{assignment.status}</Badge>
+                {assignment.zero_grading_completed_at && (
+                  <span className="text-xs text-text-muted">Deadline zeros processed</span>
+                )}
+                {assignment.zero_grading_error && (
+                  <span role="alert" className="text-xs text-error">
+                    Deadline grading needs reconciliation: {assignment.zero_grading_error}
+                  </span>
+                )}
                 <span className="text-sm text-text-muted">
                   Revision {assignment.current_revision_number} ·{" "}
                   {questions.length} questions
@@ -865,7 +873,7 @@ export default function TmaPage({ role }) {
                         setReportOffset(0);
                       }}
                     >
-                      {["not_started", "in_progress", "submitted"].map((v) => (
+                      {["not_started", "in_progress", "submitted", "missed"].map((v) => (
                         <option key={v} value={v}>
                           {v.replaceAll("_", " ")}
                         </option>

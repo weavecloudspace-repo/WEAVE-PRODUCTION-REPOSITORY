@@ -101,6 +101,8 @@ class TMACancellationService:
             raise ConflictException("Only an active TMA can be closed.")
         assignment.status = TMAAssignmentStatus.CLOSED
         assignment.closed_at = datetime.now(timezone.utc)
+        if getattr(assignment, "closes_at", None) is not None:
+            assignment.zero_grading_requested_at = assignment.closed_at
         await db.commit()
         await flush_cache_invalidation_events(db)
         return assignment

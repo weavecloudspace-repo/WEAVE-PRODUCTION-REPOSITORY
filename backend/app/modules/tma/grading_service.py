@@ -60,6 +60,7 @@ class TMAGradingService:
         correct: int,
         total: int,
         attempt: TMAAttempt | None = None,
+        scoring_date: date | None = None,
     ) -> Decimal:
         """Write only this TMA's component in the academic DRAFT result.
 
@@ -126,7 +127,7 @@ class TMAGradingService:
                 tenant_id,
                 {enrollment.class_id},
                 assignment.curriculum_subject_id,
-                date.today(),
+                scoring_date or date.today(),
             )
             teacher_assignment = owners.get(enrollment.class_id)
             if teacher_assignment is None:

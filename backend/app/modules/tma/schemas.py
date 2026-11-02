@@ -111,6 +111,8 @@ class TMAAssignmentResponse(TMAOutput):
     created_by_actor_type: TMAActorType
     created_by_actor_id: uuid.UUID
     lead_teacher_membership_id: uuid.UUID | None = None
+    zero_grading_completed_at: datetime | None = None
+    zero_grading_error: str | None = None
     activated_at: datetime | None
     closes_at: datetime | None
     closed_at: datetime | None
@@ -303,6 +305,7 @@ class TMAParticipationStatus(str, Enum):
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
     SUBMITTED = "submitted"
+    MISSED = "missed"
 
 
 class TMASubmissionStudentResponse(TMAOutput):
@@ -390,6 +393,7 @@ class TMASubmitResponse(TMAOutput):
     total_questions: int = Field(gt=0)
     component_score: Decimal = Field(ge=0, max_digits=5, decimal_places=2)
     submitted_at: datetime
+    auto_zeroed_at: datetime | None = None
 
 
 class TMAStudentAssignmentResponse(TMAOutput):
@@ -402,6 +406,7 @@ class TMAStudentAssignmentResponse(TMAOutput):
     status: TMAAssignmentStatus
     attempt_status: TMAAttemptStatus | None
     attempt_id: uuid.UUID | None = None
+    auto_zeroed_at: datetime | None = None
     closes_at: datetime | None
     can_start_or_resume: bool
     component_maximum_score: Decimal = Field(gt=0, max_digits=5, decimal_places=2)

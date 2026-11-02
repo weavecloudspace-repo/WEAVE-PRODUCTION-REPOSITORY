@@ -160,6 +160,7 @@ class TMAAttemptService:
                     status=TMAAssignmentStatus.CLOSED if expired else assignment.status,
                     attempt_status=attempt.status if attempt else None,
                     attempt_id=attempt.id if attempt else None,
+                    auto_zeroed_at=getattr(attempt, "auto_zeroed_at", None) if attempt else None,
                     closes_at=assignment.closes_at,
                     can_start_or_resume=is_open
                     and (attempt is None or attempt.status == TMAAttemptStatus.IN_PROGRESS),
@@ -461,6 +462,7 @@ class TMAAttemptService:
             total_questions=total,
             component_score=component_score,
             submitted_at=attempt.submitted_at,
+            auto_zeroed_at=getattr(attempt, "auto_zeroed_at", None),
         )
 
     @staticmethod
@@ -521,4 +523,5 @@ class TMAAttemptService:
             total_questions=attempt.total_questions,
             component_score=stored.score,
             submitted_at=attempt.submitted_at,
+            auto_zeroed_at=getattr(attempt, "auto_zeroed_at", None),
         )

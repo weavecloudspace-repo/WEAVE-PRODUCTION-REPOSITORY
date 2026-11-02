@@ -44,6 +44,7 @@ class TMAExpirationService:
         for assignment in due:
             assignment.status = TMAAssignmentStatus.CLOSED
             assignment.closed_at = current
+            assignment.zero_grading_requested_at = current
         if due:
             await db.commit()
             await flush_cache_invalidation_events(db)

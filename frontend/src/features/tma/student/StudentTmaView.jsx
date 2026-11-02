@@ -214,20 +214,29 @@ export default function StudentTmaView({
           <span className="student-tma-success-icon">
             <CheckCircle2 size={32} />
           </span>
-          <p className="student-tma-eyebrow">Assignment submitted</p>
-          <h2>Your work is complete</h2>
-          <p>Your answers have been graded and your score has been recorded.</p>
+          <p className="student-tma-eyebrow">
+            {result.auto_zeroed_at ? "Missed deadline" : "Assignment submitted"}
+          </p>
+          <h2>{result.auto_zeroed_at ? "Submission deadline passed" : "Your work is complete"}</h2>
+          <p>
+            {result.auto_zeroed_at
+              ? "This assignment was not submitted by the deadline, so a zero was recorded."
+              : "Your answers have been graded and your score has been recorded."}
+          </p>
           <div className="student-tma-score">
             <strong>{result.component_score}</strong>
             {assignment && (
               <span>/ {assignment.component_maximum_score} marks</span>
             )}
           </div>
-          <p>
-            {result.correct_answers} of {result.total_questions} answers correct
-          </p>
+          {!result.auto_zeroed_at && (
+            <p>
+              {result.correct_answers} of {result.total_questions} answers correct
+            </p>
+          )}
           <p className="text-xs text-text-muted">
-            Submitted {new Date(result.submitted_at).toLocaleString()}
+            {result.auto_zeroed_at ? "Zero recorded" : "Submitted"}{" "}
+            {new Date(result.submitted_at).toLocaleString()}
           </p>
           <Link className="student-tma-link" to={back + "?tab=assessment"}>
             View subject assessments <ArrowRight size={16} />

@@ -87,7 +87,9 @@ export default function StudentSubjectTma({ subject }) {
                 )}
                 <p className="mt-1 text-xs text-text-muted">
                   {item.attempt_status === "submitted"
-                    ? "Submitted · your result is ready"
+                    ? item.auto_zeroed_at
+                      ? "Missed deadline · zero recorded"
+                      : "Submitted · your result is ready"
                     : item.status === "closed"
                       ? "Closed · submissions are no longer accepted"
                       : item.attempt_status === "in_progress"

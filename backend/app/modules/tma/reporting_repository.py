@@ -87,6 +87,7 @@ class TMAReportingRepository:
                 TMAParticipant.class_id.label("class_id"),
                 TMAAttempt.status.label("attempt_status"),
                 TMAAttempt.submitted_at.label("submitted_at"),
+                TMAAttempt.auto_zeroed_at.label("auto_zeroed_at"),
                 func.row_number()
                 .over(
                     partition_by=TMAParticipant.student_id,
@@ -126,6 +127,7 @@ class TMAReportingRepository:
                 ranked.c.class_id,
                 ranked.c.attempt_status,
                 ranked.c.submitted_at,
+                ranked.c.auto_zeroed_at,
             )
             .where(ranked.c.rank == 1)
             .subquery("history")
@@ -137,6 +139,7 @@ class TMAReportingRepository:
 
         display_class_id = func.coalesce(eligible.c.class_id, history.c.class_id)
         status = case(
+            (history.c.auto_zeroed_at.is_not(None), "missed"),
             (history.c.attempt_status == TMAAttemptStatus.SUBMITTED, "submitted"),
             (history.c.attempt_status == TMAAttemptStatus.IN_PROGRESS, "in_progress"),
             else_="not_started",

@@ -180,6 +180,15 @@ class TMAAssignment(BaseModel):
 
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Completion and reconciliation status for missed-deadline grading.
+    zero_grading_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    zero_grading_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    zero_grading_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # ==========================#
     # Revision Management
     # ==========================#
@@ -879,8 +888,9 @@ class TMAAttempt(BaseModel):
 
     Each participant can have only one attempt per revision.
 
-    Attempts remain IN_PROGRESS until explicitly submitted.
-    Closing an assignment does not modify unfinished attempts.
+    Attempts remain IN_PROGRESS until explicitly submitted, except that
+    the missed-deadline worker finalizes unfinished/missing attempts with
+    a provably linked zero when the published deadline passes.
 
     When an assignment is reopened, unfinished attempts can
     resume using their previously saved answers.
@@ -943,6 +953,9 @@ class TMAAttempt(BaseModel):
     score_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     score_snapshot: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     score_reversed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    auto_zeroed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 

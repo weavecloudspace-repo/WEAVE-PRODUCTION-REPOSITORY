@@ -41,6 +41,17 @@ class TMALifecycleService:
         TMAAuthorizationService.require_assignment_management(actor, assignment)
         if assignment.status != TMAAssignmentStatus.CLOSED:
             raise ConflictException("Only a closed TMA can be reopened.")
+        if getattr(assignment, "zero_grading_requested_at", None) is not None and (
+            getattr(assignment, "closes_at", None) is not None
+            and assignment.closes_at <= datetime.now(timezone.utc)
+        ):
+            raise ConflictException(
+                "Deadline scoring has started; cancel this TMA and create a corrected revision."
+            )
+        if getattr(assignment, "zero_grading_completed_at", None) is not None:
+            raise ConflictException(
+                "Missed-deadline zeros have been recorded; cancel and create a corrected revision instead."
+            )
         if getattr(
             assignment, "closes_at", None
         ) is not None and assignment.closes_at <= datetime.now(timezone.utc):
@@ -55,6 +66,8 @@ class TMALifecycleService:
             raise ConflictException("A published revision is required to reopen TMA.")
         assignment.status = TMAAssignmentStatus.ACTIVE
         assignment.closed_at = None
+        assignment.zero_grading_error = None
+        assignment.zero_grading_requested_at = None
         await TMAAssignmentRepository.save(db, assignment)
         await db.commit()
         await flush_cache_invalidation_events(db)
