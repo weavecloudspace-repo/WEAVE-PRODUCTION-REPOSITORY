@@ -38,6 +38,7 @@ function fixture() {
       }),
     },
     Select: "Select",
+    TmaDeadlinePicker: "TmaDeadlinePicker",
     Button: "Button",
     field: "",
     dateInput: () => "",
