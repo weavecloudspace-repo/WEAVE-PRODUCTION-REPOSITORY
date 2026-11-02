@@ -36,6 +36,7 @@ import { useToast } from "../../hooks/useToast";
 import { api, getErrorMessage, parseApiError } from "../../services/api";
 import { parentService } from "../../services/parentService";
 import { teacherService } from "../../services/teacherService";
+import { getAvatarSrcFromRecord } from "../../utils/user";
 
 const PAGE_SIZE = 24;
 const INVITATION_STATUSES = ["pending", "accepted", "revoked", "expired"];
@@ -220,6 +221,7 @@ function TeacherMembershipList({
                 <PersonIdentity
                   name={displayName(account)}
                   meta={account.email || "No email"}
+                  avatarSrc={getAvatarSrcFromRecord(account)}
                 />
               </td>
               <td className="px-4 py-3.5 align-middle">
@@ -270,6 +272,7 @@ function TeacherMembershipList({
                 <PersonIdentity
                   name={displayName(account)}
                   meta={account.email || "No email"}
+                  avatarSrc={getAvatarSrcFromRecord(account)}
                 />
                 <Badge variant={badgeVariant(status)}>{titleCase(status)}</Badge>
               </div>
@@ -372,6 +375,7 @@ function ParentMembershipList({ items, actionId, onLifecycle }) {
                 <PersonIdentity
                   name={displayName(account)}
                   meta={account.email || "No email"}
+                  avatarSrc={getAvatarSrcFromRecord(account)}
                 />
               </td>
               <td className="px-4 py-3.5 align-middle">
@@ -422,6 +426,7 @@ function ParentMembershipList({ items, actionId, onLifecycle }) {
                 <PersonIdentity
                   name={displayName(account)}
                   meta={account.email || "No email"}
+                  avatarSrc={getAvatarSrcFromRecord(account)}
                 />
                 <Badge variant={badgeVariant(status)}>{titleCase(status)}</Badge>
               </div>

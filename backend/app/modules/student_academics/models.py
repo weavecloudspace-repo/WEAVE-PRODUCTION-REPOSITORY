@@ -151,6 +151,11 @@ class AcademicSession(BaseModel):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            name="uq_academic_sessions_tenant_id",
+        ),
         UniqueConstraint("tenant_id", "name", name="uq_academic_session_tenant_name"),
         Index(
             "uq_academic_sessions_current_per_tenant",
@@ -239,6 +244,12 @@ class AcademicTerm(BaseModel):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            "academic_session_id",
+            name="uq_academic_terms_tenant_id_session",
+        ),
         UniqueConstraint(
             "tenant_id",
             "academic_session_id",
@@ -350,6 +361,11 @@ class AssessmentComponent(BaseModel):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            name="uq_assessment_components_tenant_id",
+        ),
         CheckConstraint(
             "NOT is_hybrid OR is_examinable", name="ck_assessment_component_hybrid_examinable"
         ),

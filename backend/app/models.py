@@ -30,6 +30,7 @@ import app.modules.superadmin.models
 import app.modules.teachers.models
 import app.modules.tenant_admins.models
 import app.modules.tenant_branding.models
+import app.modules.tma.models
 import app.modules.user_guides.models
 
 # Install canonical academic-level dependency accounting before request services execute.
@@ -42,6 +43,7 @@ import app.modules.student_academics.assessment_examinability  # noqa: E402,F401
 import app.modules.bulk_imports.model_events  # noqa: E402,F401
 import app.modules.cbt.sync.model_events  # noqa: E402,F401
 import app.modules.report_cards.model_events  # noqa: E402,F401
+import app.modules.tma.cache_events  # noqa: E402,F401
 import app.modules.student_academics.elective_integrity  # noqa: E402,F401
 import app.modules.student_academics.grading_scale_integrity  # noqa: E402,F401
 import app.modules.cbt.results.models

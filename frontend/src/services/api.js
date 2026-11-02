@@ -681,14 +681,14 @@ async function request(endpoint, options = {}, hasRetried = false) {
     ...(requestSignal ? { signal: requestSignal } : {}),
   };
 
+  // The route effect can notify after the destination page has started reading.
+  const requestLocation = window.location.href;
   const abortOnNavigation = () => {
-    autoAbortController?.abort();
+    if (window.location.href !== requestLocation) autoAbortController?.abort();
   };
 
   if (autoAbortController) {
-    window.addEventListener(NAVIGATION_ABORT_EVENT, abortOnNavigation, {
-      once: true,
-    });
+    window.addEventListener(NAVIGATION_ABORT_EVENT, abortOnNavigation);
   }
 
   try {

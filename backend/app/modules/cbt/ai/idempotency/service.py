@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, ConflictException
 from app.modules.cbt.auth.schemas import AuthenticatedCBTActor
+from app.modules.cbt.ai.authoring.providers.base import ProviderStructuredOutputError
+from app.modules.cbt.ai.authoring.validation import AIResponseValidationError
 from app.modules.cbt.ai.idempotency.cache import (
     AI_REPLAY_TTL_SECONDS,
     AIReplayCache,
@@ -37,6 +39,7 @@ from app.modules.cbt.ai.schemas import (
     AIRegenerateQuestionRequest,
     AIRegenerateQuestionResponse,
 )
+from app.modules.cbt.ai.authoring.trace_logging import trace_event
 from app.modules.cbt.ai.service import CBTAIService
 
 ResponseT = TypeVar("ResponseT", bound=BaseModel)
@@ -131,7 +134,13 @@ class CBTAIIdempotentAuthoringService:
             idempotency_key=key,
             request_hash=request_hash,
         )
+        trace_event(
+            "idempotency.claim",
+            created=created,
+            idempotency_status=record.status,
+        )
         if not created:
+            trace_event("idempotency.replay_lookup", idempotency_status=record.status)
             return await cls._resolve_existing(
                 db,
                 record=record,
@@ -160,6 +169,7 @@ class CBTAIIdempotentAuthoringService:
                 record_id=record.id,
                 reservation_id=reservation.id,
             )
+            trace_event("quota.reserved", credits=requested_credits)
 
             authoring_service = CBTAIService._build_authoring_service()
             if isinstance(request, AIGenerateQuestionsRequest):
@@ -204,9 +214,20 @@ class CBTAIIdempotentAuthoringService:
                     ),
                 )
 
+            trace_event(
+                "authoring.assembled",
+                actual_count=(
+                    len(authoring_result.questions)
+                    if isinstance(request, AIGenerateQuestionsRequest)
+                    else 1
+                ),
+                credits=actual_credits,
+                repaired=authoring_result.repaired,
+            )
             # The output must be replayable before credits are settled. A failed
             # replay write therefore releases the reservation instead of billing.
             await AIReplayCache.store(record.id, provisional.model_dump(mode="json"))
+            trace_event("replay.provisional_stored")
 
             settlement = await AIQuotaService.settle_reservation(
                 db,
@@ -215,6 +236,11 @@ class CBTAIIdempotentAuthoringService:
                 actual_credits=actual_credits,
             )
             settled = True
+            trace_event(
+                "quota.settled",
+                credits_charged=settlement.total_settled_credits,
+                credits_released=settlement.released_credits,
+            )
             final_response = (
                 CBTAIService._build_generation_response(
                     result=authoring_result, settlement=settlement
@@ -237,8 +263,10 @@ class CBTAIIdempotentAuthoringService:
                 # The pre-settlement replay body already contains the same charge
                 # projection, so a transient refresh failure does not invalidate it.
                 pass
+            trace_event("idempotency.succeeded")
             return response_model.model_validate(final_response.model_dump(mode="json"))
         except AIReplayStoreUnavailableError as exc:
+            trace_event("replay.failed", error_type=type(exc).__name__)
             if reservation is not None:
                 await CBTAIService._release_reservation_safely(
                     db,
@@ -261,6 +289,11 @@ class CBTAIIdempotentAuthoringService:
                 payload={"code": "AI_REPLAY_UNAVAILABLE", "retryable": True},
             ) from exc
         except Exception as exc:
+            trace_event(
+                "authoring.failed",
+                error_type=type(exc).__name__,
+                stage="after_settlement" if settled else "before_settlement",
+            )
             # Once settlement commits, preserve both the in-progress metadata and
             # replay body. The next call with this key can repair the narrow crash
             # window from the settled reservation without charging again.
@@ -280,6 +313,12 @@ class CBTAIIdempotentAuthoringService:
                 code="AI_AUTHORING_FAILED",
                 detail=str(exc),
             )
+            if isinstance(exc, (ProviderStructuredOutputError, AIResponseValidationError)):
+                raise AppException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="AI returned invalid questions after validation and repair. No credits were charged.",
+                    payload={"code": "AI_INVALID_QUESTION_OUTPUT", "retryable": False},
+                ) from exc
             raise
 
     @classmethod
@@ -344,12 +383,14 @@ class CBTAIIdempotentAuthoringService:
         response_model: type[ResponseT],
     ) -> ResponseT:
         if record.request_hash != request_hash:
+            trace_event("idempotency.mismatched_request")
             raise ConflictException(
                 "Idempotency key was already used with a different AI request.",
                 payload={"code": "IDEMPOTENCY_KEY_REUSED"},
             )
 
         if record.status == AI_IDEMPOTENCY_SUCCEEDED:
+            trace_event("idempotency.replay_succeeded")
             payload = await cls._load_replay(record.id)
             if payload is None:
                 raise ConflictException(
@@ -362,6 +403,7 @@ class CBTAIIdempotentAuthoringService:
             return response_model.model_validate(payload)
 
         if record.status == AI_IDEMPOTENCY_FAILED:
+            trace_event("idempotency.replay_failed")
             raise ConflictException(
                 record.failure_detail or "This AI request previously failed.",
                 payload={
@@ -456,6 +498,7 @@ class CBTAIIdempotentAuthoringService:
                 payload={"code": "AI_REQUEST_ABORTED", "requires_new_generation": True},
             )
 
+        trace_event("idempotency.in_progress")
         raise ConflictException(
             "This AI request is already being processed.",
             payload={"code": "AI_REQUEST_IN_PROGRESS", "retryable": True},

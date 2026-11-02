@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+
+from arq import cron
+from sqlalchemy import select
 from typing import Any
 from uuid import UUID
 
@@ -18,7 +21,6 @@ from app.modules.cbt.results.rollback_worker import (
     process_cbt_result_rollback_job,
     recover_cbt_result_rollbacks,
 )  # noqa: E402
-from arq import cron  # noqa: E402
 from app.core.queue.context import (  # noqa: E402
     reset_current_bulk_import_job_id,
     set_current_bulk_import_job_id,
@@ -32,6 +34,11 @@ from app.modules.student_academics.lifecycle_repository import (  # noqa: E402
 from app.modules.student_academics.models import (  # noqa: E402
     StudentProgressionRunStatus,
 )
+from app.modules.tma.cancellation_service import TMACancellationService  # noqa: E402
+from app.modules.tma.models import TMACancellationRun  # noqa: E402
+from app.modules.tma.expiration_service import TMAExpirationService  # noqa: E402
+from app.modules.tma.deadline_zero_service import TMADeadlineZeroService  # noqa: E402
+from app.modules.tma.draft_deletion_service import TMADraftDeletionService  # noqa: E402
 from app.modules.student_academics.session_closure_service import (  # noqa: E402
     SessionClosureService,
 )
@@ -187,6 +194,79 @@ async def process_session_progression_job(
         raise failure_exception
 
 
+@capture_worker_exceptions(queue_name=HEAVY_QUEUE_NAME)
+async def process_tma_cancellation_job(
+    ctx: dict[str, Any],
+    run_id: str,
+    tenant_id: str,
+) -> dict[str, int | str]:
+    """Reverse only verified TMA-owned scores, atomically."""
+    _ = ctx
+    parsed_tenant, parsed_run = UUID(tenant_id), UUID(run_id)
+    try:
+        async with AsyncSessionLocal() as db:
+            return await TMACancellationService.process(
+                db,
+                tenant_id=parsed_tenant,
+                run_id=parsed_run,
+            )
+    except Exception as exc:
+        logger.exception("tma.cancellation.failed", extra={"run_id": run_id})
+        async with AsyncSessionLocal() as failure_db:
+            await TMACancellationService.mark_failed(
+                failure_db,
+                tenant_id=parsed_tenant,
+                run_id=parsed_run,
+                message=str(exc),
+            )
+        return {"status": "failed", "reversed_scores": 0}
+
+
+async def poll_tma_cancellations(ctx: dict[str, Any]) -> dict[str, int]:
+    """Recover pending jobs if enqueueing initially failed."""
+    async with AsyncSessionLocal() as db:
+        pending = (
+            await db.execute(
+                select(TMACancellationRun.id, TMACancellationRun.tenant_id)
+                .where(TMACancellationRun.status == "pending")
+                .order_by(TMACancellationRun.created_at)
+                .limit(10)
+            )
+        ).all()
+    for run_id, tenant_id in pending:
+        await process_tma_cancellation_job(ctx, str(run_id), str(tenant_id))
+    return {"processed": len(pending)}
+
+
+async def poll_tma_deadlines(ctx: dict[str, Any]) -> dict[str, int]:
+    """Bound each transaction and rotate work across tenants and assignments."""
+    from time import monotonic
+    from app.config.settings import settings
+
+    _ = ctx
+    started = monotonic()
+    async with AsyncSessionLocal() as db:
+        closed = await TMAExpirationService.close_due_assignments(db)
+    totals = {"zeroed": 0, "blocked": 0, "pending": 0}
+    for _batch in range(settings.TMA_ZERO_BATCHES_PER_POLL):
+        if monotonic() - started >= settings.TMA_ZERO_POLL_BUDGET_SECONDS:
+            break
+        async with AsyncSessionLocal() as db:
+            graded = await TMADeadlineZeroService.process_pending(db)
+        for key in totals:
+            totals[key] += graded[key]
+        if not any(graded.values()):
+            break
+    return {**closed, **totals}
+
+
+async def poll_tma_draft_media_cleanup(ctx: dict[str, Any]) -> dict[str, int]:
+    """Retry media cleanup after successful database deletion."""
+    _ = ctx
+    async with AsyncSessionLocal() as db:
+        return await TMADraftDeletionService.cleanup_media(db)
+
+
 async def startup(ctx: dict[str, Any]) -> None:
     """Initialize optional monitoring for this worker process."""
 
@@ -217,9 +297,36 @@ class WorkerSettings:
         process_bulk_import_job,
         process_session_progression_job,
         process_cbt_result_rollback_job,
+        process_tma_cancellation_job,
+    ]
+    cron_jobs = [
+        cron(
+            poll_tma_draft_media_cleanup,
+            minute={1, 6, 11, 16, 21, 26, 31, 36, 41, 46, 51, 56},
+            run_at_startup=True,
+            unique=True,
+            timeout=120,
+            max_tries=1,
+        ),
+        cron(
+            poll_tma_deadlines,
+            minute=set(range(0, 60)),
+            run_at_startup=True,
+            unique=True,
+            timeout=120,
+            max_tries=1,
+        ),
+        cron(recover_cbt_result_rollbacks, minute=set(range(0, 60, 2)), unique=True),
+        cron(
+            poll_tma_cancellations,
+            minute={3, 13, 23, 33, 43, 53},
+            run_at_startup=True,
+            unique=True,
+            timeout=3600,
+            max_tries=1,
+        ),
     ]
 
-    cron_jobs = [cron(recover_cbt_result_rollbacks, minute=set(range(0, 60, 2)), unique=True)]
     on_startup = startup
     on_shutdown = shutdown
     max_jobs = 1

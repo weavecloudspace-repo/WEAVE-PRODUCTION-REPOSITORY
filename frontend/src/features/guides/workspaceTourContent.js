@@ -19,6 +19,16 @@ const copy = {
     "Start with a session, term, and calendar. Return here for levels, departments, classes, and curriculum when you need them.",
     ["School year", "Classes & levels", "Curriculum"],
   ],
+  tma: [
+    "Create and review tutor-marked assignments",
+    "Write questions, inspect answer keys, publish assignments, and follow submissions.",
+    ["Question authoring", "Student preview", "Submissions"],
+  ],
+  "ai-usage": [
+    "Manage your AI credits",
+    "Review AI usage, balances, requests and secure credit purchases in one place.",
+    ["Usage overview", "Credit requests", "Payment history"],
+  ],
   students: [
     "Know your students",
     "Find student records and manage enrolment in your school.",

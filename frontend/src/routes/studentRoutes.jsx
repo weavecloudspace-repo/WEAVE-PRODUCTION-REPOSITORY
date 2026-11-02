@@ -21,6 +21,7 @@ const StudentParentLinkingPage = lazy(() => import("../pages/student/StudentPare
 const StudentReportCardsPage = lazy(() => import("../pages/student/StudentReportCardsPage"));
 const StudentSubjectDetailsPage = lazy(() => import("../pages/student/StudentSubjectDetailsPage"));
 const StudentSubjectsPage = lazy(() => import("../pages/student/StudentSubjectsPage"));
+const StudentTmaPage = lazy(() => import("../features/tma/student/StudentTmaPage"));
 
 export const studentRoutes = (
   <Route element={<RoleGuard allowedRoles={["STUDENT"]} />}>
@@ -33,6 +34,7 @@ export const studentRoutes = (
       <Route path="/student/analytics" element={<RoleAnalyticsPage role="student" />} />
       <Route path="/student/subjects" element={<StudentSubjectsPage />} />
       <Route path="/student/subjects/:subjectResultId" element={<StudentSubjectDetailsPage />} />
+      <Route path="/student/subjects/:subjectResultId/tma/:assignmentId" element={<StudentTmaPage />} />
       <Route path="/student/parent-linking" element={<StudentParentLinkingPage />} />
       <Route path="/student/report-cards" element={<StudentReportCardsPage />} />
       <Route path="/student/attendance" element={<RuntimeFeatureRoute feature="attendance" role="student"><StudentAttendancePage /></RuntimeFeatureRoute>} />

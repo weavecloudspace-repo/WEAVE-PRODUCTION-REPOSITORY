@@ -84,24 +84,52 @@ export function DirectoryTable({ columns, children, label }) {
   );
 }
 
-export function PersonIdentity({ name, meta, icon: Icon = UserRound }) {
-  const initials = String(name || "")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase() || "?";
+export function PersonIdentity({
+  name,
+  meta,
+  avatarSrc,
+  icon: Icon = UserRound,
+  size = "default",
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const prominent = size === "large";
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [avatarSrc]);
 
   return (
-    <div className="people-person-identity flex min-w-0 items-center gap-3">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
-        <Icon className="hidden h-4 w-4 md:block" />
-        <span className="text-xs font-bold tracking-tight md:hidden">{initials}</span>
+    <div className={cn(
+      "people-person-identity flex min-w-0 items-center py-0.5",
+      prominent ? "gap-4" : "gap-3.5",
+    )}>
+      <span className={cn(
+        "grid shrink-0 place-items-center overflow-hidden border border-primary/10 bg-primary-soft text-primary",
+        prominent ? "h-16 w-16 rounded-2xl" : "h-10 w-10 rounded-xl",
+      )}>
+        {avatarSrc && !imageFailed ? (
+          <img
+            src={avatarSrc}
+            alt=""
+            className="h-full w-full object-cover object-center"
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <Icon
+            className={prominent ? "h-7 w-7" : "h-[1.125rem] w-[1.125rem]"}
+            aria-hidden="true"
+          />
+        )}
       </span>
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-text">{name}</p>
-        <p className="mt-0.5 truncate text-xs text-text-muted">{meta}</p>
+        <p className={cn(
+          "truncate font-semibold text-text",
+          prominent ? "text-2xl leading-tight" : "text-sm leading-5",
+        )}>{name}</p>
+        <p className={cn(
+          "truncate text-text-muted",
+          prominent ? "mt-1 text-sm leading-5" : "text-xs leading-4",
+        )}>{meta}</p>
       </div>
     </div>
   );

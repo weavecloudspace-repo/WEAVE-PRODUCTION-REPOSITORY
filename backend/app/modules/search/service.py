@@ -54,6 +54,7 @@ class TenantSearchService:
         label: str,
         role: str,
         href: str,
+        passport_photo_url: str | None = None,
         metadata: str | None = None,
         admission_number: str | None = None,
         staff_id: str | None = None,
@@ -64,6 +65,7 @@ class TenantSearchService:
         return TenantSearchResult(
             label=label,
             role=role,
+            passport_photo_url=passport_photo_url,
             metadata=metadata,
             admission_number=admission_number,
             staff_id=staff_id,
@@ -143,6 +145,7 @@ class TenantSearchService:
                 TenantSearchResult(
                     label=TenantSearchService._name(student.first_name, student.last_name),
                     role="student",
+                    passport_photo_url=student.passport_photo_url,
                     metadata=class_label,
                     admission_number=student.admission_number,
                     class_name=class_label,
@@ -178,6 +181,7 @@ class TenantSearchService:
                 TenantSearchResult(
                     label=TenantSearchService._name(teacher.first_name, teacher.last_name),
                     role="teacher",
+                    passport_photo_url=teacher.passport_photo_url,
                     metadata=teacher.specialization,
                     staff_id=teacher.staff_id,
                     email=teacher.email,
@@ -657,6 +661,7 @@ class TenantSearchService:
                         TenantSearchService._result(
                             label=TenantSearchService._name(student.first_name, student.last_name),
                             role="student",
+                            passport_photo_url=student.passport_photo_url,
                             metadata=class_label,
                             admission_number=student.admission_number,
                             class_name=class_label,
@@ -717,6 +722,7 @@ class TenantSearchService:
                     TenantSearchService._result(
                         label=f"{TenantSearchService._name(student.first_name, student.last_name)} - {subject.name}",
                         role="result",
+                        passport_photo_url=student.passport_photo_url,
                         metadata=f"{class_label} | {session_label} | {term_label}",
                         admission_number=student.admission_number,
                         class_name=class_label,

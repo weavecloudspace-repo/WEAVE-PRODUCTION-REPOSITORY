@@ -640,17 +640,19 @@ class AIQuotaRequest(BaseModel):
 
 
 class AIQuotaPurchase(BaseModel):
-    """Tenant purchase of AI credits that later funds the tenant reserve."""
+    """Verified tenant-reserve or teacher-personal purchase of AI credits."""
 
     __tablename__ = "cbt_ai_quota_purchases"
 
-    initiated_by_admin_id: Mapped[uuid.UUID] = mapped_column(
+    initiated_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            f"{PUBLIC_SCHEMA}.tenant_admins.id",
-            ondelete="RESTRICT",
-        ),
-        nullable=False,
+        ForeignKey(f"{PUBLIC_SCHEMA}.tenant_admins.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    initiated_by_teacher_membership_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(f"{PUBLIC_SCHEMA}.teacher_memberships.id", ondelete="RESTRICT"),
+        nullable=True,
     )
 
     credits: Mapped[int] = mapped_column(
@@ -687,6 +689,16 @@ class AIQuotaPurchase(BaseModel):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "(initiated_by_admin_id IS NOT NULL) <> "
+            "(initiated_by_teacher_membership_id IS NOT NULL)",
+            name="ck_cbt_ai_quota_purchase_one_purchaser",
+        ),
+        Index(
+            "ix_cbt_ai_quota_purchases_teacher",
+            "tenant_id",
+            "initiated_by_teacher_membership_id",
+        ),
         CheckConstraint(
             "credits > 0",
             name="ck_cbt_ai_quota_purchases_positive_credits",

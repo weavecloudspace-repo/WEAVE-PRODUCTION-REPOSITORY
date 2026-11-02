@@ -8,6 +8,7 @@ from app.modules.cbt.ai.authoring.schemas import (
     AIQuestionOptionDraft,
     AISingleChoiceQuestionDraft,
 )
+from app.modules.cbt.ai.authoring.visual_policy import target_visual_question_count
 from app.modules.cbt.ai.authoring.validation import (
     AIResponseValidationError,
     validate_generated_question_batch,
@@ -41,6 +42,8 @@ def _single(
                 "is_correct": True,
             },
             {"text": "5", "image": None, "is_correct": False},
+            {"text": "6", "image": None, "is_correct": False},
+            {"text": "7", "image": None, "is_correct": False},
         ],
     }
 
@@ -55,6 +58,7 @@ def _multiple(prompt: str = "Select the prime numbers.", *, visual: bool = False
             {"text": "2", "image": None, "is_correct": True},
             {"text": "3", "image": None, "is_correct": True},
             {"text": "4", "image": None, "is_correct": False},
+            {"text": "5", "image": None, "is_correct": False},
         ],
     }
 
@@ -78,6 +82,7 @@ def test_multiple_choice_requires_two_correct_and_one_incorrect() -> None:
 
     all_correct = _multiple()
     all_correct["options"][2]["is_correct"] = True
+    all_correct["options"][3]["is_correct"] = True
     with pytest.raises(ValidationError, match="at least one incorrect"):
         AIMultipleChoiceQuestionDraft.model_validate(all_correct)
 
@@ -92,6 +97,8 @@ def test_question_rejects_normalized_duplicate_options() -> None:
     raw["options"] = [
         {"text": " Lagos ", "image": None, "is_correct": True},
         {"text": "lagos", "image": None, "is_correct": False},
+        {"text": "Ibadan", "image": None, "is_correct": False},
+        {"text": "Abuja", "image": None, "is_correct": False},
     ]
     with pytest.raises(ValidationError, match="options must be unique"):
         AISingleChoiceQuestionDraft.model_validate(raw)
@@ -247,3 +254,101 @@ def test_validation_feedback_is_structured_and_bounded() -> None:
     assert feedback["error"] == "invalid_generated_questions"
     assert feedback["issues"]
     assert all({"path", "code", "message"} <= set(item) for item in feedback["issues"])
+
+
+@pytest.mark.parametrize(
+    ("question_count", "visual_target"),
+    [
+        (1, 1),
+        (2, 1),
+        (3, 1),
+        (4, 1),
+        (5, 2),
+        (10, 4),
+        (12, 5),
+        (15, 6),
+        (20, 8),
+    ],
+)
+def test_allow_images_uses_deterministic_40_percent_visual_target(
+    question_count: int, visual_target: int
+) -> None:
+    assert target_visual_question_count(question_count) == visual_target
+
+
+@pytest.mark.parametrize("count", [0, -1, 1.5, True])
+def test_visual_target_rejects_invalid_question_counts(count: object) -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        target_visual_question_count(count)  # type: ignore[arg-type]
+
+
+def test_fifteen_question_auto_batch_requires_six_visual_questions() -> None:
+    questions = [_single(f"Question {index}", visual=index < 6) for index in range(15)]
+    result = validate_generated_question_batch(questions, expected_count=15, visual_mode="auto")
+    assert len(result) == 15
+
+
+def test_one_visual_in_fifteen_triggers_structured_repair_feedback() -> None:
+    questions = [_single(f"Question {index}", visual=index == 0) for index in range(15)]
+    with pytest.raises(AIResponseValidationError) as error:
+        validate_generated_question_batch(questions, expected_count=15, visual_mode="auto")
+    assert "visual_distribution_mismatch" in _issue_codes(error.value)
+    feedback = error.value.to_repair_feedback()
+    assert "exactly 6 visual-bearing" in feedback["issues"][0]["message"]
+
+
+def test_more_than_six_visual_questions_also_misses_distribution() -> None:
+    questions = [_single(f"Question {index}", visual=index < 7) for index in range(15)]
+    with pytest.raises(AIResponseValidationError) as error:
+        validate_generated_question_batch(questions, visual_mode="auto")
+    assert "visual_distribution_mismatch" in _issue_codes(error.value)
+
+
+def test_visual_question_with_option_images_counts_only_once() -> None:
+    questions = [
+        _single(f"Question {index}", visual=index < 5, option_visual=index == 5)
+        for index in range(15)
+    ]
+    result = validate_generated_question_batch(questions, visual_mode="auto")
+    assert len(result) == 15
+
+
+def test_text_only_still_allows_fifteen_text_questions_without_images() -> None:
+    questions = [_single(f"Question {index}") for index in range(15)]
+    assert (
+        len(
+            validate_generated_question_batch(questions, expected_count=15, visual_mode="text_only")
+        )
+        == 15
+    )
+
+
+def test_false_binary_review_artifact_is_removed_without_mutating_original() -> None:
+    raw = _single()
+    raw["options"][1]["binary_review_enabled"] = False
+    validated = validate_generated_question_batch([raw], visual_mode="text_only")
+    assert len(validated) == 1
+    assert validated[0].options[1].is_correct is False
+    assert "binary_review_enabled" not in validated[0].options[1].model_dump()
+    assert raw["options"][1]["binary_review_enabled"] is False
+
+
+def test_true_binary_review_artifact_and_unknown_fields_still_fail() -> None:
+    raw = _single()
+    raw["options"][1]["binary_review_enabled"] = True
+    with pytest.raises(AIResponseValidationError) as err:
+        validate_generated_question_batch([raw], visual_mode="text_only")
+    assert "extra_forbidden" in _issue_codes(err.value)
+
+    raw = _single()
+    raw["options"][1]["unexpected_key"] = False
+    with pytest.raises(AIResponseValidationError) as err:
+        validate_generated_question_batch([raw], visual_mode="text_only")
+    assert "extra_forbidden" in _issue_codes(err.value)
+
+
+def test_regenerated_question_normalizes_known_false_review_artifact() -> None:
+    raw = _single()
+    raw["options"][1]["binary_review_enabled"] = False
+    validated = validate_regenerated_question(raw, visual_mode="text_only")
+    assert validated.options[1].is_correct is False

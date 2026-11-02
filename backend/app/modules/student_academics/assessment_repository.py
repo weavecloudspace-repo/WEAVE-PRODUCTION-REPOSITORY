@@ -126,6 +126,28 @@ class AssessmentRepository:
         return dict(grouped)
 
     @staticmethod
+    async def get_components_by_ids(
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        component_ids: set[uuid.UUID],
+    ) -> dict[uuid.UUID, AssessmentComponent]:
+        if not component_ids:
+            return {}
+        rows = (
+            (
+                await db.execute(
+                    select(AssessmentComponent).where(
+                        AssessmentComponent.tenant_id == tenant_id,
+                        AssessmentComponent.id.in_(component_ids),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return {row.id: row for row in rows}
+
+    @staticmethod
     async def get_component(
         db: AsyncSession, tenant_id: uuid.UUID, component_id: uuid.UUID
     ) -> AssessmentComponent | None:

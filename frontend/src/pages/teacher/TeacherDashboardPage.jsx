@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import AnalyticsBarChart from "../../components/charts/AnalyticsBarChart";
+import AIUsageDashboardCard from "../../features/ai/AIUsageDashboardCard";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import LoadingState from "../../components/shared/LoadingState";
 import Card from "../../components/ui/Card";
@@ -223,7 +224,42 @@ function TeacherDashboardPage() {
               to={hasClassTeacherClasses ? "/teacher/student-comments" : undefined}
             />
             </section>
-          ) : null}
+          ) : (
+            <section className="dashboard-kpi-grid dashboard-kpi-grid-four grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+              <DashboardMetricCard
+                label="Assigned subjects"
+                value={subjectNames.length}
+                description="Subjects you currently teach"
+                icon={BookOpen}
+                tone="primary"
+                to="/teacher/subjects"
+              />
+              <DashboardMetricCard
+                label="Subject classes"
+                value={subjectClasses.length}
+                description="Classes in your teaching assignments"
+                icon={Users}
+                tone="accent"
+                to="/teacher/students"
+              />
+              <DashboardMetricCard
+                label="Finalized results"
+                value={metrics?.stats?.result_rows_submitted ?? "—"}
+                description="Completed result rows available to you"
+                icon={CheckCircle2}
+                tone="success"
+                to="/teacher/results"
+              />
+              <DashboardMetricCard
+                label="Pending results"
+                value={metrics?.stats?.pending_score_rows ?? "—"}
+                description="Awaiting finalization by the school"
+                icon={FilePenLine}
+                tone="warning"
+                to="/teacher/results"
+              />
+            </section>
+          )}
 
           <section
             className={
@@ -339,6 +375,7 @@ function TeacherDashboardPage() {
             </div>
           </section>
 
+          <AIUsageDashboardCard role="teacher" />
           <DashboardQuickActions
             title="Quick actions"
             description="Assignment-scoped teacher workflows."

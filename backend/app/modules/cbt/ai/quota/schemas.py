@@ -161,7 +161,8 @@ class AIQuotaPurchaseResponse(AIQuotaSchemaBase):
     amount_kobo: int = Field(gt=0)
     reference: str
     status: AIQuotaPurchaseStatus
-    initiated_by_admin_id: uuid.UUID
+    initiated_by_admin_id: uuid.UUID | None
+    initiated_by_teacher_membership_id: uuid.UUID | None = None
     initiated_by_email: str | None = None
     created_at: datetime
     credited_at: datetime | None = None

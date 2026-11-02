@@ -13,6 +13,7 @@ const render = runInNewContext(`${code}\nStudentCard`, {
   React: { createElement: (type, props, ...children) => ({ type, props: props || {}, children }) },
   MobilePersonCard: "MobilePersonCard", PersonIdentity: "PersonIdentity", Badge: "Badge", StudentActions: "StudentActions",
   displayName: (student) => student.name,
+  getAvatarSrcFromRecord: (student) => student.passport_photo_url,
   studentClassLabel: () => "Year 1",
   titleCase: (value) => value,
   formatDate: (value) => value,

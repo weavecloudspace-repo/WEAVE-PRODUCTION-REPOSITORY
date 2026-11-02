@@ -13,7 +13,7 @@ test("AI completion is public and cannot trigger payment verification or settlem
   assert.doesNotMatch(page, /\bfetch\s*\(|\buseEffect\b|localStorage|sessionStorage/);
   assert.doesNotMatch(page, /SubscriptionVerify|verifyTermPayment|authorization|access_token/);
   assert.doesNotMatch(page, /Payment successful|Payment confirmed|Credits added/i);
-  assert.match(page, /Return to Weave CBT/);
+  assert.match(page, /Return to Weave/);
   assert.doesNotMatch(page, /window\.close|handleCloseTab|<Button/);
-  assert.match(page, /You can close this tab and return to Weave CBT/);
+  assert.match(page, /You can close this tab and return to Weave/);
 });

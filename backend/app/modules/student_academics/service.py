@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -463,6 +463,46 @@ class StudentAcademicService:
             counts.update(calendar_readiness.get("counts", {}))
             blockers.extend(calendar_readiness.get("blockers", []))
         if term.status in {AcademicTermStatus.OPEN, AcademicTermStatus.CLOSING}:
+            # Do not close a term while active TMAs, cancellation reversals,
+            # or scheduled zeros are still waiting to update academic scores.
+            from app.modules.tma.models import TMAAssignment, TMAAssignmentStatus
+
+            tma_base = (
+                TMAAssignment.tenant_id == tenant_id,
+                TMAAssignment.academic_term_id == term_id,
+            )
+            counts["tma_open_assignments"] = (
+                await db.execute(
+                    select(func.count(TMAAssignment.id)).where(
+                        *tma_base, TMAAssignment.status == TMAAssignmentStatus.ACTIVE
+                    )
+                )
+            ).scalar_one()
+            counts["tma_pending_cancellation"] = (
+                await db.execute(
+                    select(func.count(TMAAssignment.id)).where(
+                        *tma_base, TMAAssignment.status == TMAAssignmentStatus.CANCELLING
+                    )
+                )
+            ).scalar_one()
+            counts["tma_pending_zero_grading"] = (
+                await db.execute(
+                    select(func.count(TMAAssignment.id)).where(
+                        *tma_base,
+                        TMAAssignment.status == TMAAssignmentStatus.CLOSED,
+                        TMAAssignment.zero_grading_requested_at.is_not(None),
+                        TMAAssignment.zero_grading_completed_at.is_(None),
+                    )
+                )
+            ).scalar_one()
+            if counts["tma_open_assignments"]:
+                blockers.append("Close every published TMA before closing this term.")
+            if counts["tma_pending_cancellation"]:
+                blockers.append("Complete TMA score cancellation before closing this term.")
+            if counts["tma_pending_zero_grading"]:
+                blockers.append(
+                    "Complete or reconcile all missed-deadline TMA zero scores before term closure."
+                )
             if counts["draft_results"]:
                 blockers.append(
                     "Draft results must be submitted, approved, or removed before closing the term."

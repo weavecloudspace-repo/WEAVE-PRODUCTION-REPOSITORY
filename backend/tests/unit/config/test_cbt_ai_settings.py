@@ -34,21 +34,28 @@ def test_defaults_and_validator_chain():
     assert config.MINIMAX_BASE_URL == "https://api.minimax.io"
     assert config.GEMINI_API_KEY is None
     assert config.MINIMAX_API_KEY is None
-    assert config.OPENVERSE_CLIENT_ID is None
-    assert config.OPENVERSE_CLIENT_SECRET is None
+    assert config.OPENROUTER_API_KEY is None
+    assert config.OPENROUTER_VISION_MODEL == "qwen/qwen3-vl-8b-instruct"
+    assert config.CBT_AI_IMAGE_SEARCH_PROVIDER == "ddgs"
     with pytest.raises(ValidationError, match="DATABASE_URL"):
         make_settings(DATABASE_URL=None)
 
 
 @pytest.mark.parametrize(
-    "field", ["CBT_AI_QUESTION_PROVIDER", "CBT_AI_IMAGE_PROVIDER", "CBT_AI_IMAGE_SEARCH_PROVIDER"]
+    "field",
+    [
+        "CBT_AI_QUESTION_PROVIDER",
+        "CBT_AI_IMAGE_PROVIDER",
+        "CBT_AI_IMAGE_SEARCH_PROVIDER",
+        "CBT_AI_IMAGE_EVALUATION_PROVIDER",
+    ],
 )
 def test_unknown_provider_rejected(field):
     with pytest.raises(ValidationError):
         make_settings(**{field: "unknown"})
 
 
-@pytest.mark.parametrize("provider", ["gemini", "minimax"])
+@pytest.mark.parametrize("provider", ["gemini", "minimax", "openrouter"])
 def test_supported_generation_providers(provider):
     assert (
         make_settings(
@@ -58,7 +65,7 @@ def test_supported_generation_providers(provider):
     )
 
 
-@pytest.mark.parametrize("field", ["MINIMAX_BASE_URL", "GEMINI_BASE_URL", "OPENVERSE_BASE_URL"])
+@pytest.mark.parametrize("field", ["MINIMAX_BASE_URL", "GEMINI_BASE_URL", "OPENROUTER_BASE_URL"])
 @pytest.mark.parametrize(
     "value",
     [
@@ -100,6 +107,9 @@ def test_values_normalized_and_secrets_masked():
         "MINIMAX_IMAGE_MODEL",
         "GEMINI_TEXT_MODEL",
         "GEMINI_IMAGE_MODEL",
+        "OPENROUTER_TEXT_MODEL",
+        "OPENROUTER_VISION_MODEL",
+        "OPENROUTER_IMAGE_MODEL",
     ],
 )
 def test_blank_model_names_rejected(field):
@@ -112,33 +122,12 @@ def test_blank_model_names_rejected(field):
     [
         "MINIMAX_API_KEY",
         "GEMINI_API_KEY",
-        "OPENVERSE_CLIENT_SECRET",
+        "OPENROUTER_API_KEY",
     ],
 )
 def test_blank_optional_secrets_become_none(field):
     config = make_settings(**{field: "   "})
     assert getattr(config, field) is None
-
-
-def test_blank_openverse_client_id_becomes_none():
-    config = make_settings(OPENVERSE_CLIENT_ID="   ")
-    assert config.OPENVERSE_CLIENT_ID is None
-
-
-def test_partial_openverse_credentials_do_not_block_startup():
-    id_only = make_settings(OPENVERSE_CLIENT_ID="client")
-    secret_only = make_settings(OPENVERSE_CLIENT_SECRET="test-secret")
-
-    assert id_only.OPENVERSE_CLIENT_ID == "client"
-    assert id_only.OPENVERSE_CLIENT_SECRET is None
-    assert secret_only.OPENVERSE_CLIENT_ID is None
-    assert isinstance(secret_only.OPENVERSE_CLIENT_SECRET, SecretStr)
-
-
-def test_complete_openverse_credentials():
-    config = make_settings(OPENVERSE_CLIENT_ID=" client ", OPENVERSE_CLIENT_SECRET="test-secret")
-    assert config.OPENVERSE_CLIENT_ID == "client"
-    assert config.OPENVERSE_CLIENT_SECRET is not None
 
 
 @pytest.mark.parametrize(
@@ -150,7 +139,10 @@ def test_complete_openverse_credentials():
         ("MINIMAX_REQUEST_TIMEOUT_SECONDS", 1, 300),
         ("GEMINI_IMAGE_TIMEOUT_SECONDS", 1, 300),
         ("GEMINI_REQUEST_TIMEOUT_SECONDS", 1, 300),
-        ("OPENVERSE_REQUEST_TIMEOUT_SECONDS", 1, 60),
+        ("OPENROUTER_REQUEST_TIMEOUT_SECONDS", 1, 300),
+        ("OPENROUTER_VISION_TIMEOUT_SECONDS", 1, 300),
+        ("OPENROUTER_IMAGE_TIMEOUT_SECONDS", 1, 300),
+        ("DDGS_REQUEST_TIMEOUT_SECONDS", 1, 60),
     ],
 )
 def test_numeric_bounds(field, low, high):

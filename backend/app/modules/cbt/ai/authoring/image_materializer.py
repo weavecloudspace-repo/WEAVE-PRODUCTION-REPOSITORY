@@ -97,6 +97,8 @@ class ImageMaterializer:
     MAX_PIXELS = 16_000_000
     MAX_DIMENSION = 8_192
     TARGET_MAX_DIMENSION = 2_048
+    TARGET_GENERATED_MAX_DIMENSION = 1_536
+    GENERATED_WEBP_QUALITY = 88
     MAX_REDIRECTS = 3
     DOWNLOAD_TIMEOUT_SECONDS = 12.0
     WIKIMEDIA_RASTER_WIDTH = 1_600
@@ -281,6 +283,7 @@ class ImageMaterializer:
             image.content_type,
             label,
             image.alt_text,
+            True,
         )
 
     async def materialize_transport_base64(
@@ -487,6 +490,7 @@ class ImageMaterializer:
         hinted_content_type: str | None,
         label: str | None,
         alt_text: str | None,
+        optimize_generated: bool = False,
     ) -> ProviderImageInput:
         """Validate real image bytes and return an efficiently encoded file image."""
 
@@ -508,8 +512,25 @@ class ImageMaterializer:
                     image = ImageOps.exif_transpose(opened)
                     image.load()
                     image_format = (opened.format or image_format).upper()
-                    image = cls._resize_if_needed(image)
+                    image = cls._resize_if_needed(
+                        image,
+                        max_dimension=(
+                            cls.TARGET_GENERATED_MAX_DIMENSION
+                            if optimize_generated
+                            else cls.TARGET_MAX_DIMENSION
+                        ),
+                    )
                     encoded, content_type = cls._encode_normalized(image, image_format)
+                    if (
+                        optimize_generated
+                        and len(encoded) >= 256 * 1024
+                        and content_type != "image/webp"
+                    ):
+                        # Prefer high-quality WebP when it provides meaningful
+                        # transfer savings. Keep PNG/JPEG when smaller or similar.
+                        alternative, _ = cls._encode_webp(image, quality=cls.GENERATED_WEBP_QUALITY)
+                        if len(alternative) < len(encoded) * 0.85:
+                            encoded, content_type = alternative, "image/webp"
         except InvalidImageError:
             raise
         except (
@@ -547,13 +568,16 @@ class ImageMaterializer:
             raise InvalidImageError("Image pixel count exceeds the maximum allowed size.")
 
     @classmethod
-    def _resize_if_needed(cls, image: Image.Image) -> Image.Image:
+    def _resize_if_needed(
+        cls, image: Image.Image, *, max_dimension: int | None = None
+    ) -> Image.Image:
         width, height = image.size
-        max_dimension = max(width, height)
-        if max_dimension <= cls.TARGET_MAX_DIMENSION:
+        requested_max = max_dimension or cls.TARGET_MAX_DIMENSION
+        current_max = max(width, height)
+        if current_max <= requested_max:
             return image.copy()
 
-        scale = cls.TARGET_MAX_DIMENSION / max_dimension
+        scale = requested_max / current_max
         target = (max(1, round(width * scale)), max(1, round(height * scale)))
         return image.resize(target, Image.Resampling.LANCZOS)
 
