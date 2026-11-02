@@ -25,6 +25,10 @@ export const tmaService = {
   close: (id) => api.post(path(id, "/close"), {}),
   cancel: (id, reason) => api.post(path(id, "/cancel"), { reason }),
   cancellation: (id) => read(path(id, "/cancellation")),
+  cancellationConflicts: (id) => read(path(id, "/cancellation/conflicts")),
+  zeroConflicts: (id) => read(path(id, "/deadline-zeros/conflicts")),
+  exemptZero: (id, studentId, reason) =>
+    api.post(path(id, `/deadline-zeros/exempt/${studentId}`), { reason }),
   retryCancellation: (id) => api.post(path(id, "/cancellation/retry"), {}),
   revise: (id) => api.post(path(id, "/revisions"), {}),
   revisions: (id) => read(path(id, "/revisions")),

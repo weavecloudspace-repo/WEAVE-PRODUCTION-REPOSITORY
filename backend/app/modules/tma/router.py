@@ -38,6 +38,9 @@ from app.modules.tma.schemas import (
     TMAAssignmentStatusResponse,
     TMAAssignmentUpdate,
     TMACancellationRequest,
+    TMACancellationConflictResponse,
+    TMAZeroGradingConflictResponse,
+    TMAZeroExemptionRequest,
     TMACancellationRunResponse,
     TMARevisionResponse,
     TMARevisionHistoryResponse,
@@ -622,6 +625,65 @@ async def get_cancellation(
         assignment_id=assignment_id,
     )
     return TMACancellationRunResponse.model_validate(run)
+
+
+@author_router.get(
+    "/assignments/{assignment_id}/deadline-zeros/conflicts",
+    response_model=list[TMAZeroGradingConflictResponse],
+)
+async def get_deadline_zero_conflicts(
+    assignment_id: uuid.UUID,
+    db: DbSession,
+    actor: Author,
+) -> list[TMAZeroGradingConflictResponse]:
+    from app.modules.tma.zero_reconciliation_service import TMAZeroReconciliationService
+
+    rows = await TMAZeroReconciliationService.list_conflicts(
+        db, actor=actor, assignment_id=assignment_id
+    )
+    return [TMAZeroGradingConflictResponse.model_validate(row) for row in rows]
+
+
+@author_router.post(
+    "/assignments/{assignment_id}/deadline-zeros/exempt/{student_id}",
+    response_model=TMAZeroGradingConflictResponse,
+)
+async def exempt_deadline_zero(
+    assignment_id: uuid.UUID,
+    student_id: uuid.UUID,
+    payload: TMAZeroExemptionRequest,
+    db: DbSession,
+    actor: Author,
+) -> TMAZeroGradingConflictResponse:
+    from app.modules.tma.zero_reconciliation_service import TMAZeroReconciliationService
+
+    row = await TMAZeroReconciliationService.exempt(
+        db,
+        actor=actor,
+        assignment_id=assignment_id,
+        student_id=student_id,
+        reason=payload.reason,
+    )
+    return TMAZeroGradingConflictResponse.model_validate(row)
+
+
+@author_router.get(
+    "/assignments/{assignment_id}/cancellation/conflicts",
+    response_model=list[TMACancellationConflictResponse],
+)
+async def get_cancellation_conflicts(
+    assignment_id: uuid.UUID,
+    db: DbSession,
+    actor: Author,
+) -> list[TMACancellationConflictResponse]:
+    from app.modules.tma.cancellation_reconciliation_service import (
+        TMACancellationReconciliationService,
+    )
+
+    rows = await TMACancellationReconciliationService.conflicts(
+        db, actor=actor, assignment_id=assignment_id
+    )
+    return [TMACancellationConflictResponse.model_validate(row) for row in rows]
 
 
 @author_router.post(

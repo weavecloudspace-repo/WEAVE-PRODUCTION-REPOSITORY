@@ -266,6 +266,9 @@ export default function TmaPage({ role }) {
   const [reportOffset, setReportOffset] = useState(0);
   const [history, setHistory] = useState([]);
   const [cancellation, setCancellation] = useState(null);
+  const [cancellationConflicts, setCancellationConflicts] = useState([]);
+  const [zeroConflicts, setZeroConflicts] = useState([]);
+  const [zeroExemptTarget, setZeroExemptTarget] = useState(null);
   const [reason, setReason] = useState("");
   const loadVersion = useRef(0);
   const load = useCallback(
@@ -334,6 +337,9 @@ export default function TmaPage({ role }) {
     setDialog(null);
     setReadiness(null);
     setCancellation(null);
+    setCancellationConflicts([]);
+    setZeroConflicts([]);
+    setZeroExemptTarget(null);
     setTab("questions");
     setAiOpen(false);
     setAssignment(null);
@@ -579,6 +585,27 @@ export default function TmaPage({ role }) {
                     }),
                 },
                 {
+                  label: "Inspect missed-deadline grading conflicts",
+                  icon: History,
+                  visible: canManage && Boolean(assignment?.zero_grading_error),
+                  onClick: () =>
+                    run(async () => {
+                      setZeroConflicts(await service.zeroConflicts(assignmentId));
+                      setTab("submissions");
+                    }),
+                },
+                {
+                  label: "Inspect cancellation conflicts",
+                  icon: History,
+                  visible: canManage && cancellation?.status === "failed",
+                  onClick: () =>
+                    run(async () => {
+                      const issues = await service.cancellationConflicts(assignmentId);
+                      setCancellationConflicts(issues);
+                      setTab("submissions");
+                    }),
+                },
+                {
                   label: "Retry cancellation",
                   icon: RefreshCw,
                   visible: canManage && cancellation?.status === "failed",
@@ -710,6 +737,39 @@ export default function TmaPage({ role }) {
                 <Badge>{assignment.status}</Badge>
                 {assignment.zero_grading_completed_at && (
                   <span className="text-xs text-text-muted">Deadline zeros processed</span>
+                )}
+                {cancellationConflicts.length > 0 && (
+                  <div role="alert" className="w-full rounded-xl border border-border bg-surface-muted p-3 text-xs text-text">
+                    <p className="font-semibold">Cancellation requires academic reconciliation:</p>
+                    {cancellationConflicts.map((issue) => (
+                      <p key={issue.attempt_id} className="mt-1">
+                        Student {issue.student_id}: {issue.reason}
+                      </p>
+                    ))}
+                    <p className="mt-2 text-text-muted">
+                      Resolve the affected results using the normal academic approval/reopen workflow, then choose Retry cancellation.
+                    </p>
+                  </div>
+                )}
+                {zeroConflicts.length > 0 && (
+                  <div role="alert" className="w-full rounded-xl border border-border bg-surface-muted p-3 text-xs text-text">
+                    <p className="font-semibold">Missed-deadline grading needs reconciliation:</p>
+                    {zeroConflicts.map((issue) => (
+                      <div key={issue.student_id} className="mt-2 flex flex-wrap items-center gap-2">
+                        <span>Student {issue.student_id}: {issue.reason} ({issue.attempts} attempt(s))</span>
+                        {role === "admin" && (
+                          <Button variant="outline" size="sm" onClick={() => {
+                            setZeroExemptTarget(issue.student_id);
+                            setReason("");
+                            setDialog("zeroExempt");
+                          }}>Exempt with reason</Button>
+                        )}
+                      </div>
+                    ))}
+                    <p className="mt-2 text-text-muted">
+                      First repair missing teachers or academic results; retries run automatically. Exemptions are audited and do not modify marks.
+                    </p>
+                  </div>
                 )}
                 {assignment.zero_grading_error && (
                   <span role="alert" className="text-xs text-error">
@@ -1081,7 +1141,7 @@ export default function TmaPage({ role }) {
           }
         />
         <Modal
-          open={["activate", "reopen", "close", "cancel", "delete", "deleteAssignment"].includes(dialog)}
+          open={["activate", "reopen", "close", "cancel", "delete", "deleteAssignment", "zeroExempt"].includes(dialog)}
           title={
             {
               activate: "Publish assignment?",
@@ -1090,6 +1150,7 @@ export default function TmaPage({ role }) {
               cancel: "Cancel assignment?",
               delete: "Delete question?",
               deleteAssignment: "Permanently delete draft assignment?",
+              zeroExempt: "Exempt student from missed-deadline zero?",
             }[dialog] || "Confirm"
           }
           onClose={() => !busy && setDialog(null)}
@@ -1109,15 +1170,17 @@ export default function TmaPage({ role }) {
                   delete: "This question will be removed from the draft.",
                   deleteAssignment:
                     "This permanently removes this unpublished assignment, its questions, answer options, and images. It cannot be undone. AI credit usage remains in transaction history.",
+                  zeroExempt:
+                    "This records a permanent audited exemption. No academic score will be generated for this student's missed TMA.",
                 }[dialog]
               }
             </p>
-            {dialog === "cancel" && (
+            {(dialog === "cancel" || dialog === "zeroExempt") && (
               <label className="grid gap-2 text-sm">
                 Reason
                 <textarea
                   className={field}
-                  minLength={5}
+                  minLength={dialog === "zeroExempt" ? 10 : 5}
                   maxLength={2000}
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
@@ -1126,10 +1189,16 @@ export default function TmaPage({ role }) {
             )}
             <Button
               disabled={
-                busy || (dialog === "cancel" && reason.trim().length < 5)
+                busy || (dialog === "cancel" && reason.trim().length < 5) ||
+                (dialog === "zeroExempt" && reason.trim().length < 10)
               }
               onClick={() =>
                 run(async () => {
+                  if (dialog === "zeroExempt") {
+                    await service.exemptZero(assignmentId, zeroExemptTarget, reason);
+                    setZeroConflicts(await service.zeroConflicts(assignmentId));
+                    setZeroExemptTarget(null);
+                  }
                   if (dialog === "activate")
                     await service.activate(assignmentId);
                   if (dialog === "reopen") await service.reopen(assignmentId);

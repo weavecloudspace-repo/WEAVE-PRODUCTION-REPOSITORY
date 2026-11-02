@@ -1185,3 +1185,45 @@ class TMADraftMediaCleanup(BaseModel):
         UniqueConstraint("tenant_id", "object_key", name="uq_tma_draft_media_cleanup_object"),
         Index("ix_tma_draft_media_cleanup_created", "created_at"),
     )
+
+
+class TMAZeroGradingFailure(BaseModel):
+    """Durable per-student reconciliation record for blocked deadline zeros."""
+
+    __tablename__ = "tma_zero_grading_failures"
+
+    assignment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    last_failed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolution: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_by_actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "assignment_id"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_assignments.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_assignments.id",
+            ],
+            name="fk_tma_zero_failure_tenant_assignment",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "assignment_id",
+            "student_id",
+            name="uq_tma_zero_failure_tenant_assignment_student",
+        ),
+        Index(
+            "ix_tma_zero_failure_pending",
+            "tenant_id",
+            "assignment_id",
+            "resolved_at",
+        ),
+    )

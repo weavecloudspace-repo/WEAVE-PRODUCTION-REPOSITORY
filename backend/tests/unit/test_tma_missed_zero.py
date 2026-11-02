@@ -180,7 +180,11 @@ async def test_student_joining_after_deadline_is_not_penalized(monkeypatch):
 async def test_worker_finishes_when_all_current_students_are_submitted(monkeypatch):
     item = assignment()
     db = AsyncMock()
-    db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: item)
+    db.execute.side_effect = [
+        SimpleNamespace(scalar_one_or_none=lambda: item),
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
+        SimpleNamespace(scalar_one=lambda: 0),
+    ]
     monkeypatch.setattr(
         mod.TMARevisionRepository,
         "get_by_number",
@@ -231,7 +235,12 @@ async def test_worker_finishes_when_all_current_students_are_submitted(monkeypat
 async def test_worker_does_not_drop_reconciliation_errors(monkeypatch):
     item = assignment()
     db = AsyncMock()
-    db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: item)
+    db.execute.side_effect = [
+        SimpleNamespace(scalar_one_or_none=lambda: item),
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
+        SimpleNamespace(),
+        SimpleNamespace(scalar_one=lambda: 1),
+    ]
     monkeypatch.setattr(
         mod.TMARevisionRepository,
         "get_by_number",

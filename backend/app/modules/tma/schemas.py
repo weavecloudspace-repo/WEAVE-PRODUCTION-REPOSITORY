@@ -162,6 +162,27 @@ class TMARevisionHistoryResponse(TMAOutput):
     revisions: list[TMARevisionResponse] = Field(default_factory=list)
 
 
+class TMAZeroGradingConflictResponse(TMAOutput):
+    student_id: uuid.UUID
+    reason: str
+    attempts: int
+    last_failed_at: datetime
+    resolved_at: datetime | None = None
+    resolution: str | None = None
+    resolution_note: str | None = None
+
+
+class TMAZeroExemptionRequest(TMAInput):
+    reason: str = Field(min_length=10, max_length=2000)
+
+
+class TMACancellationConflictResponse(TMAOutput):
+    student_id: uuid.UUID
+    attempt_id: uuid.UUID
+    score_id: uuid.UUID | None = None
+    reason: str
+
+
 class TMACancellationRequest(TMAInput):
     reason: str = Field(min_length=5, max_length=2000)
 
