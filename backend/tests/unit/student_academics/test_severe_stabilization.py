@@ -78,10 +78,7 @@ async def test_term_closure_preview_does_not_query_next_term_specialization() ->
     assert preview.can_close is True
     assert preview.can_start_closing is True
     assert db.execute.await_count == 3
-    assert all(
-        "tma_assignments" in str(call.args[0])
-        for call in db.execute.await_args_list
-    )
+    assert all("tma_assignments" in str(call.args[0]) for call in db.execute.await_args_list)
 
 
 @pytest.mark.asyncio

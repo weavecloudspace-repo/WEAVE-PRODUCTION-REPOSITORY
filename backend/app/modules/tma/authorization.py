@@ -91,6 +91,107 @@ class TMAAuthorizationService:
             raise ForbiddenException("You do not currently teach this level and subject.")
 
     @staticmethod
+    async def authorized_listing_scopes(
+        db: AsyncSession, *, actor: TeacherMembership, academic_term_id: uuid.UUID | None
+    ) -> set[tuple[uuid.UUID, uuid.UUID, uuid.UUID]]:
+        """Resolve curricula in bulk per term, never per assignment or student."""
+        from app.modules.student_academics.models import TeacherAssignment
+
+        today = date.today()
+        rooms_and_subjects = (
+            await db.execute(
+                select(
+                    ClassRoom.id,
+                    ClassRoom.academic_level_id,
+                    TeacherAssignment.curriculum_subject_id,
+                )
+                .join(TeacherAssignment, TeacherAssignment.class_id == ClassRoom.id)
+                .where(
+                    ClassRoom.tenant_id == actor.tenant_id,
+                    ClassRoom.is_active.is_(True),
+                    ClassRoom.archived_at.is_(None),
+                    TeacherAssignment.tenant_id == actor.tenant_id,
+                    TeacherAssignment.teacher_membership_id == actor.id,
+                    TeacherAssignment.effective_from <= today,
+                    TeacherAssignment.effective_to.is_(None)
+                    | (TeacherAssignment.effective_to >= today),
+                )
+            )
+        ).all()
+        if not rooms_and_subjects:
+            return set()
+        terms = (
+            [academic_term_id]
+            if academic_term_id
+            else list(
+                (
+                    await db.execute(
+                        select(TMAAssignment.academic_term_id)
+                        .where(TMAAssignment.tenant_id == actor.tenant_id)
+                        .distinct()
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        )
+        scopes = set()
+        for term_id in terms:
+            resolved = await CurriculumResolutionService.resolve_classes_subjects(
+                db,
+                tenant_id=actor.tenant_id,
+                class_ids={row[0] for row in rooms_and_subjects},
+                academic_term_id=term_id,
+                skip_unresolvable=True,
+            )
+            for room_id, level_id, subject_id in rooms_and_subjects:
+                if any(
+                    item.curriculum_subject_id == subject_id for item in resolved.get(room_id, [])
+                ):
+                    scopes.add((term_id, level_id, subject_id))
+        return scopes
+
+    @staticmethod
+    async def authorized_classroom_ids(
+        db: AsyncSession, *, actor: TMAAuthor, assignment: TMAAssignment
+    ) -> set[uuid.UUID] | None:
+        """None grants the administrator tenant scope; an empty set grants nothing."""
+        if actor.tenant_id != assignment.tenant_id:
+            raise NotFoundException("Assignment not found.")
+        if isinstance(actor, TenantAdmin):
+            return None
+        if (
+            not isinstance(actor, TeacherMembership)
+            or actor.status != TeacherMembershipStatus.ACTIVE
+        ):
+            raise ForbiddenException("An active teacher membership is required.")
+        from app.modules.student_academics.models import TeacherAssignment
+
+        today = date.today()
+        return set(
+            (
+                await db.execute(
+                    select(TeacherAssignment.class_id)
+                    .join(ClassRoom, ClassRoom.id == TeacherAssignment.class_id)
+                    .where(
+                        TeacherAssignment.tenant_id == actor.tenant_id,
+                        TeacherAssignment.teacher_membership_id == actor.id,
+                        TeacherAssignment.curriculum_subject_id == assignment.curriculum_subject_id,
+                        TeacherAssignment.effective_from <= today,
+                        TeacherAssignment.effective_to.is_(None)
+                        | (TeacherAssignment.effective_to >= today),
+                        ClassRoom.tenant_id == actor.tenant_id,
+                        ClassRoom.academic_level_id == assignment.academic_level_id,
+                        ClassRoom.is_active.is_(True),
+                        ClassRoom.archived_at.is_(None),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    @staticmethod
     async def require_assignment_access(
         db: AsyncSession,
         *,
@@ -99,6 +200,8 @@ class TMAAuthorizationService:
     ) -> None:
         if actor.tenant_id != assignment.tenant_id:
             raise NotFoundException("Assignment not found.")
+        if isinstance(actor, TenantAdmin):
+            return
         await TMAAuthorizationService.require_authoring_access(
             db,
             actor=actor,

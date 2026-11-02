@@ -61,6 +61,7 @@ class TMAGradingService:
         total: int,
         attempt: TMAAttempt | None = None,
         scoring_date: date | None = None,
+        deadline_subject_id: uuid.UUID | None = None,
     ) -> Decimal:
         """Write only this TMA's component in the academic DRAFT result.
 
@@ -134,27 +135,33 @@ class TMAGradingService:
                 raise ConflictException(
                     "No current teacher assignment can own the academic result."
                 )
-            curricula = await CurriculumResolutionService.resolve_student_subjects(
-                db,
-                tenant_id=tenant_id,
-                student_id=student_id,
-                academic_term_id=assignment.academic_term_id,
-            )
-            subject = next(
-                (
-                    row
-                    for row in curricula
-                    if row.curriculum_subject_id == assignment.curriculum_subject_id
-                ),
-                None,
-            )
-            if subject is None:
-                raise ConflictException("Student is no longer eligible for this subject.")
+            # A deadline worker supplies the subject from its immutable revision
+            # roster; resolving current enrollment here would undo that guarantee.
+            if deadline_subject_id is None:
+                curricula = await CurriculumResolutionService.resolve_student_subjects(
+                    db,
+                    tenant_id=tenant_id,
+                    student_id=student_id,
+                    academic_term_id=assignment.academic_term_id,
+                )
+                subject = next(
+                    (
+                        row
+                        for row in curricula
+                        if row.curriculum_subject_id == assignment.curriculum_subject_id
+                    ),
+                    None,
+                )
+                if subject is None:
+                    raise ConflictException("Student is no longer eligible for this subject.")
+                subject_id = subject.subject_id
+            else:
+                subject_id = deadline_subject_id
             result = StudentSubjectResult(
                 tenant_id=tenant_id,
                 student_id=student_id,
                 class_id=enrollment.class_id,
-                subject_id=subject.subject_id,
+                subject_id=subject_id,
                 curriculum_subject_id=assignment.curriculum_subject_id,
                 teacher_membership_id=teacher_assignment.teacher_membership_id,
                 teacher_assignment_id=teacher_assignment.id,

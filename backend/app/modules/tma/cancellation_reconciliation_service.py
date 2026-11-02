@@ -30,9 +30,7 @@ class TMACancellationReconciliationService:
         actor: TMAAuthor,
         assignment_id: uuid.UUID,
     ) -> list[dict]:
-        assignment = await TMAAssignmentRepository.get_by_id(
-            db, actor.tenant_id, assignment_id
-        )
+        assignment = await TMAAssignmentRepository.get_by_id(db, actor.tenant_id, assignment_id)
         if assignment is None:
             raise NotFoundException("TMA assignment not found.")
         await TMAAuthorizationService.require_assignment_access(
@@ -71,8 +69,7 @@ class TMACancellationReconciliationService:
                 .outerjoin(
                     StudentSubjectResult,
                     and_(
-                        StudentSubjectResult.id
-                        == StudentAssessmentScore.student_subject_result_id,
+                        StudentSubjectResult.id == StudentAssessmentScore.student_subject_result_id,
                         StudentSubjectResult.tenant_id == actor.tenant_id,
                     ),
                 )

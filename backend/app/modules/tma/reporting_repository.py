@@ -16,6 +16,7 @@ from app.modules.student_academics.curriculum_models import StudentElectiveSelec
 from app.modules.student_academics.models import StudentAssessmentScore, StudentSubjectResult
 from app.modules.students.models import AcademicStatus, Student, StudentEnrollment
 from app.modules.tma.models import (
+    TMADeadlineEligibility,
     TMAAssignment,
     TMAAssignmentRevision,
     TMAAttempt,
@@ -30,6 +31,7 @@ class TMAReportingRepository:
     def _query(
         assignment: TMAAssignment,
         *,
+        authorized_class_ids: set[uuid.UUID] | None = None,
         regular_class_ids: set[uuid.UUID],
         grouped_elective_class_ids: set[uuid.UUID],
         search: str | None = None,
@@ -53,6 +55,11 @@ class TMAReportingRepository:
                 )
             )
             conditions.append(and_(enrollment.class_id.in_(grouped_elective_class_ids), selected))
+        if authorized_class_ids is not None:
+            conditions = [
+                and_(condition, enrollment.class_id.in_(authorized_class_ids))
+                for condition in conditions
+            ]
         eligible_condition = or_(*conditions) if conditions else False
         eligible = (
             select(
@@ -73,8 +80,28 @@ class TMAReportingRepository:
                 Student.is_archived.is_(False),
                 eligible_condition,
             )
-            .subquery("eligible")
         )
+        # After capture, eligibility is the immutable deadline roster, not today's
+        # enrollment/elective state. Before capture the ordinary live roster applies.
+        captured_revision = select(TMAAssignmentRevision.id).where(
+            TMAAssignmentRevision.tenant_id == tenant_id,
+            TMAAssignmentRevision.assignment_id == assignment.id,
+            TMAAssignmentRevision.revision_number == assignment.current_revision_number,
+            TMAAssignmentRevision.eligibility_captured_at.is_not(None),
+        )
+        snapshot = select(
+            TMADeadlineEligibility.student_id,
+            TMADeadlineEligibility.class_id,
+        ).where(
+            TMADeadlineEligibility.tenant_id == tenant_id,
+            TMADeadlineEligibility.revision_id.in_(captured_revision),
+            *(
+                [TMADeadlineEligibility.class_id.in_(authorized_class_ids)]
+                if authorized_class_ids is not None
+                else []
+            ),
+        )
+        eligible = union(eligible.where(~exists(captured_revision)), snapshot).subquery("eligible")
 
         priority = case(
             (TMAAttempt.status == TMAAttemptStatus.SUBMITTED, 2),
@@ -118,6 +145,12 @@ class TMAReportingRepository:
             .where(
                 TMAParticipant.tenant_id == tenant_id,
                 TMAAssignmentRevision.invalidated_at.is_(None),
+                TMAAssignmentRevision.revision_number == assignment.current_revision_number,
+                *(
+                    [TMAParticipant.class_id.in_(authorized_class_ids)]
+                    if authorized_class_ids is not None
+                    else []
+                ),
             )
             .subquery("ranked_participation")
         )
@@ -236,6 +269,7 @@ class TMAReportingRepository:
         db: AsyncSession,
         *,
         assignment: TMAAssignment,
+        authorized_class_ids: set[uuid.UUID] | None = None,
         regular_class_ids: set[uuid.UUID],
         grouped_elective_class_ids: set[uuid.UUID],
         search: str | None,
@@ -246,6 +280,7 @@ class TMAReportingRepository:
     ):
         query = cls._query(
             assignment,
+            authorized_class_ids=authorized_class_ids,
             regular_class_ids=regular_class_ids,
             grouped_elective_class_ids=grouped_elective_class_ids,
             search=search,

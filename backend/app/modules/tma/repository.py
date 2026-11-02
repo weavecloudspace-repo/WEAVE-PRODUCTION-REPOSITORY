@@ -10,7 +10,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import date
 
-from sqlalchemy import delete, exists, func, select
+from sqlalchemy import delete, exists, func, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -96,6 +96,7 @@ class TMAAssignmentRepository:
         status: TMAAssignmentStatus | None = None,
         statuses: set[TMAAssignmentStatus] | None = None,
         teacher_membership_id: uuid.UUID | None = None,
+        authorized_scopes: set[tuple[uuid.UUID, uuid.UUID, uuid.UUID]] | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[TMAAssignment], int]:
@@ -124,6 +125,14 @@ class TMAAssignmentRepository:
                     )
                     .correlate(TMAAssignment)
                 )
+            )
+        if authorized_scopes is not None:
+            filters.append(
+                tuple_(
+                    TMAAssignment.academic_term_id,
+                    TMAAssignment.academic_level_id,
+                    TMAAssignment.curriculum_subject_id,
+                ).in_(authorized_scopes)
             )
         if academic_session_id is not None:
             filters.append(TMAAssignment.academic_session_id == academic_session_id)

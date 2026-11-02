@@ -169,7 +169,11 @@ async def list_assignments(
             limit=limit,
         ).model_dump(mode="json")
 
-    response = TMAAssignmentListResponse.model_validate(
+    # Teacher scope can be revoked without a TMA write. Query it fresh on every
+    # request so a cached page cannot disclose revoked assignments or stale totals.
+    if isinstance(actor, TeacherMembership):
+        return TMAAssignmentListResponse.model_validate(await fetch())
+    return TMAAssignmentListResponse.model_validate(
         await cached_staff_read(
             actor,
             "assignments",
@@ -178,17 +182,6 @@ async def list_assignments(
             ttl=15,
         )
     )
-    if TMAAuthorizationService.actor_type(actor).value == "teacher":
-        visible = []
-        for item in response.items:
-            try:
-                await TMAAssignmentService.get_assignment(db, actor=actor, assignment_id=item.id)
-            except (ForbiddenException, ConflictException, NotFoundException):
-                continue
-            visible.append(item)
-        response.items = visible
-        response.total = len(visible)
-    return response
 
 
 @author_router.get("/assignments/{assignment_id}", response_model=TMAAssignmentResponse)

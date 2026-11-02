@@ -230,9 +230,7 @@ class TMAAttemptService:
         return attempt, participant, revision
 
     @staticmethod
-    async def _locked_active_attempt(
-        db: AsyncSession, *, student: Student, attempt_id: uuid.UUID
-    ):
+    async def _locked_active_attempt(db: AsyncSession, *, student: Student, attempt_id: uuid.UUID):
         # Consistent locking: assignment SHARE -> student attempt UPDATE.
         # The initial lookup is not locked and only discovers the assignment.
         observed, _, revision = await TMAAttemptService._load_owned_attempt(
@@ -434,10 +432,14 @@ class TMAAttemptService:
                 student=student,
                 attempt_id=observed.id,
             )
-        attempt, _, revision, assignment, enrollment = (
-            await TMAAttemptService._locked_active_attempt(
-                db, student=student, attempt_id=attempt_id
-            )
+        (
+            attempt,
+            _,
+            revision,
+            assignment,
+            enrollment,
+        ) = await TMAAttemptService._locked_active_attempt(
+            db, student=student, attempt_id=attempt_id
         )
         if attempt.status == TMAAttemptStatus.SUBMITTED:
             return await TMAAttemptService.get_submission_result(

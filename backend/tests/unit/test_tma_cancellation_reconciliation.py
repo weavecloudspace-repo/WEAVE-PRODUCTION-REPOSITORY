@@ -23,28 +23,36 @@ def uid():
 async def test_admin_receives_exact_conflict_reasons_without_score_mutation(monkeypatch):
     actor = TenantAdmin(id=uid(), tenant_id=uid())
     assignment = SimpleNamespace(
-        id=uid(), tenant_id=actor.tenant_id, academic_term_id=uid(),
-        academic_session_id=uid(), curriculum_subject_id=uid(),
-        assessment_component_id=uid(), current_revision_number=1,
+        id=uid(),
+        tenant_id=actor.tenant_id,
+        academic_term_id=uid(),
+        academic_session_id=uid(),
+        curriculum_subject_id=uid(),
+        assessment_component_id=uid(),
+        current_revision_number=1,
     )
     revision = SimpleNamespace(id=uid())
     monkeypatch.setattr(
-        mod.TMAAssignmentRepository, "get_by_id",
+        mod.TMAAssignmentRepository,
+        "get_by_id",
         AsyncMock(return_value=assignment),
     )
     monkeypatch.setattr(
-        mod.TMARevisionRepository, "get_by_number",
+        mod.TMARevisionRepository,
+        "get_by_number",
         AsyncMock(return_value=revision),
     )
     guard = AsyncMock()
     monkeypatch.setattr(mod.TMAAuthorizationService, "require_assignment_access", guard)
     participant1 = SimpleNamespace(student_id=uid())
-    attempt1 = SimpleNamespace(
-        id=uid(), score_id=uid(), score_snapshot=Decimal("6.00")
-    )
+    attempt1 = SimpleNamespace(id=uid(), score_id=uid(), score_snapshot=Decimal("6.00"))
     score1 = SimpleNamespace(
-        id=attempt1.score_id, assessment_component_id=assignment.assessment_component_id,
-        score=Decimal("7.00"), cbt_score=None, theory_score=None, source_exam_id=None,
+        id=attempt1.score_id,
+        assessment_component_id=assignment.assessment_component_id,
+        score=Decimal("7.00"),
+        cbt_score=None,
+        theory_score=None,
+        source_exam_id=None,
     )
     result1 = SimpleNamespace(
         student_id=participant1.student_id,
@@ -54,12 +62,13 @@ async def test_admin_receives_exact_conflict_reasons_without_score_mutation(monk
         status=AcademicResultStatus.DRAFT,
     )
     participant2 = SimpleNamespace(student_id=uid())
-    attempt2 = SimpleNamespace(
-        id=uid(), score_id=uid(), score_snapshot=Decimal("0")
-    )
+    attempt2 = SimpleNamespace(id=uid(), score_id=uid(), score_snapshot=Decimal("0"))
     score2 = SimpleNamespace(
         assessment_component_id=assignment.assessment_component_id,
-        score=Decimal("0"), cbt_score=None, theory_score=None, source_exam_id=None,
+        score=Decimal("0"),
+        cbt_score=None,
+        theory_score=None,
+        source_exam_id=None,
     )
     result2 = SimpleNamespace(
         student_id=participant2.student_id,
@@ -94,9 +103,7 @@ async def test_admin_receives_exact_conflict_reasons_without_score_mutation(monk
 @pytest.mark.asyncio
 async def test_other_tenant_cannot_query_reconciliation(monkeypatch):
     actor = TenantAdmin(id=uid(), tenant_id=uid())
-    monkeypatch.setattr(
-        mod.TMAAssignmentRepository, "get_by_id", AsyncMock(return_value=None)
-    )
+    monkeypatch.setattr(mod.TMAAssignmentRepository, "get_by_id", AsyncMock(return_value=None))
     db = AsyncMock()
     with pytest.raises(NotFoundException):
         await mod.TMACancellationReconciliationService.conflicts(

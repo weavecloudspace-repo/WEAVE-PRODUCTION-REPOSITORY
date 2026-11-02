@@ -241,6 +241,7 @@ class TMALifecycleService:
         if revision is None:
             raise ConflictException("Revision missing.")
         revision.published_at = datetime.now(timezone.utc)
+        revision.eligibility_tracking_started_at = revision.published_at
         assignment.status = TMAAssignmentStatus.ACTIVE
         assignment.activated_at = datetime.now(timezone.utc)
         await TMARevisionRepository.save(db, revision)

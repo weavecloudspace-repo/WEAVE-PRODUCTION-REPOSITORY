@@ -154,7 +154,7 @@ async def test_can_change_only_closing_estimate_without_touching_questions(
     assignment = _assignment(author, status)
     actor, save, questions = _setup(monkeypatch, assignment)
     db = AsyncMock()
-    date = _date(-5)  # Deadlines may be edited; live student requests reject overdue TMAs.
+    date = _date(-5) if status == TMAAssignmentStatus.DRAFT else _date(5)
     updated = await mod.TMAAssignmentService.update_draft_assignment(
         db,
         actor=actor,
@@ -417,3 +417,26 @@ def test_student_schema_exposes_optional_closes_at() -> None:
         component_maximum_score=Decimal("20"),
     )
     assert item.model_dump()["closes_at"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("old_deadline,new_deadline", [(-1, 5), (-1, None), (5, -1)])
+async def test_active_deadline_cannot_rewrite_historical_eligibility(
+    monkeypatch, old_deadline, new_deadline
+):
+    from app.modules.tma import assignment_service as mod
+
+    actor = _actor()
+    assignment = _assignment(actor, TMAAssignmentStatus.ACTIVE)
+    assignment.closes_at = _date(old_deadline)
+    actor, save, _ = _setup(monkeypatch, assignment)
+    with pytest.raises(ConflictException):
+        await mod.TMAAssignmentService.update_draft_assignment(
+            AsyncMock(),
+            actor=actor,
+            assignment_id=assignment.id,
+            payload=TMAAssignmentUpdate(
+                closes_at=_date(new_deadline) if new_deadline is not None else None
+            ),
+        )
+    save.assert_not_awaited()

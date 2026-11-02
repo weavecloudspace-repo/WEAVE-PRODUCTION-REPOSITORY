@@ -28,9 +28,7 @@ class TMAZeroReconciliationService:
     async def list_conflicts(
         db: AsyncSession, *, actor: TMAAuthor, assignment_id: uuid.UUID
     ) -> list[TMAZeroGradingFailure]:
-        assignment = await TMAAssignmentRepository.get_by_id(
-            db, actor.tenant_id, assignment_id
-        )
+        assignment = await TMAAssignmentRepository.get_by_id(db, actor.tenant_id, assignment_id)
         if assignment is None:
             raise NotFoundException("Assignment not found.")
         await TMAAuthorizationService.require_assignment_access(
@@ -44,6 +42,7 @@ class TMAZeroReconciliationService:
                     .where(
                         TMAZeroGradingFailure.tenant_id == actor.tenant_id,
                         TMAZeroGradingFailure.assignment_id == assignment_id,
+                        TMAZeroGradingFailure.revision_number == assignment.current_revision_number,
                         TMAZeroGradingFailure.resolved_at.is_(None),
                     )
                     .order_by(
@@ -51,7 +50,9 @@ class TMAZeroReconciliationService:
                         TMAZeroGradingFailure.student_id,
                     )
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
 
     @staticmethod
@@ -85,6 +86,7 @@ class TMAZeroReconciliationService:
                 .where(
                     TMAZeroGradingFailure.tenant_id == actor.tenant_id,
                     TMAZeroGradingFailure.assignment_id == assignment_id,
+                    TMAZeroGradingFailure.revision_number == assignment.current_revision_number,
                     TMAZeroGradingFailure.student_id == student_id,
                 )
                 .with_for_update()
@@ -117,6 +119,7 @@ class TMAZeroReconciliationService:
                 .where(
                     TMAAttempt.tenant_id == actor.tenant_id,
                     TMAAssignmentRevision.assignment_id == assignment_id,
+                    TMAAssignmentRevision.revision_number == assignment.current_revision_number,
                     TMAParticipant.student_id == student_id,
                     TMAAttempt.status == TMAAttemptStatus.SUBMITTED,
                     TMAAttempt.score_reversed_at.is_(None),

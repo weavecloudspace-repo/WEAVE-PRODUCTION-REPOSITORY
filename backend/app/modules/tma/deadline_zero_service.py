@@ -16,13 +16,11 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.tma.authorization import TMAAuthorizationService
+from app.config.settings import settings
+from app.modules.tma.deadline_eligibility_repository import TMADeadlineEligibilityRepository
 from app.core.cache.events import flush_cache_invalidation_events
 from app.core.exceptions import BadRequestException, ConflictException, ForbiddenException
-from app.modules.classes.models import ClassRoom
-from app.modules.student_academics.curriculum_service import CurriculumResolutionService
-from app.modules.student_academics.repository import StudentAcademicRepository
-from app.modules.student_academics.models import AcademicTermStatus
-from app.modules.students.repository import StudentEnrollmentRepository
 from app.modules.tma.grading_service import TMAGradingService
 from app.modules.tma.models import (
     TMAAssignment,
@@ -37,59 +35,14 @@ from app.modules.tma.repository import (
     TMAQuestionRepository,
     TMARevisionRepository,
 )
-from app.modules.tma.reporting_repository import TMAReportingRepository
 
 logger = logging.getLogger(__name__)
 
 
 class TMADeadlineZeroService:
-    """One assignment with at most 25 score writes per scheduled tick."""
+    """One locked assignment and a bounded number of student transactions."""
 
-    PAGE_SIZE = 100
-    MAX_WRITES = 25
-
-    @staticmethod
-    async def _eligible_classes(
-        db: AsyncSession, assignment: TMAAssignment
-    ) -> tuple[set[uuid.UUID], set[uuid.UUID]]:
-        classrooms = set(
-            (
-                await db.execute(
-                    select(ClassRoom.id).where(
-                        ClassRoom.tenant_id == assignment.tenant_id,
-                        ClassRoom.academic_level_id == assignment.academic_level_id,
-                        ClassRoom.is_active.is_(True),
-                        ClassRoom.archived_at.is_(None),
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        subjects = await CurriculumResolutionService.resolve_classes_subjects(
-            db,
-            tenant_id=assignment.tenant_id,
-            class_ids=classrooms,
-            academic_term_id=assignment.academic_term_id,
-            skip_unresolvable=True,
-        )
-        term = await StudentAcademicRepository.get_term_by_id(
-            db, assignment.tenant_id, assignment.academic_term_id
-        )
-        if term is None or term.status != AcademicTermStatus.OPEN or not term.is_current:
-            raise ConflictException("Academic term is not open for missed-deadline scoring.")
-        regular: set[uuid.UUID] = set()
-        elective: set[uuid.UUID] = set()
-        for class_id, class_subjects in subjects.items():
-            for subject in class_subjects:
-                if subject.curriculum_subject_id != assignment.curriculum_subject_id:
-                    continue
-                if subject.is_elective and subject.elective_group_id is not None:
-                    elective.add(class_id)
-                else:
-                    regular.add(class_id)
-                break
-        return regular, elective
+    MAX_WRITES = settings.TMA_ZERO_BATCH_SIZE
 
     @classmethod
     async def _write_zero(
@@ -103,18 +56,12 @@ class TMADeadlineZeroService:
         current: datetime,
     ) -> bool:
         tenant_id = assignment.tenant_id
-        enrollment = await StudentEnrollmentRepository.get_authoritative_for_session(
-            db, tenant_id, student_id, assignment.academic_session_id
+        historical = await TMADeadlineEligibilityRepository.enrollment(
+            db, tenant_id=tenant_id, revision_id=revision_id, student_id=student_id
         )
-        if (
-            enrollment is None
-            or enrollment.class_id is None
-            or enrollment.academic_level_id != assignment.academic_level_id
-            or enrollment.created_at > assignment.closes_at
-        ):
-            raise ConflictException(
-                "Student enrollment changed after the deadline; manual review required."
-            )
+        if historical is None:
+            raise ConflictException("Student was not eligible at this revision's deadline.")
+        enrollment, subject_id = historical
         participant = await TMAParticipantRepository.get_by_revision_student(
             db, tenant_id, revision_id, student_id
         )
@@ -154,6 +101,7 @@ class TMADeadlineZeroService:
             total=total_questions,
             attempt=attempt,
             scoring_date=assignment.closes_at.date(),
+            deadline_subject_id=subject_id,
         )
         attempt.status = TMAAttemptStatus.SUBMITTED
         graded_at = datetime.now(timezone.utc)
@@ -170,14 +118,25 @@ class TMADeadlineZeroService:
         db: AsyncSession,
         *,
         now: datetime | None = None,
+        tenant_ids: set[uuid.UUID] | None = None,
     ) -> dict[str, int]:
         current = now or datetime.now(timezone.utc)
         # Existing CLOSED TMAs are not backfilled: only assignments closed by
         # the new deadline-aware lifecycle receive a requested timestamp.
+        tenant_turn = (
+            select(
+                TMAAssignment.tenant_id.label("tenant_id"),
+                func.max(TMAAssignment.zero_grading_last_processed_at).label("last_processed"),
+            )
+            .group_by(TMAAssignment.tenant_id)
+            .subquery()
+        )
         assignment = (
             await db.execute(
                 select(TMAAssignment)
+                .join(tenant_turn, tenant_turn.c.tenant_id == TMAAssignment.tenant_id)
                 .where(
+                    *([TMAAssignment.tenant_id.in_(tenant_ids)] if tenant_ids is not None else []),
                     TMAAssignment.status == TMAAssignmentStatus.CLOSED,
                     TMAAssignment.zero_grading_requested_at.is_not(None),
                     TMAAssignment.zero_grading_completed_at.is_(None),
@@ -185,12 +144,13 @@ class TMADeadlineZeroService:
                     TMAAssignment.closes_at <= current,
                 )
                 .order_by(
-                    TMAAssignment.zero_grading_error.is_not(None),
+                    tenant_turn.c.last_processed.asc().nullsfirst(),
+                    TMAAssignment.zero_grading_last_processed_at.asc().nullsfirst(),
                     TMAAssignment.zero_grading_requested_at,
                     TMAAssignment.id,
                 )
                 .limit(1)
-                .with_for_update(skip_locked=True)
+                .with_for_update(skip_locked=True, of=TMAAssignment)
             )
         ).scalar_one_or_none()
         if assignment is None:
@@ -211,76 +171,49 @@ class TMADeadlineZeroService:
             )
             if not questions:
                 raise ConflictException("Cannot record zero without published questions.")
-            regular, elective = await cls._eligible_classes(db, assignment)
+            await TMAAuthorizationService.require_open_term(db, assignment)
+            await TMADeadlineEligibilityRepository.capture(
+                db, tenant_id=assignment.tenant_id, assignment_id=assignment.id
+            )
+            students = await TMADeadlineEligibilityRepository.pending(
+                db, assignment=assignment, revision_id=revision.id, limit=cls.MAX_WRITES + 1
+            )
             processed = 0
             blocked = 0
             error = ""
-            offset = 0
-            more = True
-            while more and processed < cls.MAX_WRITES:
-                students, total = await TMAReportingRepository.list_participation(
-                    db,
-                    assignment=assignment,
-                    regular_class_ids=regular,
-                    grouped_elective_class_ids=elective,
-                    search=None,
-                    class_id=None,
-                    participation_status=None,
-                    offset=offset,
-                    limit=cls.PAGE_SIZE,
-                )
-                student_ids = [item["student_id"] for item in students]
-                existing_failures = (
-                    (
-                        await db.execute(
-                            select(TMAZeroGradingFailure).where(
-                                TMAZeroGradingFailure.tenant_id == assignment.tenant_id,
-                                TMAZeroGradingFailure.assignment_id == assignment.id,
-                                TMAZeroGradingFailure.student_id.in_(student_ids),
-                            )
+            more = len(students) > cls.MAX_WRITES
+            for student_id, failure in students[: cls.MAX_WRITES]:
+                try:
+                    async with db.begin_nested():
+                        written = await cls._write_zero(
+                            db,
+                            assignment=assignment,
+                            revision_id=revision.id,
+                            student_id=student_id,
+                            total_questions=len(questions),
+                            current=current,
                         )
-                    ).scalars().all()
-                    if student_ids else []
-                )
-                failures_by_student = {record.student_id: record for record in existing_failures}
-                for row in students:
-                    failure = failures_by_student.get(row["student_id"])
-                    if failure is not None and failure.resolution == "exempt":
-                        continue
-                    if not row["is_currently_eligible"] or row["participation_status"] in {
-                        "submitted",
-                        "missed",
-                    }:
-                        continue
-                    try:
-                        async with db.begin_nested():
-                            written = await cls._write_zero(
-                                db,
-                                assignment=assignment,
-                                revision_id=revision.id,
-                                student_id=row["student_id"],
-                                total_questions=len(questions),
-                                current=current,
-                            )
-                    except (
-                        ConflictException,
-                        BadRequestException,
-                        ForbiddenException,
-                        IntegrityError,
-                    ) as exc:
-                        blocked += 1
-                        error = str(exc)[:500]
-                        stmt = insert(TMAZeroGradingFailure).values(
-                            id=uuid.uuid4(),
-                            tenant_id=assignment.tenant_id,
-                            assignment_id=assignment.id,
-                            student_id=row["student_id"],
-                            reason=error,
-                            attempts=1,
-                            last_failed_at=current,
-                        )
-                        stmt = stmt.on_conflict_do_update(
-                            constraint="uq_tma_zero_failure_tenant_assignment_student",
+                except (
+                    ConflictException,
+                    BadRequestException,
+                    ForbiddenException,
+                    IntegrityError,
+                ) as exc:
+                    blocked += 1
+                    error = str(exc)[:500]
+                    stmt = insert(TMAZeroGradingFailure).values(
+                        id=uuid.uuid4(),
+                        tenant_id=assignment.tenant_id,
+                        assignment_id=assignment.id,
+                        revision_number=assignment.current_revision_number,
+                        student_id=student_id,
+                        reason=error,
+                        attempts=1,
+                        last_failed_at=current,
+                    )
+                    await db.execute(
+                        stmt.on_conflict_do_update(
+                            constraint="uq_tma_zero_failure_revision_student",
                             set_={
                                 "reason": error,
                                 "attempts": TMAZeroGradingFailure.attempts + 1,
@@ -290,27 +223,24 @@ class TMADeadlineZeroService:
                                 "resolution_note": None,
                             },
                         )
-                        await db.execute(stmt)
-                        logger.warning(
-                            "tma.deadline_zero.blocked",
-                            extra={
-                                "tenant_id": str(assignment.tenant_id),
-                                "assignment_id": str(assignment.id),
-                                "student_id": str(row["student_id"]),
-                                "reason": error,
-                            },
-                        )
-                        continue
-                    if written:
-                        processed += 1
-                        if failure is not None and failure.resolved_at is None:
-                            failure.resolved_at = current
-                            failure.resolution = "graded"
-                            failure.resolution_note = "Academic zero recorded successfully."
-                    if processed >= cls.MAX_WRITES:
-                        break
-                offset += len(students)
-                more = bool(students) and offset < total
+                    )
+                    logger.warning(
+                        "tma.deadline_zero.blocked",
+                        extra={
+                            "tenant_id": str(assignment.tenant_id),
+                            "assignment_id": str(assignment.id),
+                            "revision_number": assignment.current_revision_number,
+                        },
+                    )
+                    continue
+                if written:
+                    processed += 1
+                if failure is not None and failure.resolved_at is None:
+                    failure.resolved_at = current
+                    failure.resolution = "graded"
+                    failure.resolution_note = "Academic zero recorded successfully."
+            # Flush successful reconciliations before counting remaining failures.
+            await db.flush()
             # Do not claim completion while previously reported students
             # remain unresolved, even if a transfer makes them disappear from
             # today's eligible roster. Administrators must resolve/exempt them.
@@ -319,11 +249,13 @@ class TMADeadlineZeroService:
                     select(func.count(TMAZeroGradingFailure.id)).where(
                         TMAZeroGradingFailure.tenant_id == assignment.tenant_id,
                         TMAZeroGradingFailure.assignment_id == assignment.id,
+                        TMAZeroGradingFailure.revision_number == assignment.current_revision_number,
                         TMAZeroGradingFailure.resolved_at.is_(None),
                     )
                 )
             ).scalar_one()
-            if not more and processed < cls.MAX_WRITES and not blocked and not unresolved:
+            assignment.zero_grading_last_processed_at = datetime.now(timezone.utc)
+            if not more and not blocked and not unresolved:
                 assignment.zero_grading_completed_at = current
                 assignment.zero_grading_error = None
             elif unresolved:
@@ -335,6 +267,17 @@ class TMADeadlineZeroService:
                 assignment.zero_grading_error = (
                     f"{blocked} student(s) need reconciliation. Latest: {error}"
                 )[:1500]
+            logger.info(
+                "tma.deadline_zero.batch",
+                extra={
+                    "tenant_id": str(assignment.tenant_id),
+                    "assignment_id": str(assignment.id),
+                    "revision_number": assignment.current_revision_number,
+                    "zeroed": processed,
+                    "blocked": blocked,
+                    "more": more,
+                },
+            )
             await db.commit()
             await flush_cache_invalidation_events(db)
             return {
@@ -345,6 +288,7 @@ class TMADeadlineZeroService:
         except Exception as exc:
             assignment_id = assignment.id
             tenant_id = assignment.tenant_id
+            revision_number = assignment.current_revision_number
             await db.rollback()
             # Make the processing problem visible to staff, while retaining
             # the pending marker so the next worker tick can safely retry.
@@ -358,7 +302,12 @@ class TMADeadlineZeroService:
                     .with_for_update()
                 )
             ).scalar_one_or_none()
-            if row is not None and row.status == TMAAssignmentStatus.CLOSED:
+            if (
+                row is not None
+                and row.status == TMAAssignmentStatus.CLOSED
+                and row.current_revision_number == revision_number
+            ):
+                row.zero_grading_last_processed_at = datetime.now(timezone.utc)
                 row.zero_grading_error = str(exc)[:1500]
                 await db.commit()
                 await flush_cache_invalidation_events(db)

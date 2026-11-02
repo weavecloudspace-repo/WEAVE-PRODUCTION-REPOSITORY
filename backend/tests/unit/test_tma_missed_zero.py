@@ -53,9 +53,9 @@ async def test_zero_creates_owned_attempt_with_score_provenance(monkeypatch):
         created_at=item.closes_at - timedelta(days=1),
     )
     monkeypatch.setattr(
-        mod.StudentEnrollmentRepository,
-        "get_authoritative_for_session",
-        AsyncMock(return_value=enrollment),
+        mod.TMADeadlineEligibilityRepository,
+        "enrollment",
+        AsyncMock(return_value=(enrollment, uid())),
     )
     participant = SimpleNamespace(id=uid())
     lookup = AsyncMock(side_effect=[None, participant])
@@ -119,9 +119,9 @@ async def test_existing_submission_is_never_overwritten(monkeypatch):
         created_at=item.closes_at - timedelta(days=1),
     )
     monkeypatch.setattr(
-        mod.StudentEnrollmentRepository,
-        "get_authoritative_for_session",
-        AsyncMock(return_value=enrollment),
+        mod.TMADeadlineEligibilityRepository,
+        "enrollment",
+        AsyncMock(return_value=(enrollment, uid())),
     )
     participant = SimpleNamespace(id=uid())
     monkeypatch.setattr(
@@ -158,13 +158,13 @@ async def test_student_joining_after_deadline_is_not_penalized(monkeypatch):
         created_at=item.closes_at + timedelta(seconds=1),
     )
     monkeypatch.setattr(
-        mod.StudentEnrollmentRepository,
-        "get_authoritative_for_session",
-        AsyncMock(return_value=enrollment),
+        mod.TMADeadlineEligibilityRepository,
+        "enrollment",
+        AsyncMock(return_value=None),
     )
     grade = AsyncMock()
     monkeypatch.setattr(mod.TMAGradingService, "persist_component_score", grade)
-    with pytest.raises(ConflictException, match="enrollment changed"):
+    with pytest.raises(ConflictException, match="not eligible"):
         await mod.TMADeadlineZeroService._write_zero(
             AsyncMock(),
             assignment=item,
@@ -182,7 +182,6 @@ async def test_worker_finishes_when_all_current_students_are_submitted(monkeypat
     db = AsyncMock()
     db.execute.side_effect = [
         SimpleNamespace(scalar_one_or_none=lambda: item),
-        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
         SimpleNamespace(scalar_one=lambda: 0),
     ]
     monkeypatch.setattr(
@@ -195,30 +194,9 @@ async def test_worker_finishes_when_all_current_students_are_submitted(monkeypat
         "list_for_revision_with_options",
         AsyncMock(return_value=[(SimpleNamespace(), [])]),
     )
-    monkeypatch.setattr(
-        mod.TMADeadlineZeroService, "_eligible_classes", AsyncMock(return_value=(set(), set()))
-    )
-    monkeypatch.setattr(
-        mod.TMAReportingRepository,
-        "list_participation",
-        AsyncMock(
-            return_value=(
-                [
-                    {
-                        "student_id": uid(),
-                        "is_currently_eligible": True,
-                        "participation_status": "submitted",
-                    },
-                    {
-                        "student_id": uid(),
-                        "is_currently_eligible": True,
-                        "participation_status": "missed",
-                    },
-                ],
-                2,
-            )
-        ),
-    )
+    monkeypatch.setattr(mod.TMADeadlineEligibilityRepository, "capture", AsyncMock())
+    monkeypatch.setattr(mod.TMAAuthorizationService, "require_open_term", AsyncMock())
+    monkeypatch.setattr(mod.TMADeadlineEligibilityRepository, "pending", AsyncMock(return_value=[]))
     grade = AsyncMock()
     monkeypatch.setattr(mod.TMADeadlineZeroService, "_write_zero", grade)
     invalidation = AsyncMock()
@@ -237,7 +215,6 @@ async def test_worker_does_not_drop_reconciliation_errors(monkeypatch):
     db = AsyncMock()
     db.execute.side_effect = [
         SimpleNamespace(scalar_one_or_none=lambda: item),
-        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
         SimpleNamespace(),
         SimpleNamespace(scalar_one=lambda: 1),
     ]
@@ -251,24 +228,10 @@ async def test_worker_does_not_drop_reconciliation_errors(monkeypatch):
         "list_for_revision_with_options",
         AsyncMock(return_value=[(SimpleNamespace(), [])]),
     )
+    monkeypatch.setattr(mod.TMADeadlineEligibilityRepository, "capture", AsyncMock())
+    monkeypatch.setattr(mod.TMAAuthorizationService, "require_open_term", AsyncMock())
     monkeypatch.setattr(
-        mod.TMADeadlineZeroService, "_eligible_classes", AsyncMock(return_value=(set(), set()))
-    )
-    monkeypatch.setattr(
-        mod.TMAReportingRepository,
-        "list_participation",
-        AsyncMock(
-            return_value=(
-                [
-                    {
-                        "student_id": uid(),
-                        "is_currently_eligible": True,
-                        "participation_status": "not_started",
-                    },
-                ],
-                1,
-            )
-        ),
+        mod.TMADeadlineEligibilityRepository, "pending", AsyncMock(return_value=[(uid(), None)])
     )
 
     @asynccontextmanager

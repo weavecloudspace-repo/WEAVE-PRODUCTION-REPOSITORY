@@ -33,6 +33,9 @@ def fake(status=TMAAssignmentStatus.CLOSED):
         closed_at=None,
         current_revision_number=1,
         activated_at=None,
+        zero_grading_requested_at=None,
+        zero_grading_completed_at=None,
+        zero_grading_error=None,
         assessment_component_id=uid(),
         academic_session_id=uid(),
         academic_term_id=uid(),
@@ -233,10 +236,16 @@ async def test_failed_cancellation_never_allows_revision(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_corrected_revision_preserves_previous_questions(monkeypatch):
+@pytest.mark.parametrize("zero_state", ["completed", "failed"])
+async def test_corrected_revision_preserves_previous_questions(monkeypatch, zero_state):
     from app.modules.tma import cancellation_service as mod
 
     assignment, actor = fake(TMAAssignmentStatus.CANCELLED)
+    assignment.zero_grading_requested_at = datetime.now(timezone.utc)
+    assignment.zero_grading_completed_at = (
+        assignment.zero_grading_requested_at if zero_state == "completed" else None
+    )
+    assignment.zero_grading_error = "old failure" if zero_state == "failed" else None
     previous = SimpleNamespace(id=uid(), invalidated_at=object())
     original = SimpleNamespace(
         position=1,
@@ -287,6 +296,11 @@ async def test_corrected_revision_preserves_previous_questions(monkeypatch):
         actor=actor,
         assignment_id=assignment.id,
     )
+    assert previous.zero_grading_requested_at is not None
+    assert previous.zero_grading_error == ("old failure" if zero_state == "failed" else None)
+    assert assignment.zero_grading_requested_at is None
+    assert assignment.zero_grading_completed_at is None
+    assert assignment.zero_grading_error is None
     assert new.revision_number == 2
     assert assignment.current_revision_number == 2
     assert assignment.status == TMAAssignmentStatus.DRAFT

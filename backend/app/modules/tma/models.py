@@ -88,7 +88,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.shared.base_model import BaseModel, PUBLIC_SCHEMA
+from app.shared.base_model import Base, BaseModel, PUBLIC_SCHEMA
 
 
 class TMAAssignmentStatus(str, PyEnum):
@@ -181,6 +181,8 @@ class TMAAssignment(BaseModel):
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Completion and reconciliation status for missed-deadline grading.
+    zero_grading_last_processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     zero_grading_requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -328,6 +330,15 @@ class TMAAssignmentRevision(BaseModel):
     revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    eligibility_tracking_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    eligibility_captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    zero_grading_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    zero_grading_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    zero_grading_error: Mapped[str | None] = mapped_column(Text)
 
     invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -1193,6 +1204,7 @@ class TMAZeroGradingFailure(BaseModel):
     __tablename__ = "tma_zero_grading_failures"
 
     assignment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
     student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
@@ -1214,16 +1226,56 @@ class TMAZeroGradingFailure(BaseModel):
             name="fk_tma_zero_failure_tenant_assignment",
             ondelete="CASCADE",
         ),
+        ForeignKeyConstraint(
+            ["tenant_id", "assignment_id", "revision_number"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_assignment_revisions.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_assignment_revisions.assignment_id",
+                f"{PUBLIC_SCHEMA}.tma_assignment_revisions.revision_number",
+            ],
+            name="fk_tma_zero_failure_revision",
+        ),
         UniqueConstraint(
             "tenant_id",
             "assignment_id",
+            "revision_number",
             "student_id",
-            name="uq_tma_zero_failure_tenant_assignment_student",
+            name="uq_tma_zero_failure_revision_student",
         ),
         Index(
             "ix_tma_zero_failure_pending",
             "tenant_id",
             "assignment_id",
             "resolved_at",
+        ),
+    )
+
+
+class TMADeadlineEligibility(Base):
+    """Frozen deadline roster, captured before the first subsequent eligibility change."""
+
+    __tablename__ = "tma_deadline_eligibility"
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    revision_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    student_enrollment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    class_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    subject_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "revision_id"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_assignment_revisions.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_assignment_revisions.id",
+            ],
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "student_enrollment_id", "student_id", "class_id"],
+            [
+                f"{PUBLIC_SCHEMA}.student_enrollments.tenant_id",
+                f"{PUBLIC_SCHEMA}.student_enrollments.id",
+                f"{PUBLIC_SCHEMA}.student_enrollments.student_id",
+                f"{PUBLIC_SCHEMA}.student_enrollments.class_id",
+            ],
         ),
     )

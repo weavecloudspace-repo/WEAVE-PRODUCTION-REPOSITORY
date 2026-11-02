@@ -239,12 +239,25 @@ async def poll_tma_cancellations(ctx: dict[str, Any]) -> dict[str, int]:
 
 
 async def poll_tma_deadlines(ctx: dict[str, Any]) -> dict[str, int]:
-    """Persist scheduled TMA closure; write paths enforce the deadline immediately."""
+    """Bound each transaction and rotate work across tenants and assignments."""
+    from time import monotonic
+    from app.config.settings import settings
+
     _ = ctx
+    started = monotonic()
     async with AsyncSessionLocal() as db:
         closed = await TMAExpirationService.close_due_assignments(db)
-        graded = await TMADeadlineZeroService.process_pending(db)
-        return {**closed, **graded}
+    totals = {"zeroed": 0, "blocked": 0, "pending": 0}
+    for _batch in range(settings.TMA_ZERO_BATCHES_PER_POLL):
+        if monotonic() - started >= settings.TMA_ZERO_POLL_BUDGET_SECONDS:
+            break
+        async with AsyncSessionLocal() as db:
+            graded = await TMADeadlineZeroService.process_pending(db)
+        for key in totals:
+            totals[key] += graded[key]
+        if not any(graded.values()):
+            break
+    return {**closed, **totals}
 
 
 async def poll_tma_draft_media_cleanup(ctx: dict[str, Any]) -> dict[str, int]:

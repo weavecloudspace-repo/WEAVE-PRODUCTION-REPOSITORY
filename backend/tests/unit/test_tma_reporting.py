@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy.dialects import postgresql
 
+from app.modules.tenant_admins.models import TenantAdmin
 from app.core.exceptions import ForbiddenException, NotFoundException
 from app.modules.tma.reporting_repository import TMAReportingRepository
 from app.modules.tma.reporting_service import TMAReportingService
@@ -23,6 +24,8 @@ def _id() -> uuid.UUID:
 def _assignment():
     return SimpleNamespace(
         id=_id(),
+        current_revision_number=1,
+        closes_at=None,
         tenant_id=_id(),
         academic_level_id=_id(),
         academic_session_id=_id(),
@@ -158,7 +161,7 @@ async def test_service_applies_term_elective_policy_and_returns_scores(monkeypat
     from app.modules.tma import reporting_service as mod
 
     assignment = _assignment()
-    actor = SimpleNamespace(tenant_id=assignment.tenant_id)
+    actor = TenantAdmin(tenant_id=assignment.tenant_id)
     general_class, grouped_class = _id(), _id()
 
     monkeypatch.setattr(
@@ -242,7 +245,7 @@ async def test_historical_terms_do_not_reuse_current_elective_choices(monkeypatc
 
     assignment = _assignment()
     classroom = _id()
-    actor = SimpleNamespace(tenant_id=assignment.tenant_id)
+    actor = TenantAdmin(tenant_id=assignment.tenant_id)
     monkeypatch.setattr(
         mod.TMAAssignmentRepository,
         "get_by_id",
@@ -293,7 +296,7 @@ async def test_missing_assignment_and_forbidden_teacher_do_not_read_roster(monke
     from app.modules.tma import reporting_service as mod
 
     assignment = _assignment()
-    actor = SimpleNamespace(tenant_id=assignment.tenant_id)
+    actor = TenantAdmin(tenant_id=assignment.tenant_id)
     read = AsyncMock()
     monkeypatch.setattr(mod.TMAReportingRepository, "list_participation", read)
     get = AsyncMock(return_value=None)

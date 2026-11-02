@@ -450,6 +450,12 @@ class TMACancellationService:
                     for opt in originals_options
                 ]
             )
+        previous.zero_grading_requested_at = assignment.zero_grading_requested_at
+        previous.zero_grading_completed_at = assignment.zero_grading_completed_at
+        previous.zero_grading_error = assignment.zero_grading_error
+        assignment.zero_grading_requested_at = None
+        assignment.zero_grading_completed_at = None
+        assignment.zero_grading_error = None
         assignment.current_revision_number = revision.revision_number
         assignment.status = TMAAssignmentStatus.DRAFT
         assignment.activated_at = None

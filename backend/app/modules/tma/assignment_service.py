@@ -204,34 +204,20 @@ class TMAAssignmentService:
         # assignments for which they currently have authoring permission.
         if isinstance(actor, TeacherMembership) and actor.status != TeacherMembershipStatus.ACTIVE:
             return [], 0
-        rows, total = await TMAAssignmentRepository.list_for_scope(
+        scopes = None
+        if isinstance(actor, TeacherMembership):
+            scopes = await TMAAuthorizationService.authorized_listing_scopes(
+                db, actor=actor, academic_term_id=academic_term_id
+            )
+        return await TMAAssignmentRepository.list_for_scope(
             db,
             actor.tenant_id,
             academic_term_id=academic_term_id,
             teacher_membership_id=(actor.id if isinstance(actor, TeacherMembership) else None),
+            authorized_scopes=scopes,
             offset=offset,
             limit=limit,
         )
-        if TMAAuthorizationService.actor_type(actor).value == "tenant_admin":
-            return rows, total
-        allowed = []
-        for assignment in rows:
-            try:
-                await TMAAuthorizationService.require_assignment_access(
-                    db,
-                    actor=actor,
-                    assignment=assignment,
-                )
-            except (NotFoundException, ConflictException, BadRequestException):
-                continue
-            except Exception as exc:
-                from app.core.exceptions import ForbiddenException
-
-                if not isinstance(exc, ForbiddenException):
-                    raise
-                continue
-            allowed.append(assignment)
-        return allowed, total
 
     @staticmethod
     async def update_draft_assignment(
@@ -262,7 +248,15 @@ class TMAAssignmentService:
         TMAAuthorizationService.require_assignment_management(actor, assignment)
         if "lead_teacher_membership_id" in changes and not isinstance(actor, TenantAdmin):
             raise ForbiddenException("Only an administrator can assign or change the lead teacher.")
-        # Only staff action changes availability; this estimate is display-only.
+        if "closes_at" in changes and assignment.status == TMAAssignmentStatus.ACTIVE:
+            current = datetime.now(timezone.utc)
+            if assignment.closes_at is not None and assignment.closes_at <= current:
+                raise ConflictException(
+                    "The deadline has passed. Close, cancel and revise this assignment instead."
+                )
+            if changes["closes_at"] is not None and changes["closes_at"] <= current:
+                raise ConflictException("An active assignment requires a future deadline.")
+        # Published deadlines are binding; draft academic scope remains editable.
         if assignment.status not in (
             TMAAssignmentStatus.DRAFT,
             TMAAssignmentStatus.ACTIVE,

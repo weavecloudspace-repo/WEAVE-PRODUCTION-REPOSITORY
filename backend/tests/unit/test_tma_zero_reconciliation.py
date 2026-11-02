@@ -25,6 +25,7 @@ def fixture():
     assignment = SimpleNamespace(
         tenant_id=actor.tenant_id,
         id=uid(),
+        current_revision_number=1,
         status=TMAAssignmentStatus.CLOSED,
         zero_grading_requested_at=datetime.now(timezone.utc),
         zero_grading_completed_at=None,
@@ -50,9 +51,7 @@ async def test_admin_exemption_is_audited_and_does_not_write_any_score(monkeypat
     monkeypatch.setattr(
         mod.TMAAssignmentRepository, "get_by_id", AsyncMock(return_value=assignment)
     )
-    monkeypatch.setattr(
-        mod.TMAAuthorizationService, "require_assignment_access", AsyncMock()
-    )
+    monkeypatch.setattr(mod.TMAAuthorizationService, "require_assignment_access", AsyncMock())
     row = MagicMock()
     row.scalar_one_or_none.return_value = failure
     empty = MagicMock()
@@ -62,8 +61,11 @@ async def test_admin_exemption_is_audited_and_does_not_write_any_score(monkeypat
     invalidation = AsyncMock()
     monkeypatch.setattr(mod, "flush_cache_invalidation_events", invalidation)
     result = await mod.TMAZeroReconciliationService.exempt(
-        db, actor=actor, assignment_id=assignment.id,
-        student_id=student, reason="Student joined after closure",
+        db,
+        actor=actor,
+        assignment_id=assignment.id,
+        student_id=student,
+        reason="Student joined after closure",
     )
     assert result is failure
     assert result.resolution == "exempt"
@@ -82,8 +84,10 @@ async def test_teacher_cannot_exempt_student_even_when_lead():
     with pytest.raises(ForbiddenException, match="administrator"):
         await mod.TMAZeroReconciliationService.exempt(
             AsyncMock(),
-            actor=teacher, assignment_id=assignment.id,
-            student_id=student, reason="Administrator only",
+            actor=teacher,
+            assignment_id=assignment.id,
+            student_id=student,
+            reason="Administrator only",
         )
 
 
@@ -93,9 +97,7 @@ async def test_exemption_rejects_recorded_submission(monkeypatch):
     monkeypatch.setattr(
         mod.TMAAssignmentRepository, "get_by_id", AsyncMock(return_value=assignment)
     )
-    monkeypatch.setattr(
-        mod.TMAAuthorizationService, "require_assignment_access", AsyncMock()
-    )
+    monkeypatch.setattr(mod.TMAAuthorizationService, "require_assignment_access", AsyncMock())
     result = MagicMock()
     result.scalar_one_or_none.return_value = failure
     submission = MagicMock()
@@ -104,8 +106,11 @@ async def test_exemption_rejects_recorded_submission(monkeypatch):
     db.execute.side_effect = [result, submission]
     with pytest.raises(ConflictException, match="already has a score"):
         await mod.TMAZeroReconciliationService.exempt(
-            db, actor=actor, assignment_id=assignment.id,
-            student_id=student, reason="Exemption must not erase scores",
+            db,
+            actor=actor,
+            assignment_id=assignment.id,
+            student_id=student,
+            reason="Exemption must not erase scores",
         )
     assert failure.resolved_at is None
     db.commit.assert_not_awaited()
@@ -114,9 +119,7 @@ async def test_exemption_rejects_recorded_submission(monkeypatch):
 @pytest.mark.asyncio
 async def test_other_tenant_cannot_view_blocked_students(monkeypatch):
     actor, assignment, student, failure = fixture()
-    monkeypatch.setattr(
-        mod.TMAAssignmentRepository, "get_by_id", AsyncMock(return_value=None)
-    )
+    monkeypatch.setattr(mod.TMAAssignmentRepository, "get_by_id", AsyncMock(return_value=None))
     db = AsyncMock()
     with pytest.raises(NotFoundException):
         await mod.TMAZeroReconciliationService.list_conflicts(

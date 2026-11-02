@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +48,15 @@ class TMAReportingService:
             assignment=assignment,
         )
 
+        if assignment.closes_at is not None and assignment.closes_at <= datetime.now(timezone.utc):
+            from app.modules.tma.deadline_eligibility_repository import (
+                TMADeadlineEligibilityRepository,
+            )
+
+            await TMADeadlineEligibilityRepository.capture(
+                db, tenant_id=assignment.tenant_id, assignment_id=assignment.id
+            )
+
         classrooms = set(
             (
                 await db.execute(
@@ -90,9 +100,13 @@ class TMAReportingService:
                     regular_classes.add(current_class_id)
                 break
 
+        authorized_class_ids = await TMAAuthorizationService.authorized_classroom_ids(
+            db, actor=actor, assignment=assignment
+        )
         students, total = await TMAReportingRepository.list_participation(
             db,
             assignment=assignment,
+            authorized_class_ids=authorized_class_ids,
             regular_class_ids=regular_classes,
             grouped_elective_class_ids=grouped_elective_classes,
             search=search,
