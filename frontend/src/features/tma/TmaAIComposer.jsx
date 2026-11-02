@@ -29,6 +29,7 @@ export default function TmaAIComposer({
   const [count, setCount] = useState(5);
   const [difficulty, setDifficulty] = useState("medium");
   const [visuals, setVisuals] = useState("text_only");
+  const difficultyOptions = ["easy", "medium", "difficult"];
   const [busy, setBusy] = useState(false);
   const [drafts, setDrafts] = useState([]);
   const user = authSession.getUser();
@@ -224,27 +225,28 @@ export default function TmaAIComposer({
                     onChange={(e) => setCount(Number(e.target.value))}
                   />
                 </label>
-                <fieldset className="tma-ai-choices">
-                  <legend>Difficulty</legend>
-                  {["easy", "medium", "difficult"].map((v) => (
-                    <label key={v}>
-                      <input
-                        type="radio"
-                        name="tma-difficulty"
-                        value={v}
-                        checked={difficulty === v}
-                        disabled={busy}
-                        onChange={() => setDifficulty(v)}
-                      />
-                      <span>{v}</span>
-                    </label>
-                  ))}
-                </fieldset>
+                <div className="tma-ai-difficulty">
+                  <label htmlFor="tma-ai-difficulty">Difficulty · {difficulty}</label>
+                  <input
+                    id="tma-ai-difficulty"
+                    type="range"
+                    min={0}
+                    max={2}
+                    step={1}
+                    value={difficultyOptions.indexOf(difficulty)}
+                    disabled={busy}
+                    aria-valuetext={difficulty}
+                    onChange={(e) => setDifficulty(difficultyOptions[Number(e.target.value)])}
+                  />
+                  <div aria-hidden="true" className="tma-ai-difficulty-labels">
+                    <span>Easy</span><span>Medium</span><span>Difficult</span>
+                  </div>
+                </div>
                 <fieldset className="tma-ai-choices">
                   <legend>Visuals</legend>
                   {[
                     ["text_only", "Text only"],
-                    ["auto", "Automatic"],
+                    ["auto", "Allow images"],
                   ].map(([v, label]) => (
                     <label key={v}>
                       <input
