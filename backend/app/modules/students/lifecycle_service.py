@@ -878,8 +878,14 @@ class StudentLifecycleService(LegacyStudentLifecycleService):
                         Student.tenant_id == tenant_id,
                         Student.status.in_(StudentLifecycleService.TERMINAL_ACTIONS),
                         StudentEnrollment.is_current.is_(True),
+                        # A terminal enrollment whose inclusive last day is today
+                        # is not a due return; do not lock it during request auth.
+                        StudentEnrollment.ended_on.is_(None),
                     )
-                    .with_for_update()
+                    # This scan also runs in the authentication dependency.
+                    # Skip rows a concurrent request is already activating,
+                    # and avoid locking joined enrollment rows unnecessarily.
+                    .with_for_update(of=Student, skip_locked=True)
                 )
             )
             .scalars()
