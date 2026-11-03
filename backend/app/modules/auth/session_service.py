@@ -16,6 +16,7 @@ from app.config.security import (
     hash_refresh_token,
 )
 from app.config.settings import settings
+from app.config.logging import get_logger
 from app.core.exceptions import BadRequestException, UnauthorizedException
 from app.modules.auth.models import AuthRefreshToken, AuthSession, AuthSessionActorType
 from app.modules.auth.repository import (
@@ -46,6 +47,9 @@ from app.modules.tenant_admins.models import TenantAdminStatus
 from app.modules.tenant_admins.repository import TenantAdminRepository
 from app.tenant_management.models import TenantStatus, TenantVerificationStatus
 from app.tenant_management.repository import TenantRepository
+
+
+logger = get_logger(__name__)
 
 
 def _utc_now() -> datetime:
@@ -81,6 +85,22 @@ class AuthSessionTokenPair:
 
 class AuthSessionService:
     """Issue, rotate, reconstruct, and revoke persistent sessions."""
+
+    @staticmethod
+    async def _announce_revocation(session: AuthSession) -> None:
+        """Best-effort immediate invalidation; WebSockets also revalidate periodically."""
+        try:
+            from app.modules.realtime.publisher import RealtimePublisher
+
+            await RealtimePublisher.to_actor(
+                event_type="auth.session.revoked",
+                actor_type=session.actor_type.value,
+                actor_id=session.actor_id,
+                tenant_id=session.tenant_id,
+                data={"session_jti": session.session_jti},
+            )
+        except Exception:
+            logger.exception("Failed to notify realtime clients of a revoked auth session.")
 
     @staticmethod
     def _session_lifetime(*, remember_me: bool) -> timedelta:
@@ -368,6 +388,7 @@ class AuthSessionService:
                 reason="refresh_reuse_detected",
             )
             await db.commit()
+            await AuthSessionService._announce_revocation(session)
             SecurityAlertService.notify_refresh_token_reuse(
                 background_tasks=background_tasks,
                 actor_type=session.actor_type.value,
@@ -462,3 +483,4 @@ class AuthSessionService:
             reason="logout",
         )
         await db.commit()
+        await AuthSessionService._announce_revocation(session)
