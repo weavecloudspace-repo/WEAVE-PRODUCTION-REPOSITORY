@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -12,6 +13,7 @@ from app.core.exceptions import AppException, ForbiddenException
 from app.modules.cbt.auth.schemas import AuthenticatedCBTServer
 from app.modules.cbt.auth.service import CBTMachineAuthService
 from app.modules.cbt.sync.manager import CBTMachineConnection, cbt_connection_manager
+from app.modules.cbt.sync.ownership import CBTSocketOwnership, CBT_LEASE_REFRESH_SECONDS
 from app.modules.cbt.sync.service import CBTSyncService
 
 logger = get_logger(__name__)
@@ -54,6 +56,8 @@ async def _send(connection: CBTMachineConnection, message: dict) -> None:
 @router.websocket("/stream")
 async def cbt_sync_stream(websocket: WebSocket) -> None:
     connection: CBTMachineConnection | None = None
+    ownership_token: str | None = None
+    server_id: uuid.UUID | None = None
     credential = _extract_bearer_credential(websocket)
     if credential is None:
         await websocket.close(
@@ -78,12 +82,16 @@ async def cbt_sync_stream(websocket: WebSocket) -> None:
             )
             return
 
+        server_id = current_server.server_id
+        ownership_token = uuid.uuid4().hex
+        await CBTSocketOwnership.claim(server_id, ownership_token)
         await websocket.accept()
         connection = await cbt_connection_manager.register(
             server_id=current_server.server_id,
             credential_id=current_server.credential_id,
             tenant_id=current_server.tenant_id,
             websocket=websocket,
+            ownership_token=ownership_token,
         )
         await _send(
             connection,
@@ -95,9 +103,24 @@ async def cbt_sync_stream(websocket: WebSocket) -> None:
         )
 
         while True:
-            message = await websocket.receive_json()
+            try:
+                message = await asyncio.wait_for(
+                    websocket.receive_json(), timeout=CBT_LEASE_REFRESH_SECONDS,
+                )
+            except TimeoutError:
+                message = None
+            if not await CBTSocketOwnership.renew(server_id, ownership_token):
+                await cbt_connection_manager.disconnect_server(
+                    server_id,
+                    expected_websocket=websocket,
+                    code=4001,
+                    reason="CBT socket ownership moved to another replica.",
+                )
+                return
             if not await cbt_connection_manager.ensure_authorized(connection):
                 return
+            if message is None:
+                continue
             if not isinstance(message, dict):
                 await _send(
                     connection,
@@ -133,3 +156,8 @@ async def cbt_sync_stream(websocket: WebSocket) -> None:
                 server_id=connection.server_id,
                 websocket=websocket,
             )
+        if server_id is not None and ownership_token is not None:
+            try:
+                await CBTSocketOwnership.release(server_id, ownership_token)
+            except Exception:
+                logger.exception("Failed to release CBT socket ownership lease.")
