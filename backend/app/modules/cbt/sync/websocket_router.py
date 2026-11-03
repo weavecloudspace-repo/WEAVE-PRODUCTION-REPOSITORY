@@ -105,7 +105,8 @@ async def cbt_sync_stream(websocket: WebSocket) -> None:
         while True:
             try:
                 message = await asyncio.wait_for(
-                    websocket.receive_json(), timeout=CBT_LEASE_REFRESH_SECONDS,
+                    websocket.receive_json(),
+                    timeout=CBT_LEASE_REFRESH_SECONDS,
                 )
             except TimeoutError:
                 message = None
