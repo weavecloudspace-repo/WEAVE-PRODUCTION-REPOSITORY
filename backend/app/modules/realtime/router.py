@@ -248,7 +248,7 @@ async def realtime_stream(websocket: WebSocket) -> None:
     except RuntimeError as exc:
         if not (
             "WebSocket is not connected" in str(exc)
-            or "Cannot call \"receive\" once a disconnect message has been received" in str(exc)
+            or 'Cannot call "receive" once a disconnect message has been received' in str(exc)
         ):
             logger.exception("Unexpected realtime WebSocket failure.")
     except Exception:
