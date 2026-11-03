@@ -39,6 +39,7 @@ class RateLimitResult:
     retry_after: int
     reset_after: int
     current: int
+    backend_unavailable: bool = False
 
 
 def _log_redis_fallback(error: Exception) -> None:
@@ -69,6 +70,7 @@ def _redis_failure_result(*, limit: int, window_seconds: int) -> RateLimitResult
         retry_after=max(min(window_seconds, 60), 1),
         reset_after=max(min(window_seconds, 60), 1),
         current=limit + 1,
+        backend_unavailable=True,
     )
 
 
