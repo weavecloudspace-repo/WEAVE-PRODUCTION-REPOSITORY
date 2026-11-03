@@ -238,7 +238,7 @@ def create_app() -> FastAPI:
         "allow_headers": ["*"],
     }
     if (
-        settings.ALLOW_CROSS_SITE_REFRESH_COOKIE
+        getattr(settings, "ALLOW_CROSS_SITE_REFRESH_COOKIE", False)
         and settings.ENV.value == "prod"
         and datetime.now(timezone.utc) < datetime(2026, 11, 4, 23, 0, tzinfo=timezone.utc)
     ):
