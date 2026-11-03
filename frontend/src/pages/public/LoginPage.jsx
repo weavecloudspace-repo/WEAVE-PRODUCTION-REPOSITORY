@@ -163,7 +163,7 @@ function LoginPage() {
       return null;
     }
   });
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const retryAfterSeconds = lockout
     ? Math.max(0, Math.ceil((lockout.expiresAt - now) / 1000))
     : 0;
