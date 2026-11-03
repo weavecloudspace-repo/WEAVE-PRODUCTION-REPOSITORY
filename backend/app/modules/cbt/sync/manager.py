@@ -72,9 +72,12 @@ class CBTConnectionManager:
             self._tenant_servers.setdefault(tenant_id, set()).add(server_id)
         if old and old.websocket is not websocket:
             try:
-                await old.websocket.close(
-                    code=4001,
-                    reason="Connection replaced by a newer CBT session.",
+                await asyncio.wait_for(
+                    old.websocket.close(
+                        code=4001,
+                        reason="Connection replaced by a newer CBT session.",
+                    ),
+                    timeout=2,
                 )
             except Exception:
                 pass
