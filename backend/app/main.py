@@ -1,6 +1,7 @@
 """FastAPI application factory and router registration."""
 
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any, AsyncGenerator
 
 from fastapi import APIRouter, Depends, FastAPI, status
@@ -236,6 +237,9 @@ def create_app() -> FastAPI:
         "allow_methods": ["*"],
         "allow_headers": ["*"],
     }
+    if (settings.ALLOW_CROSS_SITE_REFRESH_COOKIE and settings.ENV.value == "prod"
+            and datetime.now(timezone.utc) < datetime(2026, 11, 4, 23, 0, tzinfo=timezone.utc)):
+        middleware_options["allow_origins"] = [*settings.ALLOWED_ORIGINS, settings.TEMPORARY_FRONTEND_ORIGIN]
     if settings.is_development:
         middleware_options["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
     app.add_middleware(PlatformLockdownMiddleware)
