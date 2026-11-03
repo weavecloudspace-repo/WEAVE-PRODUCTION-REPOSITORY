@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -32,6 +33,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/realtime", tags=["Realtime"])
 
 AUTHENTICATION_TIMEOUT_SECONDS = 10
+SESSION_REVALIDATION_SECONDS = 30
 AUTHENTICATION_CLOSE_CODE = 4401
 IDENTITY_CHANGE_CLOSE_CODE = 4403
 _control_frame_adapter = TypeAdapter(RealtimeClientControlFrame)
@@ -133,6 +135,8 @@ async def realtime_stream(websocket: WebSocket) -> None:
             await websocket.close(code=AUTHENTICATION_CLOSE_CODE)
             return
 
+        access_token = initial_frame.access_token
+        last_verified_at = time.monotonic()
         connection = await realtime_manager.register(websocket, identity=identity)
         await _send_control(
             websocket,
@@ -145,19 +149,42 @@ async def realtime_stream(websocket: WebSocket) -> None:
 
         while True:
             try:
+                next_check = max(
+                    0.0,
+                    SESSION_REVALIDATION_SECONDS - (time.monotonic() - last_verified_at),
+                )
                 frame = await _receive_control_frame(
                     websocket,
-                    timeout=_seconds_until_expiry(identity),
+                    timeout=min(_seconds_until_expiry(identity), next_check),
                 )
             except TimeoutError:
-                await _send_error(
-                    websocket,
-                    code="authentication_expired",
-                    message="The WebSocket access token expired.",
-                    connection=connection,
-                )
-                await websocket.close(code=AUTHENTICATION_CLOSE_CODE)
-                return
+                if _seconds_until_expiry(identity) <= 0:
+                    await _send_error(
+                        websocket,
+                        code="authentication_expired",
+                        message="The WebSocket access token expired.",
+                        connection=connection,
+                    )
+                    await websocket.close(code=AUTHENTICATION_CLOSE_CODE)
+                    return
+                try:
+                    verified_identity = await _authenticate(access_token)
+                except AppException:
+                    await _send_error(
+                        websocket,
+                        code="authentication_failed",
+                        message="The realtime session is no longer valid.",
+                        connection=connection,
+                    )
+                    await websocket.close(code=AUTHENTICATION_CLOSE_CODE)
+                    return
+                if not await realtime_manager.refresh_identity(
+                    connection.connection_id, identity=verified_identity,
+                ):
+                    return
+                identity = verified_identity
+                last_verified_at = time.monotonic()
+                continue
             except (ValidationError, ValueError, TypeError):
                 await _send_error(
                     websocket,
@@ -199,6 +226,8 @@ async def realtime_stream(websocket: WebSocket) -> None:
                     return
 
                 identity = refreshed_identity
+                access_token = frame.access_token
+                last_verified_at = time.monotonic()
                 await _send_control(
                     websocket,
                     RealtimeAuthRefreshedFrame(
@@ -217,6 +246,12 @@ async def realtime_stream(websocket: WebSocket) -> None:
 
     except WebSocketDisconnect:
         pass
+    except RuntimeError as exc:
+        if not (
+            "WebSocket is not connected" in str(exc)
+            or "Cannot call \"receive\" once a disconnect message has been received" in str(exc)
+        ):
+            logger.exception("Unexpected realtime WebSocket failure.")
     except Exception:
         logger.exception("Unexpected realtime WebSocket failure.")
         try:
