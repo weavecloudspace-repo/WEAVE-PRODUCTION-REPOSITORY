@@ -15,6 +15,7 @@ from app.config.database import AsyncSessionLocal
 from app.config.logging import get_logger
 from app.modules.cbt.enums import CBTServerStatus
 from app.modules.cbt.models import CBTServer, CBTServerCredential
+from app.modules.cbt.sync.ownership import CBTSocketOwnership
 
 SEND_TIMEOUT_SECONDS = 8.0
 AUTHORIZATION_CLOSE_CODE = 4403
@@ -28,6 +29,7 @@ class CBTMachineConnection:
     credential_id: uuid.UUID
     tenant_id: uuid.UUID
     websocket: WebSocket
+    ownership_token: str | None = None
     send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     authorized_until: datetime = field(
         default_factory=lambda: (
@@ -49,12 +51,14 @@ class CBTConnectionManager:
         credential_id: uuid.UUID,
         tenant_id: uuid.UUID,
         websocket: WebSocket,
+        ownership_token: str | None = None,
     ) -> CBTMachineConnection:
         connection = CBTMachineConnection(
             server_id=server_id,
             credential_id=credential_id,
             tenant_id=tenant_id,
             websocket=websocket,
+            ownership_token=ownership_token,
         )
         async with self._lock:
             old = self._connections.get(server_id)
@@ -68,9 +72,12 @@ class CBTConnectionManager:
             self._tenant_servers.setdefault(tenant_id, set()).add(server_id)
         if old and old.websocket is not websocket:
             try:
-                await old.websocket.close(
-                    code=4001,
-                    reason="Connection replaced by a newer CBT session.",
+                await asyncio.wait_for(
+                    old.websocket.close(
+                        code=4001,
+                        reason="Connection replaced by a newer CBT session.",
+                    ),
+                    timeout=2,
                 )
             except Exception:
                 pass
@@ -129,6 +136,22 @@ class CBTConnectionManager:
         return credential.expires_at is None or credential.expires_at > datetime.now(timezone.utc)
 
     async def ensure_authorized(self, connection: CBTMachineConnection) -> bool:
+        if connection.ownership_token is not None:
+            try:
+                current = await CBTSocketOwnership.is_current(
+                    connection.server_id, connection.ownership_token
+                )
+            except Exception:
+                logger.exception("CBT socket ownership verification failed.")
+                current = False
+            if not current:
+                await self.disconnect_server(
+                    connection.server_id,
+                    expected_websocket=connection.websocket,
+                    code=4001,
+                    reason="CBT socket ownership moved to another replica.",
+                )
+                return False
         now = datetime.now(timezone.utc)
         if now < connection.authorized_until:
             return True
@@ -137,6 +160,7 @@ class CBTConnectionManager:
             return True
         await self.disconnect_server(
             connection.server_id,
+            expected_websocket=connection.websocket,
             code=AUTHORIZATION_CLOSE_CODE,
             reason="CBT server authorization changed.",
         )
@@ -206,20 +230,40 @@ class CBTConnectionManager:
         *,
         code: int = AUTHORIZATION_CLOSE_CODE,
         reason: str = "CBT server access changed.",
+        expected_websocket: WebSocket | None = None,
     ) -> bool:
         async with self._lock:
             connection = self._connections.get(server_id)
-        if connection is None:
+        if connection is None or (
+            expected_websocket is not None and connection.websocket is not expected_websocket
+        ):
             return False
         await self.unregister(
             server_id=server_id,
             websocket=connection.websocket,
         )
         try:
-            await connection.websocket.close(code=code, reason=reason)
+            await asyncio.wait_for(connection.websocket.close(code=code, reason=reason), timeout=2)
         except Exception:
             pass
         return True
+
+    async def disconnect_replaced(self, *, server_id: str, ownership_token: str) -> bool:
+        """Close only a stale local connection after a newer Redis lease is announced."""
+        try:
+            machine_id = uuid.UUID(server_id)
+        except (ValueError, TypeError):
+            return False
+        async with self._lock:
+            current = self._connections.get(machine_id)
+        if current is None or current.ownership_token in (None, ownership_token):
+            return False
+        return await self.disconnect_server(
+            machine_id,
+            expected_websocket=current.websocket,
+            code=4001,
+            reason="Connection replaced by a newer CBT session.",
+        )
 
 
 cbt_connection_manager = CBTConnectionManager()

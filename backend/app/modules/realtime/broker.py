@@ -15,6 +15,8 @@ from redis.asyncio import Redis
 from app.config.logging import get_logger
 from app.config.settings import settings
 from app.modules.realtime.manager import realtime_manager
+from app.modules.cbt.sync.ownership import CBT_OWNERSHIP_CHANNEL
+from app.modules.cbt.sync.manager import cbt_connection_manager
 from app.modules.realtime.schemas import RealtimeBrokerMessage
 
 
@@ -80,7 +82,7 @@ class RealtimeRedisBroker:
         await self._close_subscriber_resources()
         self._subscriber = self._create_redis_client()
         self._pubsub = self._subscriber.pubsub()
-        await self._pubsub.subscribe(REALTIME_CHANNEL)
+        await self._pubsub.subscribe(REALTIME_CHANNEL, CBT_OWNERSHIP_CHANNEL)
 
     async def _listen(self) -> None:
         """
@@ -105,7 +107,20 @@ class RealtimeRedisBroker:
                         continue
 
                     try:
+                        if raw_message.get("channel") == CBT_OWNERSHIP_CHANNEL:
+                            control = json.loads(raw_message["data"])
+                            if isinstance(control, dict):
+                                await cbt_connection_manager.disconnect_replaced(
+                                    server_id=control.get("server_id", ""),
+                                    ownership_token=control.get("ownership_token", ""),
+                                )
+                            continue
                         message = RealtimeBrokerMessage.model_validate_json(raw_message["data"])
+                        if message.event.type == "auth.session.revoked":
+                            sid = message.event.data.get("session_jti")
+                            if isinstance(sid, str) and sid:
+                                await realtime_manager.disconnect_session(sid)
+                            continue
                         await realtime_manager.dispatch(
                             event=message.event,
                             audience=message.audience,
