@@ -153,7 +153,20 @@ function LoginPage() {
   );
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
-  const [retryAfterSeconds, setRetryAfterSeconds] = useState(0);
+  const [lockout, setLockout] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("weave_login_lockout") || "null");
+      return saved?.scope === "ip" && Number(saved.expiresAt) > Date.now()
+        ? saved
+        : null;
+    } catch {
+      return null;
+    }
+  });
+  const [now, setNow] = useState(() => Date.now());
+  const retryAfterSeconds = lockout
+    ? Math.max(0, Math.ceil((lockout.expiresAt - now) / 1000))
+    : 0;
   const [lockoutMessage, setLockoutMessage] = useState(null);
 
   useEffect(() => {
@@ -199,17 +212,24 @@ function LoginPage() {
   }, [navigate, returnTo, shouldRestoreSession]);
 
   useEffect(() => {
-    if (!retryAfterSeconds) return undefined;
-    const intervalId = window.setInterval(() => {
-      setRetryAfterSeconds((currentValue) => Math.max(currentValue - 1, 0));
-    }, 1000);
-    return () => window.clearInterval(intervalId);
-  }, [retryAfterSeconds]);
+    const updateClock = () => setNow(Date.now());
+    const intervalId = window.setInterval(updateClock, 1000);
+    window.addEventListener("focus", updateClock);
+    document.addEventListener("visibilitychange", updateClock);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", updateClock);
+      document.removeEventListener("visibilitychange", updateClock);
+    };
+  }, []);
 
   useEffect(() => {
-    if (retryAfterSeconds > 0) return;
+    if (!lockout) return;
+    if (lockout.expiresAt > now) return;
+    setLockout(null);
     setLockoutMessage(null);
-  }, [retryAfterSeconds]);
+    localStorage.removeItem("weave_login_lockout");
+  }, [lockout, now]);
 
   const lockoutCountdownLabel = useMemo(
     () => formatCountdown(retryAfterSeconds),
@@ -258,7 +278,7 @@ function LoginPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (retryAfterSeconds > 0) return;
+    if (lockout && lockout.expiresAt > Date.now()) return;
 
     setIsLoading(true);
     setError(null);
@@ -270,6 +290,8 @@ function LoginPage() {
         remember: formData.remember,
       });
 
+      localStorage.removeItem("weave_login_lockout");
+      setLockout(null);
       authService.clearPendingVerificationEmail();
       const role = String(data?.role || data?.user?.role || "").toUpperCase();
       const passwordResetRequired = Boolean(
@@ -313,7 +335,18 @@ function LoginPage() {
         retryAfter > 0
       ) {
         const roundedRetryAfter = Math.ceil(retryAfter);
-        setRetryAfterSeconds(roundedRetryAfter);
+        const scope = apiError.data?.rate_limit_scope === "ip" ? "ip" : "identifier";
+        const nextLockout = {
+          scope,
+          expiresAt: Date.now() + roundedRetryAfter * 1000,
+        };
+        setNow(Date.now());
+        setLockout(nextLockout);
+        if (scope === "ip") {
+          localStorage.setItem("weave_login_lockout", JSON.stringify(nextLockout));
+        } else {
+          localStorage.removeItem("weave_login_lockout");
+        }
         setLockoutMessage(
           apiError.message ||
             "Login is temporarily locked after too many failed attempts. Correct passwords are also blocked until the countdown ends."
