@@ -15,6 +15,7 @@ from app.core.exceptions import AppException
 from app.modules.realtime.authentication import (
     RealtimeIdentity,
     authenticate_realtime_access_token,
+    validate_realtime_session,
 )
 from app.modules.realtime.manager import RealtimeConnection, realtime_manager
 from app.modules.realtime.schemas import (
@@ -71,6 +72,11 @@ async def _authenticate(access_token: str) -> RealtimeIdentity:
     # deliberately not a WebSocket dependency because sockets can live for hours.
     async with AsyncSessionLocal() as db:
         return await authenticate_realtime_access_token(db, access_token=access_token)
+
+
+async def _validate_active_session(identity: RealtimeIdentity) -> None:
+    async with AsyncSessionLocal() as db:
+        await validate_realtime_session(db, identity=identity)
 
 
 def _seconds_until_expiry(identity: RealtimeIdentity) -> float:
@@ -135,7 +141,6 @@ async def realtime_stream(websocket: WebSocket) -> None:
             await websocket.close(code=AUTHENTICATION_CLOSE_CODE)
             return
 
-        access_token = initial_frame.access_token
         last_verified_at = time.monotonic()
         connection = await realtime_manager.register(websocket, identity=identity)
         await _send_control(
@@ -168,7 +173,7 @@ async def realtime_stream(websocket: WebSocket) -> None:
                     await websocket.close(code=AUTHENTICATION_CLOSE_CODE)
                     return
                 try:
-                    verified_identity = await _authenticate(access_token)
+                    await _validate_active_session(identity)
                 except AppException:
                     await _send_error(
                         websocket,
@@ -178,11 +183,6 @@ async def realtime_stream(websocket: WebSocket) -> None:
                     )
                     await websocket.close(code=AUTHENTICATION_CLOSE_CODE)
                     return
-                if not await realtime_manager.refresh_identity(
-                    connection.connection_id, identity=verified_identity,
-                ):
-                    return
-                identity = verified_identity
                 last_verified_at = time.monotonic()
                 continue
             except (ValidationError, ValueError, TypeError):
@@ -226,7 +226,6 @@ async def realtime_stream(websocket: WebSocket) -> None:
                     return
 
                 identity = refreshed_identity
-                access_token = frame.access_token
                 last_verified_at = time.monotonic()
                 await _send_control(
                     websocket,
