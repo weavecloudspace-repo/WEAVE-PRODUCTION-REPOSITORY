@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.config.logging import get_logger
 from app.config.settings import settings
 from app.core.exceptions import TooManyRequestsException
 from app.core.rate_limits.keys import (
@@ -10,6 +11,9 @@ from app.core.rate_limits.keys import (
     normalize_identifier,
 )
 from app.core.rate_limits.redis_limiter import RedisFixedWindowRateLimiter
+
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -50,6 +54,44 @@ class AuthRateLimitService:
     def _ip_hash(cls, ip_address: str | None) -> str:
         return digest_key_part(cls._safe_ip(ip_address))
 
+    @staticmethod
+    def _log_rejection(
+        *,
+        rules: list[RateLimitRule],
+        states: list,
+        reason: str,
+        scope: str,
+        phase: str,
+    ) -> None:
+        """Internal-only diagnostics. Never log raw identifiers, IPs or Redis keys."""
+        for rule, state in zip(rules, states):
+            if state.allowed:
+                continue
+            logger.warning(
+                "auth_rate_limit.rejected",
+                extra={
+                    "rate_limit_reason": reason,
+                    "rate_limit_scope": scope,
+                    "rate_limit_phase": phase,
+                    "rate_limit_bucket": (
+                        "identifier-ip"
+                        if ":identifier-ip:" in rule.key
+                        else "identifier"
+                        if ":identifier:" in rule.key
+                        else "ip"
+                        if ":ip:" in rule.key
+                        else "email"
+                        if ":email:" in rule.key
+                        else "other"
+                    ),
+                    "rate_limit_window_seconds": rule.window_seconds,
+                    "rate_limit_backend_unavailable": state.backend_unavailable,
+                    "rate_limit_limit": rule.limit,
+                    "rate_limit_current": state.current,
+                    "rate_limit_retry_after_seconds": state.retry_after,
+                },
+            )
+
     @classmethod
     async def _enforce_rules(
         cls,
@@ -75,6 +117,9 @@ class AuthRateLimitService:
 
         blocked = [state for state in states if not state.allowed]
         if blocked:
+            cls._log_rejection(
+                rules=rules, states=states, reason=reason, scope=scope, phase="status"
+            )
             retry_after = max(state.retry_after for state in blocked)
             raise TooManyRequestsException(
                 detail=detail,
@@ -90,6 +135,9 @@ class AuthRateLimitService:
                 window_seconds=rule.window_seconds,
             )
             if not result.allowed:
+                cls._log_rejection(
+                    rules=[rule], states=[result], reason=reason, scope=scope, phase="consume"
+                )
                 raise TooManyRequestsException(
                     detail=detail,
                     retry_after=max(result.retry_after, 1),
