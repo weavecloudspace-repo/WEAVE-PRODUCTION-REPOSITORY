@@ -33,6 +33,7 @@ from app.core.dependencies.route_guards import (
     get_current_tenant_admin,
 )
 from app.core.exceptions import UnauthorizedException
+from app.modules.auth.repository import AuthSessionRepository
 
 
 @dataclass(frozen=True)
@@ -194,3 +195,24 @@ async def authenticate_realtime_access_token(
         build_realtime_identity(actor, token_expires_at=token_expires_at),
         session_jti=payload.get("sid"),
     )
+
+
+async def validate_realtime_session(db: AsyncSession, *, identity: RealtimeIdentity) -> None:
+    """Cheap periodic revocation check; full actor checks occur on auth/refresh."""
+    if not identity.session_jti:
+        raise UnauthorizedException("Realtime session has no persistent session identifier.")
+    session = await AuthSessionRepository.get_session_by_jti(db, identity.session_jti)
+    if session is None:
+        raise UnauthorizedException("Realtime session is no longer valid.")
+    expires_at = session.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if (
+        session.revoked_at is not None
+        or session.compromised_at is not None
+        or expires_at <= datetime.now(timezone.utc)
+        or session.actor_id != identity.actor_id
+        or session.actor_type.value != identity.actor_type
+        or session.tenant_id != identity.tenant_id
+    ):
+        raise UnauthorizedException("Realtime session is no longer valid.")
