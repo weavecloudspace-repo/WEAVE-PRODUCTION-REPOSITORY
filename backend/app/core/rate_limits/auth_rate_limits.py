@@ -73,7 +73,7 @@ class AuthRateLimitService:
                     "rate_limit_reason": reason,
                     "rate_limit_scope": scope,
                     "rate_limit_phase": phase,
-                    "rate_limit_bucket": rule.key.split(":")[-1],
+                    "rate_limit_bucket": (\n                        "identifier-ip" if ":identifier-ip:" in rule.key\n                        else "identifier" if ":identifier:" in rule.key\n                        else "ip" if ":ip:" in rule.key\n                        else "email" if ":email:" in rule.key\n                        else "other"\n                    ),\n                    "rate_limit_window_seconds": rule.window_seconds,
                     "rate_limit_backend_unavailable": state.backend_unavailable,
                     "rate_limit_limit": rule.limit,
                     "rate_limit_current": state.current,
