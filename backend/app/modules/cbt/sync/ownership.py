@@ -50,10 +50,12 @@ class CBTSocketOwnership:
         await client.set(cls._key(server_id), ownership_token, ex=CBT_LEASE_SECONDS)
         await client.publish(
             CBT_OWNERSHIP_CHANNEL,
-            json.dumps({
-                "server_id": str(server_id),
-                "ownership_token": ownership_token,
-            }),
+            json.dumps(
+                {
+                    "server_id": str(server_id),
+                    "ownership_token": ownership_token,
+                }
+            ),
         )
 
     @classmethod
@@ -64,13 +66,19 @@ class CBTSocketOwnership:
     async def renew(cls, server_id: uuid.UUID, ownership_token: str) -> bool:
         return bool(
             await cls._client().eval(
-                _RENEW_IF_OWNER, 1, cls._key(server_id),
-                ownership_token, CBT_LEASE_SECONDS,
+                _RENEW_IF_OWNER,
+                1,
+                cls._key(server_id),
+                ownership_token,
+                CBT_LEASE_SECONDS,
             )
         )
 
     @classmethod
     async def release(cls, server_id: uuid.UUID, ownership_token: str) -> None:
         await cls._client().eval(
-            _RELEASE_IF_OWNER, 1, cls._key(server_id), ownership_token,
+            _RELEASE_IF_OWNER,
+            1,
+            cls._key(server_id),
+            ownership_token,
         )
