@@ -36,8 +36,11 @@ def _allowed_origins() -> set[str]:
         for origin in settings.ALLOWED_ORIGINS
         if (normalized := _normalized_origin(origin)) is not None
     }
-    if (settings.ALLOW_CROSS_SITE_REFRESH_COOKIE and settings.ENV.value == "prod"
-            and datetime.now(timezone.utc) < datetime(2026, 11, 4, 23, 0, tzinfo=timezone.utc)):
+    if (
+        settings.ALLOW_CROSS_SITE_REFRESH_COOKIE
+        and settings.ENV.value == "prod"
+        and datetime.now(timezone.utc) < datetime(2026, 11, 4, 23, 0, tzinfo=timezone.utc)
+    ):
         origins.add(settings.TEMPORARY_FRONTEND_ORIGIN)
     return origins
 
