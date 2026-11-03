@@ -65,8 +65,11 @@ def _refresh_cookie_secure() -> bool:
 
 
 def _refresh_cookie_samesite() -> str:
-    if (settings.ALLOW_CROSS_SITE_REFRESH_COOKIE and settings.ENV.value == "prod"
-            and datetime.now(timezone.utc) < datetime(2026, 11, 4, 23, 0, tzinfo=timezone.utc)):
+    if (
+        settings.ALLOW_CROSS_SITE_REFRESH_COOKIE
+        and settings.ENV.value == "prod"
+        and datetime.now(timezone.utc) < datetime(2026, 11, 4, 23, 0, tzinfo=timezone.utc)
+    ):
         return "none"
     return "none" if settings.ENV.value == "stg" else "lax"
 
