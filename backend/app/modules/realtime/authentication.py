@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from uuid import UUID
 
 
@@ -45,6 +45,7 @@ class RealtimeIdentity:
     actor_id: UUID
     tenant_id: UUID | None
     token_expires_at: datetime
+    session_jti: str | None = None
 
 
 def build_realtime_identity(
@@ -189,7 +190,7 @@ async def authenticate_realtime_access_token(
         tz=timezone.utc,
     )
 
-    return build_realtime_identity(
-        actor,
-        token_expires_at=token_expires_at,
+    return replace(
+        build_realtime_identity(actor, token_expires_at=token_expires_at),
+        session_jti=payload.get("sid"),
     )
