@@ -100,7 +100,8 @@ async def test_revocation_disconnects_only_matching_persistent_session():
     first, second = Socket(), Socket()
     actor_id, tenant_id = uuid4(), uuid4()
     await manager.register(
-        first, identity=actor_identity(session_jti="revoked", actor_id=actor_id, tenant_id=tenant_id)
+        first,
+        identity=actor_identity(session_jti="revoked", actor_id=actor_id, tenant_id=tenant_id),
     )
     await manager.register(
         second, identity=actor_identity(session_jti="valid", actor_id=actor_id, tenant_id=tenant_id)
@@ -143,13 +144,19 @@ async def test_cbt_lease_replacement_and_stale_release_across_replicas(monkeypat
 
     await ownership_mod.CBTSocketOwnership.claim(machine_id, "older")
     await replica_one.register(
-        server_id=machine_id, credential_id=uuid4(), tenant_id=tenant_id,
-        websocket=old_socket, ownership_token="older",
+        server_id=machine_id,
+        credential_id=uuid4(),
+        tenant_id=tenant_id,
+        websocket=old_socket,
+        ownership_token="older",
     )
     await ownership_mod.CBTSocketOwnership.claim(machine_id, "newer")
     await replica_two.register(
-        server_id=machine_id, credential_id=uuid4(), tenant_id=tenant_id,
-        websocket=new_socket, ownership_token="newer",
+        server_id=machine_id,
+        credential_id=uuid4(),
+        tenant_id=tenant_id,
+        websocket=new_socket,
+        ownership_token="newer",
     )
     channel, event = redis.published[-1]
     assert channel == ownership_mod.CBT_OWNERSHIP_CHANNEL
@@ -173,13 +180,19 @@ async def test_stale_cbt_socket_cannot_disconnect_new_local_owner(monkeypatch):
     old, new = Socket(), Socket()
     await ownership_mod.CBTSocketOwnership.claim(machine_id, "one")
     stale = await manager.register(
-        server_id=machine_id, credential_id=uuid4(), tenant_id=tenant_id,
-        websocket=old, ownership_token="one",
+        server_id=machine_id,
+        credential_id=uuid4(),
+        tenant_id=tenant_id,
+        websocket=old,
+        ownership_token="one",
     )
     await ownership_mod.CBTSocketOwnership.claim(machine_id, "two")
     await manager.register(
-        server_id=machine_id, credential_id=uuid4(), tenant_id=tenant_id,
-        websocket=new, ownership_token="two",
+        server_id=machine_id,
+        credential_id=uuid4(),
+        tenant_id=tenant_id,
+        websocket=new,
+        ownership_token="two",
     )
     assert await manager.ensure_authorized(stale) is False
     assert not new.closes
@@ -191,22 +204,29 @@ async def test_redis_broker_handles_cross_replica_revocation_event():
     session_id = "session-to-close"
     payload = RealtimeBrokerMessage(
         event=RealtimeEvent(type="auth.session.revoked", data={"session_jti": session_id}),
-        audience=RealtimeAudience(
-            kind="actor", actor_type="teacher", actor_id=uuid4()
-        ),
+        audience=RealtimeAudience(kind="actor", actor_type="teacher", actor_id=uuid4()),
     )
 
     class PubSub:
         async def listen(self):
-            yield {"type": "message", "channel": "weave:realtime:v1", "data": payload.model_dump_json()}
+            yield {
+                "type": "message",
+                "channel": "weave:realtime:v1",
+                "data": payload.model_dump_json(),
+            }
             raise asyncio.CancelledError
 
     broker = RealtimeRedisBroker()
     broker._pubsub = PubSub()
     broker._connect_subscriber = AsyncMock()
     with (
-        patch("app.modules.realtime.broker.realtime_manager.disconnect_session", new_callable=AsyncMock) as close,
-        patch("app.modules.realtime.broker.realtime_manager.dispatch", new_callable=AsyncMock) as deliver,
+        patch(
+            "app.modules.realtime.broker.realtime_manager.disconnect_session",
+            new_callable=AsyncMock,
+        ) as close,
+        patch(
+            "app.modules.realtime.broker.realtime_manager.dispatch", new_callable=AsyncMock
+        ) as deliver,
     ):
         with pytest.raises(asyncio.CancelledError):
             await broker._listen()
@@ -221,15 +241,24 @@ async def test_cbt_replacement_event_dispatches_without_realtime_delivery():
 
     class PubSub:
         async def listen(self):
-            yield {"type": "message", "channel": ownership_mod.CBT_OWNERSHIP_CHANNEL, "data": content}
+            yield {
+                "type": "message",
+                "channel": ownership_mod.CBT_OWNERSHIP_CHANNEL,
+                "data": content,
+            }
             raise asyncio.CancelledError
 
     broker = RealtimeRedisBroker()
     broker._pubsub = PubSub()
     broker._connect_subscriber = AsyncMock()
     with (
-        patch("app.modules.realtime.broker.cbt_connection_manager.disconnect_replaced", new_callable=AsyncMock) as close,
-        patch("app.modules.realtime.broker.realtime_manager.dispatch", new_callable=AsyncMock) as dispatch,
+        patch(
+            "app.modules.realtime.broker.cbt_connection_manager.disconnect_replaced",
+            new_callable=AsyncMock,
+        ) as close,
+        patch(
+            "app.modules.realtime.broker.realtime_manager.dispatch", new_callable=AsyncMock
+        ) as dispatch,
     ):
         with pytest.raises(asyncio.CancelledError):
             await broker._listen()
