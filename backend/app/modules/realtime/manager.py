@@ -270,7 +270,8 @@ class RealtimeConnectionManager:
         """Disconnect this process's sockets for one revoked persistent session."""
         async with self._lock:
             matches = [
-                connection for connection in self._connections.values()
+                connection
+                for connection in self._connections.values()
                 if connection.session_jti == session_jti
             ]
         for connection in matches:
