@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from datetime import datetime
 import asyncio
+
+BROWSER_SEND_TIMEOUT_SECONDS = 5.0
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
@@ -32,6 +34,7 @@ class RealtimeConnection:
     actor_id: UUID
     tenant_id: UUID | None
     token_expires_at: datetime
+    session_jti: str | None
     send_lock: asyncio.Lock
 
 
@@ -70,6 +73,7 @@ class RealtimeConnectionManager:
             actor_id=identity.actor_id,
             tenant_id=identity.tenant_id,
             token_expires_at=identity.token_expires_at,
+            session_jti=identity.session_jti,
             send_lock=asyncio.Lock(),
         )
 
@@ -196,10 +200,17 @@ class RealtimeConnectionManager:
 
         try:
             async with connection.send_lock:
-                await connection.websocket.send_json(payload)
+                await asyncio.wait_for(
+                    connection.websocket.send_json(payload),
+                    timeout=BROWSER_SEND_TIMEOUT_SECONDS,
+                )
             return True
         except Exception:
             await self.unregister(connection_id)
+            try:
+                await asyncio.wait_for(connection.websocket.close(code=1011), timeout=2)
+            except Exception:
+                pass
             return False
 
     async def _send_to_connections(
@@ -251,8 +262,28 @@ class RealtimeConnectionManager:
                 return False
 
             connection.token_expires_at = identity.token_expires_at
+            connection.session_jti = identity.session_jti
 
             return True
+
+    async def disconnect_session(self, session_jti: str) -> int:
+        """Disconnect this process's sockets for one revoked persistent session."""
+        async with self._lock:
+            matches = [
+                connection for connection in self._connections.values()
+                if connection.session_jti == session_jti
+            ]
+        for connection in matches:
+            await self.unregister(connection.connection_id)
+        await asyncio.gather(*(self._close_revoked(connection) for connection in matches))
+        return len(matches)
+
+    @staticmethod
+    async def _close_revoked(connection: RealtimeConnection) -> None:
+        try:
+            await asyncio.wait_for(connection.websocket.close(code=4401), timeout=2)
+        except Exception:
+            pass
 
 
 realtime_manager = RealtimeConnectionManager()
