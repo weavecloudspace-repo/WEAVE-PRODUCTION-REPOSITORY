@@ -74,10 +74,14 @@ class AuthRateLimitService:
                     "rate_limit_scope": scope,
                     "rate_limit_phase": phase,
                     "rate_limit_bucket": (
-                        "identifier-ip" if ":identifier-ip:" in rule.key
-                        else "identifier" if ":identifier:" in rule.key
-                        else "ip" if ":ip:" in rule.key
-                        else "email" if ":email:" in rule.key
+                        "identifier-ip"
+                        if ":identifier-ip:" in rule.key
+                        else "identifier"
+                        if ":identifier:" in rule.key
+                        else "ip"
+                        if ":ip:" in rule.key
+                        else "email"
+                        if ":email:" in rule.key
                         else "other"
                     ),
                     "rate_limit_window_seconds": rule.window_seconds,
@@ -113,7 +117,9 @@ class AuthRateLimitService:
 
         blocked = [state for state in states if not state.allowed]
         if blocked:
-            cls._log_rejection(rules=rules, states=states, reason=reason, scope=scope, phase="status")
+            cls._log_rejection(
+                rules=rules, states=states, reason=reason, scope=scope, phase="status"
+            )
             retry_after = max(state.retry_after for state in blocked)
             raise TooManyRequestsException(
                 detail=detail,
@@ -129,7 +135,9 @@ class AuthRateLimitService:
                 window_seconds=rule.window_seconds,
             )
             if not result.allowed:
-                cls._log_rejection(rules=[rule], states=[result], reason=reason, scope=scope, phase="consume")
+                cls._log_rejection(
+                    rules=[rule], states=[result], reason=reason, scope=scope, phase="consume"
+                )
                 raise TooManyRequestsException(
                     detail=detail,
                     retry_after=max(result.retry_after, 1),
