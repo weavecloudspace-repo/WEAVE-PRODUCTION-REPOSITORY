@@ -31,12 +31,11 @@ def test_trigram_indexes_compile_for_postgresql():
         assert "gin_trgm_ops" in sql
 
     full_name = next(
-        index for index in Student.__table__.indexes
+        index
+        for index in Student.__table__.indexes
         if index.name == "ix_students_tma_full_name_trgm"
     )
-    assert full_name.dialect_options["postgresql"]["ops"] == {
-        "tma_full_name": "gin_trgm_ops"
-    }
+    assert full_name.dialect_options["postgresql"]["ops"] == {"tma_full_name": "gin_trgm_ops"}
     assert "gin_trgm_ops" not in str(full_name.expressions[0])
 
 
