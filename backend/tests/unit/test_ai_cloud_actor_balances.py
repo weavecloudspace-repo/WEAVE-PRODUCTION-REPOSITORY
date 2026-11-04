@@ -70,9 +70,7 @@ async def test_actor_search_finds_matches_after_original_first_100(monkeypatch) 
         )
         for i in range(150)
     ]
-    cached = AIActorQuotaBalanceListResponse(
-        items=items, total=150, weekly_used_credits_total=300
-    )
+    cached = AIActorQuotaBalanceListResponse(items=items, total=150, weekly_used_credits_total=300)
 
     async def list_balances(db, *, actor):
         assert actor is converted
