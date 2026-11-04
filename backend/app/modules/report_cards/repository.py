@@ -1,8 +1,9 @@
 import uuid
 
-from sqlalchemy import func, inspect, select
+from sqlalchemy import exists, func, inspect, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.students.models import Student
 from app.modules.report_cards.models import (
     ReportCard,
     ReportCardStatus,
@@ -125,6 +126,7 @@ class ReportCardRepository:
         status: ReportCardStatus | None = None,
         is_outdated: bool | None = None,
         published_only: bool = False,
+        search: str | None = None,
     ) -> tuple[list[ReportCard], int]:
         filters = [ReportCard.tenant_id == tenant_id]
         if published_only:
@@ -146,6 +148,25 @@ class ReportCardRepository:
             filters.append(ReportCard.academic_term_id == academic_term_id)
         if is_outdated is not None:
             filters.append(ReportCard.is_outdated.is_(is_outdated))
+
+        search_term = (search or "").strip()
+        if search_term:
+            escaped = search_term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
+            filters.append(
+                exists(
+                    select(Student.id).where(
+                        Student.id == ReportCard.student_id,
+                        Student.tenant_id == tenant_id,
+                        or_(
+                            func.concat(Student.first_name, " ", Student.last_name).ilike(pattern, escape="\\"),
+                            Student.first_name.ilike(pattern, escape="\\"),
+                            Student.last_name.ilike(pattern, escape="\\"),
+                            Student.admission_number.ilike(pattern, escape="\\"),
+                        ),
+                    ).correlate(ReportCard)
+                )
+            )
 
         total = (
             await db.execute(select(func.count()).select_from(ReportCard).where(*filters))
