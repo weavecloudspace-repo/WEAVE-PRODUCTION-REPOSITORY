@@ -252,6 +252,12 @@ function BulkImportPage() {
   const [jobs, setJobs] = useState([]);
   const [jobsTotal, setJobsTotal] = useState(0);
   const [historySearch, setHistorySearch] = useState("");
+  const [appliedHistorySearch, setAppliedHistorySearch] = useState("");
+  const historyRequestVersion = useRef(0);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAppliedHistorySearch(historySearch.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [historySearch]);
   const [historyStatus, setHistoryStatus] = useState("");
   const [historySkip, setHistorySkip] = useState(0);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -306,17 +312,21 @@ function BulkImportPage() {
   }, []);
 
   const loadJobs = useCallback(
-    ({ skip, status }) =>
-      loadImportHistoryPage({
+    ({ skip, status }) => {
+      const requestVersion = ++historyRequestVersion.current;
+      return loadImportHistoryPage({
         listJobs: bulkImportService.listJobs,
         skip,
         status,
+        search: appliedHistorySearch,
+        isCurrent: () => requestVersion === historyRequestVersion.current,
         setJobs,
         setJobsTotal,
         setHistorySkip,
         setHistoryLoading,
-      }),
-    [],
+      });
+    },
+    [appliedHistorySearch],
   );
 
   const refresh = useCallback(async () => {
@@ -353,6 +363,7 @@ function BulkImportPage() {
 
     return () => {
       mounted = false;
+      historyRequestVersion.current += 1;
     };
   }, [historySkip, historyStatus, loadJobs, showError, step]);
 
@@ -460,15 +471,8 @@ function BulkImportPage() {
     () => getActualParentInvitationsQueued(currentJob),
     [currentJob],
   );
-  const filteredJobs = useMemo(() => {
-    const query = historySearch.trim().toLowerCase();
-    if (!query) return jobs;
-    return jobs.filter((job) =>
-      String(job.original_filename || "")
-        .toLowerCase()
-        .includes(query),
-    );
-  }, [historySearch, jobs]);
+  // Search is applied across the tenant in PostgreSQL before pagination.
+  const filteredJobs = jobs;
 
   const handleDownloadTemplate = async () => {
     setBusy("template");
@@ -1048,7 +1052,7 @@ function BulkImportPage() {
           <h2 className="text-lg font-semibold text-text">Job History</h2>
           <p className="mt-1 text-sm text-text-muted">
             {jobsTotal} import job{jobsTotal === 1 ? "" : "s"} match the
-            selected status.
+            selected filters.
           </p>
         </div>
         <Button className="w-full sm:w-auto" onClick={() => go("upload")}>
@@ -1060,9 +1064,9 @@ function BulkImportPage() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
           <input
             value={historySearch}
-            onChange={(event) => setHistorySearch(event.target.value)}
+            onChange={(event) => { setHistorySkip(0); setHistorySearch(event.target.value); }}
             className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-            placeholder="Search filenames on this page"
+            placeholder="Search all import filenames"
             aria-label="Search import filenames"
           />
         </label>
@@ -1093,15 +1097,10 @@ function BulkImportPage() {
         {jobs.length === 0 && !historyLoading && (
           <EmptyState
             title="No imports found"
-            description="Student import jobs will appear here after validation."
+            description={historySearch || historyStatus ? "No import jobs match these filters." : "Student import jobs will appear here after validation."}
           />
         )}
-        {jobs.length > 0 && filteredJobs.length === 0 && (
-          <EmptyState
-            title="No matching filenames"
-            description="Clear the search or load another page of history."
-          />
-        )}
+
         {filteredJobs.map((job) => (
           <div
             key={job.id}
