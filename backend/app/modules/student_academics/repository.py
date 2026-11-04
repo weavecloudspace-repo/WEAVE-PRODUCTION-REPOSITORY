@@ -284,6 +284,7 @@ class StudentAcademicRepository:
         if search and search.strip():
             # Search must run before counting and paging the tenant's term records.
             from sqlalchemy import String, cast
+
             normalized = search.strip().replace(" ", "_")
             pattern = f"%{normalized}%"
             filters.append(cast(AcademicTerm.name, String).ilike(pattern))
