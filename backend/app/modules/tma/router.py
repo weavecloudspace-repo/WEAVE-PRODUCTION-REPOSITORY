@@ -150,9 +150,14 @@ async def list_assignments(
 ) -> TMAAssignmentListResponse:
     async def fetch():
         items, total = await TMAAssignmentService.list_assignments(
-            db, actor=actor, academic_term_id=academic_term_id,
-            academic_level_id=academic_level_id, status=status,
-            search=search, offset=offset, limit=limit
+            db,
+            actor=actor,
+            academic_term_id=academic_term_id,
+            academic_level_id=academic_level_id,
+            status=status,
+            search=search,
+            offset=offset,
+            limit=limit,
         )
         return TMAAssignmentListResponse(
             items=[TMAAssignmentResponse.model_validate(item) for item in items],
@@ -170,9 +175,14 @@ async def list_assignments(
             actor,
             "assignments",
             fetch,
-            params={"term": academic_term_id, "level": academic_level_id,
-                    "status": status.value if status else None, "search": search,
-                    "offset": offset, "limit": limit},
+            params={
+                "term": academic_term_id,
+                "level": academic_level_id,
+                "status": status.value if status else None,
+                "search": search,
+                "offset": offset,
+                "limit": limit,
+            },
             ttl=15,
         )
     )
