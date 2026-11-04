@@ -116,10 +116,13 @@ async def admin_cloud_actor_balances(
     # authorized snapshot before slicing rather than only the first 100.
     term = search.strip().casefold() if isinstance(search, str) else ""
     matches = [
-        item for item in balances.items
+        item
+        for item in balances.items
         if not term or term in item.display_name.casefold() or term in (item.email or "").casefold()
     ]
-    return balances.model_copy(update={"items": matches[offset : offset + limit], "total": len(matches)})
+    return balances.model_copy(
+        update={"items": matches[offset : offset + limit], "total": len(matches)}
+    )
 
 
 @router.get("/admin/quota/requests", response_model=AIQuotaRequestListResponse)
