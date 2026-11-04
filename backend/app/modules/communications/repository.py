@@ -107,83 +107,124 @@ class CommunicationRepository:
         if search_term:
             escaped = search_term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             pattern = f"%{escaped}%"
-            participant_matches = or_(
-                and_(
-                    counterpart.actor_type == CommunicationActorType.STUDENT,
-                    exists(select(Student.id).where(
+            student_match = (
+                exists(
+                    select(Student.id).where(
                         Student.id == counterpart.actor_id,
                         or_(
                             Student.first_name.ilike(pattern, escape="\\"),
                             Student.last_name.ilike(pattern, escape="\\"),
                             Student.admission_number.ilike(pattern, escape="\\"),
-                            func.concat(Student.first_name, " ", Student.last_name).ilike(pattern, escape="\\"),
+                            func.concat(Student.first_name, " ", Student.last_name).ilike(
+                                pattern, escape="\\"
+                            ),
                         ),
-                    )).correlate(counterpart),
-                ),
-                and_(
-                    counterpart.actor_type == CommunicationActorType.TEACHER,
-                    exists(
-                        select(Teacher.id)
-                        .join(TeacherAccount, Teacher.teacher_account_id == TeacherAccount.id)
-                        .where(
-                            Teacher.id == counterpart.actor_id,
-                            or_(
-                                TeacherAccount.first_name.ilike(pattern, escape="\\"),
-                                TeacherAccount.last_name.ilike(pattern, escape="\\"),
-                                TeacherAccount.email.ilike(pattern, escape="\\"),
-                                Teacher.staff_id.ilike(pattern, escape="\\"),
-                                func.concat(TeacherAccount.first_name, " ", TeacherAccount.last_name).ilike(pattern, escape="\\"),
-                            ),
-                        )
-                    ).correlate(counterpart),
-                ),
-                and_(
-                    counterpart.actor_type == CommunicationActorType.PARENT,
-                    exists(
-                        select(Parent.id)
-                        .join(ParentAccount, Parent.parent_account_id == ParentAccount.id)
-                        .where(
-                            Parent.id == counterpart.actor_id,
-                            or_(
-                                ParentAccount.first_name.ilike(pattern, escape="\\"),
-                                ParentAccount.last_name.ilike(pattern, escape="\\"),
-                                ParentAccount.email.ilike(pattern, escape="\\"),
-                                func.concat(ParentAccount.first_name, " ", ParentAccount.last_name).ilike(pattern, escape="\\"),
-                            ),
-                        )
-                    ).correlate(counterpart),
-                ),
-                and_(
-                    counterpart.actor_type == CommunicationActorType.TENANT_ADMIN,
-                    exists(select(TenantAdmin.id).where(
+                    )
+                )
+                .correlate(counterpart)
+            )
+            teacher_match = (
+                exists(
+                    select(Teacher.id)
+                    .join(TeacherAccount, Teacher.teacher_account_id == TeacherAccount.id)
+                    .where(
+                        Teacher.id == counterpart.actor_id,
+                        or_(
+                            TeacherAccount.first_name.ilike(pattern, escape="\\"),
+                            TeacherAccount.last_name.ilike(pattern, escape="\\"),
+                            TeacherAccount.email.ilike(pattern, escape="\\"),
+                            Teacher.staff_id.ilike(pattern, escape="\\"),
+                            func.concat(
+                                TeacherAccount.first_name, " ", TeacherAccount.last_name
+                            ).ilike(pattern, escape="\\"),
+                        ),
+                    )
+                )
+                .correlate(counterpart)
+            )
+            parent_match = (
+                exists(
+                    select(Parent.id)
+                    .join(ParentAccount, Parent.parent_account_id == ParentAccount.id)
+                    .where(
+                        Parent.id == counterpart.actor_id,
+                        or_(
+                            ParentAccount.first_name.ilike(pattern, escape="\\"),
+                            ParentAccount.last_name.ilike(pattern, escape="\\"),
+                            ParentAccount.email.ilike(pattern, escape="\\"),
+                            func.concat(
+                                ParentAccount.first_name, " ", ParentAccount.last_name
+                            ).ilike(pattern, escape="\\"),
+                        ),
+                    )
+                )
+                .correlate(counterpart)
+            )
+            admin_match = (
+                exists(
+                    select(TenantAdmin.id).where(
                         TenantAdmin.id == counterpart.actor_id,
                         TenantAdmin.email.ilike(pattern, escape="\\"),
-                    )).correlate(counterpart),
-                ),
-                and_(
-                    counterpart.actor_type == CommunicationActorType.SUPERADMIN,
-                    exists(select(SuperAdmin.id).where(
+                    )
+                )
+                .correlate(counterpart)
+            )
+            superadmin_match = (
+                exists(
+                    select(SuperAdmin.id).where(
                         SuperAdmin.id == counterpart.actor_id,
                         SuperAdmin.email.ilike(pattern, escape="\\"),
-                    )).correlate(counterpart),
-                ),
+                    )
+                )
+                .correlate(counterpart)
             )
             matching_counterpart = exists(
-                select(counterpart.id).where(*counterpart_filters, participant_matches)
+                select(counterpart.id).where(
+                    *counterpart_filters,
+                    or_(
+                        and_(
+                            counterpart.actor_type == CommunicationActorType.STUDENT,
+                            student_match,
+                        ),
+                        and_(
+                            counterpart.actor_type == CommunicationActorType.TEACHER,
+                            teacher_match,
+                        ),
+                        and_(
+                            counterpart.actor_type == CommunicationActorType.PARENT,
+                            parent_match,
+                        ),
+                        and_(
+                            counterpart.actor_type == CommunicationActorType.TENANT_ADMIN,
+                            admin_match,
+                        ),
+                        and_(
+                            counterpart.actor_type == CommunicationActorType.SUPERADMIN,
+                            superadmin_match,
+                        ),
+                    ),
+                )
             ).correlate(Conversation)
-            base = base.where(or_(
-                Conversation.subject.ilike(pattern, escape="\\"),
-                matching_counterpart,
-                exists(select(Message.id).where(
+            matching_message = exists(
+                select(Message.id).where(
                     Message.conversation_id == Conversation.id,
                     Message.deleted_at.is_(None),
                     Message.body.ilike(pattern, escape="\\"),
-                )).correlate(Conversation),
-            ))
+                )
+            ).correlate(Conversation)
+            base = base.where(
+                or_(
+                    Conversation.subject.ilike(pattern, escape="\\"),
+                    matching_counterpart,
+                    matching_message,
+                )
+            )
         if counterpart_type is not None:
-            base = base.where(exists(
-                select(counterpart.id).where(*counterpart_filters)
-            ).correlate(Conversation))
+            base = base.where(
+                exists(select(counterpart.id).where(*counterpart_filters)).correlate(
+                    Conversation
+                )
+            )
 
         total = int(
             (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
