@@ -18,6 +18,7 @@ from app.modules.tma.cache import cached_staff_read
 from app.modules.students.models import Student
 from app.modules.teachers.models import TeacherMembership
 from app.modules.tenant_admins.models import TenantAdmin
+from app.modules.tma.models import TMAAssignmentStatus
 from app.modules.tma.assignment_service import TMAAssignmentService
 from app.modules.tma.cancellation_service import TMACancellationService
 from app.modules.tma.attempt_service import TMAAttemptService
@@ -141,12 +142,22 @@ async def list_assignments(
     db: DbSession,
     actor: Author,
     academic_term_id: uuid.UUID | None = None,
+    academic_level_id: uuid.UUID | None = None,
+    status: TMAAssignmentStatus | None = None,
+    search: str | None = Query(default=None, max_length=100),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
 ) -> TMAAssignmentListResponse:
     async def fetch():
         items, total = await TMAAssignmentService.list_assignments(
-            db, actor=actor, academic_term_id=academic_term_id, offset=offset, limit=limit
+            db,
+            actor=actor,
+            academic_term_id=academic_term_id,
+            academic_level_id=academic_level_id,
+            status=status,
+            search=search,
+            offset=offset,
+            limit=limit,
         )
         return TMAAssignmentListResponse(
             items=[TMAAssignmentResponse.model_validate(item) for item in items],
@@ -164,7 +175,14 @@ async def list_assignments(
             actor,
             "assignments",
             fetch,
-            params={"term": academic_term_id, "offset": offset, "limit": limit},
+            params={
+                "term": academic_term_id,
+                "level": academic_level_id,
+                "status": status.value if status else None,
+                "search": search,
+                "offset": offset,
+                "limit": limit,
+            },
             ttl=15,
         )
     )

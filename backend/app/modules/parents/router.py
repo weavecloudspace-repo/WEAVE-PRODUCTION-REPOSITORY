@@ -283,6 +283,7 @@ async def create_parent_invitation(
 async def list_parent_invitations(
     db: DbSession,
     current_admin: CurrentTenantAdmin,
+    search: str | None = Query(default=None, max_length=100),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
     invitation_status: ParentInvitationStatus | None = Query(
@@ -296,6 +297,7 @@ async def list_parent_invitations(
         skip=skip,
         limit=limit,
         status=invitation_status,
+        search=search,
     )
     return ParentInvitationListResponse(items=invitations, total=total)
 

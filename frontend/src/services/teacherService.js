@@ -24,11 +24,12 @@ const buildTeacherQuery = ({ skip = 0, limit = 50, search, status } = {}) => {
   return params.toString();
 };
 
-const buildInvitationQuery = ({ skip = 0, limit = 50, status } = {}) => {
+const buildInvitationQuery = ({ skip = 0, limit = 50, status, search } = {}) => {
   const params = new URLSearchParams();
   params.set("skip", String(Math.max(Number(skip) || 0, 0)));
   params.set("limit", String(clampLimit(limit)));
   if (status) params.set("status", status);
+  if (search?.trim()) params.set("search", search.trim());
   return params.toString();
 };
 

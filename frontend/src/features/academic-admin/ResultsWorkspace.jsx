@@ -1,5 +1,5 @@
 import { ArrowLeft, ClipboardList, Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import Badge from "../../components/ui/Badge";
@@ -107,6 +107,14 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
   const [results, setResults] = useState([]);
   const [resultTotal, setResultTotal] = useState(0);
   const [resultPage, setResultPage] = useState(0);
+  const [resultSearch, setResultSearch] = useState("");
+  const [appliedResultSearch, setAppliedResultSearch] = useState("");
+  const resultsRequestVersion = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAppliedResultSearch(resultSearch.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [resultSearch]);
   const [assessmentConfig, setAssessmentConfig] = useState(null);
   const [entryResults, setEntryResults] = useState([]);
   const [entryResultsLoading, setEntryResultsLoading] = useState(false);
@@ -283,6 +291,7 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
   }, [filters.class_id, showError]);
 
   const loadResults = useCallback(async () => {
+    const requestVersion = ++resultsRequestVersion.current;
     if (!filters.class_id || !filters.academic_session_id || !filters.academic_term_id) {
       setResults([]);
       setResultTotal(0);
@@ -295,17 +304,20 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
         academic_term_id: filters.academic_term_id,
         status: filters.status || undefined,
         subject_id: filters.subject_id || undefined,
+        search: appliedResultSearch || undefined,
         skip: resultPage * PAGE_SIZE,
         limit: PAGE_SIZE,
       });
+      if (requestVersion !== resultsRequestVersion.current) return;
       setResults(asItems(response));
       setResultTotal(Number(response?.total || 0));
     } catch (requestError) {
+      if (requestVersion !== resultsRequestVersion.current) return;
       setResults([]);
       setResultTotal(0);
       showError(getErrorMessage(requestError, "Could not load results."));
     }
-  }, [filters, resultPage, showError]);
+  }, [filters, resultPage, appliedResultSearch, showError]);
 
   useEffect(() => {
     loadBase();
@@ -914,6 +926,8 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
           </Button>
         }
         items={results}
+        searchValue={resultSearch}
+        onSearchChange={(value) => { setResultPage(0); setResultSearch(value); }}
         loading={loading}
         emptyIcon={ClipboardList}
         emptyTitle="No results found"

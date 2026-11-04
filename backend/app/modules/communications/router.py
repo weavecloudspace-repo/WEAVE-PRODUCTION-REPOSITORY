@@ -261,12 +261,19 @@ async def available_recipients(
 async def list_conversations(
     db: DbSession,
     actor: CurrentCommunicationActor,
+    search: str | None = Query(default=None, max_length=100),
+    counterpart_type: CommunicationActorType | None = Query(default=None),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
 ) -> ConversationListResponse:
     current = await _active_communication_actor(actor, db)
     items, total = await MessagingService.list_conversations(
-        db, actor=current, offset=skip, limit=limit
+        db,
+        actor=current,
+        offset=skip,
+        limit=limit,
+        search=search,
+        counterpart_type=counterpart_type,
     )
     responses = [await _conversation_response(db, item, current) for item in items]
     return ConversationListResponse(

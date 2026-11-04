@@ -10,11 +10,13 @@ import uuid
 from collections.abc import Sequence
 from datetime import date
 
-from sqlalchemy import delete, exists, func, select, tuple_
+from sqlalchemy import delete, exists, func, or_, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.classes.models import ClassRoom
+from app.modules.classes.models import AcademicLevel, ClassRoom
+from app.modules.student_academics.curriculum_models import CurriculumSubject
+from app.modules.subjects.models import Subject
 from app.modules.student_academics.models import TeacherAssignment
 from app.modules.tma.models import (
     TMAAnswer,
@@ -97,6 +99,7 @@ class TMAAssignmentRepository:
         statuses: set[TMAAssignmentStatus] | None = None,
         teacher_membership_id: uuid.UUID | None = None,
         authorized_scopes: set[tuple[uuid.UUID, uuid.UUID, uuid.UUID]] | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[TMAAssignment], int]:
@@ -146,6 +149,40 @@ class TMAAssignmentRepository:
             filters.append(TMAAssignment.status == status)
         if statuses is not None:
             filters.append(TMAAssignment.status.in_(statuses))
+        search_term = (search or "").strip()
+        if search_term:
+            # Correlated EXISTS avoids duplicating assignments before pagination.
+            escaped_search = (
+                search_term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
+            pattern = f"%{escaped_search}%"
+            filters.append(
+                or_(
+                    exists(
+                        select(CurriculumSubject.id)
+                        .join(Subject, Subject.id == CurriculumSubject.subject_id)
+                        .where(
+                            CurriculumSubject.id == TMAAssignment.curriculum_subject_id,
+                            CurriculumSubject.tenant_id == tenant_id,
+                            Subject.tenant_id == tenant_id,
+                            or_(
+                                Subject.name.ilike(pattern, escape="\\"),
+                                Subject.code.ilike(pattern, escape="\\"),
+                            ),
+                        )
+                        .correlate(TMAAssignment)
+                    ),
+                    exists(
+                        select(AcademicLevel.id)
+                        .where(
+                            AcademicLevel.id == TMAAssignment.academic_level_id,
+                            AcademicLevel.tenant_id == tenant_id,
+                            AcademicLevel.name.ilike(pattern, escape="\\"),
+                        )
+                        .correlate(TMAAssignment)
+                    ),
+                )
+            )
         total = (
             await db.execute(select(func.count(TMAAssignment.id)).where(*filters))
         ).scalar_one()

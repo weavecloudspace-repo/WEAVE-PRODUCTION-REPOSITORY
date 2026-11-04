@@ -282,6 +282,7 @@ async def create_teacher_invitation(
 async def list_teacher_invitations(
     db: DbSession,
     current_admin: CurrentTenantAdmin,
+    search: str | None = Query(default=None, max_length=100),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
     invitation_status: TeacherInvitationStatus | None = Query(
@@ -295,6 +296,7 @@ async def list_teacher_invitations(
         skip=skip,
         limit=limit,
         status=invitation_status,
+        search=search,
     )
     return invitations
 

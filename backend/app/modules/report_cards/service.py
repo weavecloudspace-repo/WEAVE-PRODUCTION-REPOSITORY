@@ -1167,6 +1167,7 @@ class ReportCardService:
         academic_term_id: uuid.UUID | None = None,
         status: ReportCardStatus | None = None,
         is_outdated: bool | None = None,
+        search: str | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[ReportCardResponse], int]:
@@ -1192,5 +1193,6 @@ class ReportCardService:
             status=status,
             is_outdated=is_outdated,
             published_only=published_only,
+            search=search,
         )
         return [await ReportCardService._response(db, card) for card in cards], total

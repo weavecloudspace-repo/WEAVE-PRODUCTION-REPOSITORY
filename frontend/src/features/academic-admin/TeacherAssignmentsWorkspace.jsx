@@ -125,6 +125,12 @@ function TeacherAssignmentsWorkspace({ activeTab }) {
   const [assignments, setAssignments] = useState([]);
   const [assignmentTotal, setAssignmentTotal] = useState(0);
   const [assignmentPage, setAssignmentPage] = useState(0);
+  const [assignmentSearch, setAssignmentSearch] = useState("");
+  const [appliedAssignmentSearch, setAppliedAssignmentSearch] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAppliedAssignmentSearch(assignmentSearch.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [assignmentSearch]);
   const [assignmentLoading, setAssignmentLoading] = useState(true);
   const assignmentRequestGeneration = useRef(0);
   const [filters, setFilters] = useState({
@@ -221,6 +227,7 @@ function TeacherAssignmentsWorkspace({ activeTab }) {
           class_id: filters.class_id || undefined,
           teacher_membership_id: filters.teacher_membership_id || undefined,
           status: filters.status || undefined,
+          search: appliedAssignmentSearch || undefined,
           skip: assignmentPage * PAGE_SIZE,
           limit: PAGE_SIZE,
         },
@@ -237,7 +244,7 @@ function TeacherAssignmentsWorkspace({ activeTab }) {
         setAssignmentLoading(false);
       }
     }
-  }, [assignmentPage, filters, showError]);
+  }, [assignmentPage, filters, appliedAssignmentSearch, showError]);
 
   useEffect(() => {
     loadBase();
@@ -830,6 +837,8 @@ function TeacherAssignmentsWorkspace({ activeTab }) {
           </Button>
         }
         items={visibleAssignments}
+        searchValue={assignmentSearch}
+        onSearchChange={(value) => { setAssignmentPage(0); setAssignmentSearch(value); }}
         loading={loading || assignmentLoading}
         emptyIcon={Users}
         emptyTitle="No teacher assignments"

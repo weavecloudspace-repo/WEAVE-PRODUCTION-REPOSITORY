@@ -235,6 +235,12 @@ function AcademicSetupWorkspace({
   const [termTotal, setTermTotal] = useState(0);
   const [sessionPage, setSessionPage] = useState(1);
   const [termPage, setTermPage] = useState(1);
+  const [termSearch, setTermSearch] = useState("");
+  const [appliedTermSearch, setAppliedTermSearch] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAppliedTermSearch(termSearch.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [termSearch]);
   const [scales, setScales] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [subjectTotal, setSubjectTotal] = useState(0);
@@ -288,6 +294,7 @@ function AcademicSetupWorkspace({
             skip: domain === "terms" ? (termPage - 1) * ACADEMIC_PAGE_SIZE : 0,
             limit: domain === "terms" ? ACADEMIC_PAGE_SIZE : 100,
             status: domain === "terms" ? academicStatusFilter : undefined,
+            search: domain === "terms" ? appliedTermSearch || undefined : undefined,
           }),
           academicService.listGradingScales({ limit: 100 }),
           subjectService.getSubjects({
@@ -349,7 +356,7 @@ function AcademicSetupWorkspace({
     setSubjectPage(1);
     setSessionPage(1);
     setTermPage(1);
-  }, [activeTab, domain, subjectSearch]);
+  }, [activeTab, domain, subjectSearch, appliedTermSearch]);
 
   const sessionOptions = useMemo(
     () => sessions.map((item) => ({ value: item.id, label: item.name })),
@@ -1144,6 +1151,8 @@ function AcademicSetupWorkspace({
             activeTab === "create" ? null : (
               <RecordList
                 title={`Academic terms (${termTotal})`}
+                searchValue={termSearch}
+                onSearchChange={(value) => { setTermPage(1); setTermSearch(value); }}
                 listClassName="max-h-[32rem] overflow-y-auto overscroll-contain pr-1"
                 actions={
                   termTotal > ACADEMIC_PAGE_SIZE ? (
@@ -1630,6 +1639,7 @@ function AcademicSetupWorkspace({
     <div>
       <RecordList
         title="Subject catalog"
+        hideSearch
         description="Subjects available for one or more level curricula."
         actions={subjectSearchControls}
         items={subjectListItems}

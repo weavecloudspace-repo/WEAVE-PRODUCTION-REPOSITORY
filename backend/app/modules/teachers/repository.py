@@ -429,12 +429,15 @@ class TeacherInvitationRepository:
         tenant_id: UUID,
         *,
         status: TeacherInvitationStatus | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[TeacherInvitation], int]:
         filters = [TeacherInvitation.tenant_id == tenant_id]
         if status is not None:
             filters.append(TeacherInvitation.status == status)
+        if search and search.strip():
+            filters.append(TeacherInvitation.invited_email.ilike(f"%{search.strip()}%"))
 
         total = (
             await db.execute(select(func.count()).select_from(TeacherInvitation).where(*filters))
