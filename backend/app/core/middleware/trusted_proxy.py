@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 from datetime import datetime, timezone
@@ -14,14 +15,20 @@ from app.config.settings import settings
 
 logger = get_logger(__name__)
 
-# TEMPORARY, STAGING-ONLY. Remove after confirming Railway IP forwarding.
-_STAGING_IP_DIAGNOSTIC_FILE = "/tmp/weave-ip-resolution-staging.jsonl"
-_STAGING_IP_DIAGNOSTIC_PATHS = frozenset({"/api/v1/auth/login", "/health/live"})
+# TEMPORARY DIAGNOSTIC: remove after investigating Railway forwarding.
+# Files are local to each Railway replica and disappear on redeployment.
+_IP_DIAGNOSTIC_MAX_BYTES = 5 * 1024 * 1024
+_IP_DIAGNOSTIC_PATHS = frozenset({"/api/v1/auth/login", "/health/live"})
+_IP_DIAGNOSTIC_FILES = {
+    "stg": "/tmp/weave-ip-resolution-staging.jsonl",
+    "prod": "/tmp/weave-ip-resolution-production.jsonl",
+}
 
 
-def _write_staging_ip_diagnostic(scope: dict[str, Any], resolved_ip: str | None) -> None:
+def _write_ip_diagnostic(scope: dict[str, Any], resolved_ip: str | None) -> None:
     """Write relevant proxy identity details to a private container file, not deploy logs."""
-    if settings.ENV.value != "stg" or scope.get("path") not in _STAGING_IP_DIAGNOSTIC_PATHS:
+    diagnostic_file = _IP_DIAGNOSTIC_FILES.get(settings.ENV.value)
+    if diagnostic_file is None or scope.get("path") not in _IP_DIAGNOSTIC_PATHS:
         return
 
     headers = scope.get("headers") or []
@@ -59,20 +66,26 @@ def _write_staging_ip_diagnostic(scope: dict[str, Any], resolved_ip: str | None)
     }
 
     try:
-        # Append a single JSONL record; 0600 prevents access by other local users.
         data = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
-        fd = os.open(
-            _STAGING_IP_DIAGNOSTIC_FILE,
-            os.O_WRONLY | os.O_APPEND | os.O_CREAT,
-            0o600,
-        )
+        fd = os.open(diagnostic_file, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
         try:
-            os.write(fd, data)
+            # Serialize size checks and appends across worker processes.
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            try:
+                if os.fstat(fd).st_size + len(data) <= _IP_DIAGNOSTIC_MAX_BYTES:
+                    view = memoryview(data)
+                    while view:
+                        written = os.write(fd, view)
+                        if written <= 0:
+                            raise OSError("IP diagnostic write made no progress")
+                        view = view[written:]
+            finally:
+                fcntl.flock(fd, fcntl.LOCK_UN)
         finally:
             os.close(fd)
     except OSError:
-        # Diagnostics must never prevent a real login.
-        logger.warning("staging_ip_diagnostic_file_write_failed")
+        # Diagnostic failures must never prevent a real login.
+        logger.warning("ip_diagnostic_file_write_failed")
 
 
 class TrustedProxyHeadersMiddleware:
@@ -118,7 +131,7 @@ class TrustedProxyHeadersMiddleware:
             return
 
         resolved_ip = self._resolved_ip(scope)
-        _write_staging_ip_diagnostic(scope, resolved_ip)
+        _write_ip_diagnostic(scope, resolved_ip)
         if resolved_ip:
             original_client = scope.get("client")
             port = original_client[1] if original_client else 0
