@@ -662,7 +662,11 @@ class AIQuotaRequestRepository:
                     (TeacherAccount.first_name.ilike(pattern))
                     | (TeacherAccount.last_name.ilike(pattern))
                     | (TeacherAccount.email.ilike(pattern))
-                    | (func.concat(TeacherAccount.first_name, " ", TeacherAccount.last_name).ilike(pattern)),
+                    | (
+                        func.concat(TeacherAccount.first_name, " ", TeacherAccount.last_name).ilike(
+                            pattern
+                        )
+                    ),
                 )
                 .correlate(AIQuotaRequest)
                 .exists()
