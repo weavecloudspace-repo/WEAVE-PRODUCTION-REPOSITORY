@@ -8,7 +8,7 @@ import {
   RefreshCw,
   TriangleAlert,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import Badge from "../../components/ui/Badge";
@@ -141,6 +141,14 @@ function ReportCardsWorkspace({ activeTab, onContextChange }) {
   const [cards, setCards] = useState([]);
   const [cardTotal, setCardTotal] = useState(0);
   const [cardPage, setCardPage] = useState(0);
+  const [cardSearch, setCardSearch] = useState("");
+  const [appliedCardSearch, setAppliedCardSearch] = useState("");
+  const cardRequestVersion = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAppliedCardSearch(cardSearch.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [cardSearch]);
   const [readinessPage, setReadinessPage] = useState(0);
   const [readinessQuery, setReadinessQuery] = useState("");
   const [debouncedReadinessQuery, setDebouncedReadinessQuery] = useState("");
@@ -268,6 +276,7 @@ function ReportCardsWorkspace({ activeTab, onContextChange }) {
   ]);
 
   const loadCards = useCallback(async () => {
+    const requestVersion = ++cardRequestVersion.current;
     if (!filters.class_id || !filters.academic_session_id || !filters.academic_term_id) {
       setCards([]);
       setCardTotal(0);
@@ -285,17 +294,20 @@ function ReportCardsWorkspace({ activeTab, onContextChange }) {
             : filters.record_state === "current"
               ? false
               : undefined,
+        search: appliedCardSearch || undefined,
         skip: cardPage * CARD_PAGE_SIZE,
         limit: CARD_PAGE_SIZE,
       });
+      if (requestVersion !== cardRequestVersion.current) return;
       setCards(asItems(response));
       setCardTotal(Number(response?.total || 0));
     } catch (requestError) {
+      if (requestVersion !== cardRequestVersion.current) return;
       setCards([]);
       setCardTotal(0);
       showError(getErrorMessage(requestError, "Could not load report cards."));
     }
-  }, [cardPage, filters, showError]);
+  }, [cardPage, filters, appliedCardSearch, showError]);
 
   useEffect(() => {
     loadBase();
@@ -888,6 +900,8 @@ function ReportCardsWorkspace({ activeTab, onContextChange }) {
           </Button>
         }
         items={cards}
+        searchValue={cardSearch}
+        onSearchChange={(value) => { setCardPage(0); setCardSearch(value); }}
         loading={loading}
         emptyIcon={FileText}
         emptyTitle="No report cards found"
