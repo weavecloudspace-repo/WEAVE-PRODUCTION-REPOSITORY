@@ -19,6 +19,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    literal_column,
     select,
     text,
 )
@@ -280,10 +281,11 @@ class Student(BaseModel):
         ),
         Index(
             "ix_students_tma_full_name_trgm",
-            text(
-                "(btrim(coalesce(first_name, '') || ' ' || coalesce(last_name, ''))) gin_trgm_ops"
-            ),
+            literal_column(
+                "btrim(coalesce(first_name, '') || ' ' || coalesce(last_name, ''))"
+            ).label("tma_full_name"),
             postgresql_using="gin",
+            postgresql_ops={"tma_full_name": "gin_trgm_ops"},
         ),
         Index("ix_students_tenant_status", "tenant_id", "status"),
         Index("ix_students_tenant_account_status", "tenant_id", "account_status"),
