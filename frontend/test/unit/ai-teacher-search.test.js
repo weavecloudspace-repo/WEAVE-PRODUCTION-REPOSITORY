@@ -7,12 +7,13 @@ const source = await readFile(
   "utf8",
 );
 
-test("admin AI dashboard provides teacher name and email searches", () => {
+test("admin AI searches names and emails globally through separate paginated endpoints", () => {
   assert.match(source, /aria-label="Search staff AI credits"/);
   assert.match(source, /aria-label="Search teacher credit requests"/);
-  assert.match(source, /filteredActors\.map/);
-  assert.match(source, /filteredRequests\.map/);
-  assert.match(source, /staffSearch, item\.display_name, item\.email/);
-  assert.match(source, /requestSearch, item\.requester_name, item\.requester_email/);
-  assert.match(source, /toLocaleLowerCase\(\)\.includes\(term\)/);
+  assert.match(source, /filteredActors\\.map/);
+  assert.match(source, /filteredRequests\\.map/);
+  assert.match(source, /\/ai\/admin\/quota\/actors\\?\\$\\{params\\}/);
+  assert.match(source, /\/ai\/admin\/quota\/requests\\?\\$\\{params\\}/);
+  assert.match(source, /params\\.set\\("search", staffQuery\\)/);
+  assert.match(source, /params\\.set\\("search", requestQuery\\)/);
 });
