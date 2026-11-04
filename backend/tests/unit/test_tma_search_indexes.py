@@ -33,7 +33,7 @@ def test_trigram_indexes_compile_for_postgresql():
 
 def test_student_name_lookup_uses_the_immutable_expression_indexed_by_migration():
     source = inspect.getsource(TMAReportingRepository._query)
-    assert 'func.btrim(' in source
-    assert 'func.coalesce(Student.first_name, literal_column("\'\'"))' in source
-    assert 'func.coalesce(Student.last_name, literal_column("\'\'"))' in source
-    assert 'name.ilike(pattern' in source
+    assert "func.btrim(" in source
+    assert "func.coalesce(Student.first_name, literal_column(\"''\"))" in source
+    assert "func.coalesce(Student.last_name, literal_column(\"''\"))" in source
+    assert "name.ilike(pattern" in source
