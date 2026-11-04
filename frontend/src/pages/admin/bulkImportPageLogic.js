@@ -12,16 +12,19 @@ export const getActualParentInvitationsQueued = (job) => getResultRows(job).redu
   0,
 );
 
-export const createHistoryQuery = ({ skip, status }) => ({
+export const createHistoryQuery = ({ skip, status, search }) => ({
   skip,
   limit: BULK_IMPORT_HISTORY_PAGE_SIZE,
   status: status || undefined,
+  ...(search?.trim() ? { search: search.trim() } : {}),
 });
 
 export async function loadImportHistoryPage({
   listJobs,
   skip,
   status,
+  search,
+  isCurrent = () => true,
   setJobs,
   setJobsTotal,
   setHistorySkip,
@@ -29,14 +32,16 @@ export async function loadImportHistoryPage({
 }) {
   setHistoryLoading(true);
   try {
-    const response = await listJobs(createHistoryQuery({ skip, status }));
+    const response = await listJobs(createHistoryQuery({ skip, status, search }));
     const items = Array.isArray(response?.items) ? response.items : [];
-    setJobs(items);
-    setJobsTotal(Number(response?.total || items.length));
-    setHistorySkip(skip);
+    if (isCurrent()) {
+      setJobs(items);
+      setJobsTotal(Number(response?.total ?? items.length));
+      setHistorySkip(skip);
+    }
     return items;
   } finally {
-    setHistoryLoading(false);
+    if (isCurrent()) setHistoryLoading(false);
   }
 }
 

@@ -40,7 +40,7 @@ test("AI actions send feedback through the existing toast bus and retain errors 
     setBusy: (busy) => events.push(busy),
     setAction: (action) => events.push(action),
     errorText: (error) => error.message,
-    reload: async () => {
+    refreshAll: async () => {
       events.push("refreshed");
     },
   });
@@ -76,11 +76,11 @@ test("background AI refresh does not repeat an unchanged error toast", async () 
     page: 0,
     PAGE_SIZE: 20,
     setLoading() {},
-    setData: (data) => snapshots.push(data),
+    setData: (value) => snapshots.push(typeof value === "function" ? value({}) : value),
     errorText: (error) => error.message,
     api: {
       get: async (path) => {
-        if (path.startsWith("/ai/admin/quota/actors") && fail)
+        if (path.startsWith("/ai/admin/quota/summary") && fail)
           throw new Error("Temporarily unavailable");
         return { items: [] };
       },
@@ -91,7 +91,7 @@ test("background AI refresh does not repeat an unchanged error toast", async () 
     await reload({ silent: true });
     assert.equal(messages.length, 1);
     assert.equal(messages[0].type, "error");
-    assert.match(messages[0].message, /Staff usage: Temporarily unavailable/);
+    assert.match(messages[0].message, /School reserve: Temporarily unavailable/);
     assert.ok(snapshots[0].quota);
     await reload();
     assert.equal(messages.length, 2);
