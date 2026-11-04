@@ -130,9 +130,9 @@ class CommunicationRepository:
                         TeacherAccount.last_name.ilike(pattern, escape="\\"),
                         TeacherAccount.email.ilike(pattern, escape="\\"),
                         Teacher.staff_id.ilike(pattern, escape="\\"),
-                        func.concat(
-                            TeacherAccount.first_name, " ", TeacherAccount.last_name
-                        ).ilike(pattern, escape="\\"),
+                        func.concat(TeacherAccount.first_name, " ", TeacherAccount.last_name).ilike(
+                            pattern, escape="\\"
+                        ),
                     ),
                 )
             ).correlate(counterpart)
@@ -145,9 +145,9 @@ class CommunicationRepository:
                         ParentAccount.first_name.ilike(pattern, escape="\\"),
                         ParentAccount.last_name.ilike(pattern, escape="\\"),
                         ParentAccount.email.ilike(pattern, escape="\\"),
-                        func.concat(
-                            ParentAccount.first_name, " ", ParentAccount.last_name
-                        ).ilike(pattern, escape="\\"),
+                        func.concat(ParentAccount.first_name, " ", ParentAccount.last_name).ilike(
+                            pattern, escape="\\"
+                        ),
                     ),
                 )
             ).correlate(counterpart)
