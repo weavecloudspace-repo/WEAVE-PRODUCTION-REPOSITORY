@@ -7,8 +7,14 @@ const read = (endpoint) =>
 export const tmaService = {
   configuration: () => read("/tma/configuration"),
   terms: () => read("/tma/terms"),
-  list: (offset = 0, termId = null) =>
-    read(`/tma/assignments?offset=${offset}&limit=24${termId ? `&academic_term_id=${encodeURIComponent(termId)}` : ""}`),
+  list: (offset = 0, termId = null, filters = {}) => {
+    const params = new URLSearchParams({ offset: String(offset), limit: "24" });
+    if (termId) params.set("academic_term_id", termId);
+    if (filters.search?.trim()) params.set("search", filters.search.trim());
+    if (filters.status) params.set("status", filters.status);
+    if (filters.academic_level_id) params.set("academic_level_id", filters.academic_level_id);
+    return read(`/tma/assignments?${params.toString()}`);
+  },
   create: (body) => api.post("/tma/assignments", body),
   get: (id) => read(path(id)),
   update: (id, body) => api.patch(path(id), body),

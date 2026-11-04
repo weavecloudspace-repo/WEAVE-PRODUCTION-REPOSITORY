@@ -115,7 +115,15 @@ class MessagingService:
         )
 
     @staticmethod
-    async def list_conversations(db: AsyncSession, *, actor, offset: int, limit: int):
+    async def list_conversations(
+        db: AsyncSession,
+        *,
+        actor,
+        offset: int,
+        limit: int,
+        search: str | None = None,
+        counterpart_type: CommunicationActorType | None = None,
+    ):
         return await CommunicationRepository.list_conversations_for_actor(
             db,
             actor_type=actor_type_for(actor),
@@ -123,6 +131,8 @@ class MessagingService:
             tenant_id=actor_tenant_id(actor),
             offset=offset,
             limit=limit,
+            search=search,
+            counterpart_type=counterpart_type,
         )
 
     @staticmethod

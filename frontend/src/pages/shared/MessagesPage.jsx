@@ -224,6 +224,14 @@ export default function MessagesPage() {
   const [sidebarMode, setSidebarMode] = useState("chats");
   const [sidebarRole, setSidebarRole] = useState("all");
   const [sidebarSearch, setSidebarSearch] = useState("");
+  const [appliedSidebarSearch, setAppliedSidebarSearch] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAppliedSidebarSearch(sidebarSearch.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [sidebarSearch]);
+  useEffect(() => {
+    setConversationPage(1);
+  }, [appliedSidebarSearch, sidebarRole]);
   const [body, setBody] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -352,30 +360,8 @@ export default function MessagesPage() {
     Math.ceil(conversationTotal / CONVERSATION_PAGE_SIZE),
   );
 
-  const filteredConversations = useMemo(() => {
-    const query = sidebarSearch.trim().toLowerCase();
-    return conversations.filter((conversation) => {
-      const counterpart = counterpartFor(
-        conversation,
-        currentActorKey,
-        identityDirectory,
-      );
-      if (sidebarRole !== "all" && counterpart?.actor_type !== sidebarRole) {
-        return false;
-      }
-      if (!query) return true;
-      const latestMessage = conversation.messages?.at(-1);
-      return `${conversationTitle(conversation, currentActorKey, identityDirectory)} ${latestMessage?.body || ""} ${counterpart?.group_label || ""}`
-        .toLowerCase()
-        .includes(query);
-    });
-  }, [
-    conversations,
-    currentActorKey,
-    identityDirectory,
-    sidebarRole,
-    sidebarSearch,
-  ]);
+  // Conversation list is filtered on the server before pagination.
+  const filteredConversations = conversations;
 
   const filteredRecipientGroups = useMemo(() => {
     const query = sidebarSearch.trim().toLowerCase();
@@ -403,6 +389,8 @@ export default function MessagesPage() {
         const response = await messageService.listConversations({
           skip,
           limit: CONVERSATION_PAGE_SIZE,
+          search: appliedSidebarSearch || undefined,
+          counterpart_type: sidebarRole === "all" ? undefined : sidebarRole,
         });
         const rows = response?.items || [];
         setConversations(rows);
@@ -418,7 +406,7 @@ export default function MessagesPage() {
         if (showLoading) setLoading(false);
       }
     },
-    [conversationPage],
+    [conversationPage, appliedSidebarSearch, sidebarRole],
   );
 
   const refreshRecipients = useCallback(async () => {

@@ -270,6 +270,7 @@ export default function TmaPage({ role }) {
   const [tab, setTab] = useState("questions");
   const [aiOpen, setAiOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
   const [assets, setAssets] = useState([]);
@@ -284,6 +285,13 @@ export default function TmaPage({ role }) {
   const [zeroConflicts, setZeroConflicts] = useState([]);
   const [zeroExemptTarget, setZeroExemptTarget] = useState(null);
   const [reason, setReason] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  useEffect(() => {
+    setOffset(0);
+  }, [debouncedQuery, statusFilter, levelFilter]);
   const loadVersion = useRef(0);
   const load = useCallback(
     async ({ background = false } = {}) => {
@@ -320,7 +328,11 @@ export default function TmaPage({ role }) {
             : (termOptions.find((term) => term.is_current)?.id || termOptions[0]?.id || "");
           if (selected !== termId) setTermId(selected);
           const response = selected
-            ? await service.list(offset, selected)
+            ? await service.list(offset, selected, {
+                search: debouncedQuery,
+                status: statusFilter,
+                academic_level_id: levelFilter,
+              })
             : { items: [], total: 0 };
           if (version === loadVersion.current) {
             setList(rows(response));
@@ -336,7 +348,7 @@ export default function TmaPage({ role }) {
         if (version === loadVersion.current) setLoading(false);
       }
     },
-    [assignmentId, offset, showError, termId],
+    [assignmentId, offset, showError, termId, debouncedQuery, statusFilter, levelFilter],
   );
   useEffect(() => {
     load();
@@ -469,12 +481,8 @@ export default function TmaPage({ role }) {
       setDraft(createAnother ? blank() : null);
       await load({ background: true });
     }, "Question saved.");
-  const visibleList = list.filter(
-    (a) =>
-      (!statusFilter || a.status === statusFilter) &&
-      (!levelFilter || a.academic_level_id === levelFilter) &&
-      scopeLabel(a).toLowerCase().includes(query.toLowerCase()),
-  );
+  // Filtered and counted on the server before LIMIT/OFFSET.
+  const visibleList = list;
   return (
     <TmaAuthoringWorkspace
       open={aiOpen && Boolean(assignmentId)}
@@ -675,7 +683,7 @@ export default function TmaPage({ role }) {
                 Find an assignment
                 <input
                   className={field}
-                  placeholder="Search this page by subject or level"
+                  placeholder="Search all assignments by subject or level"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -714,7 +722,7 @@ export default function TmaPage({ role }) {
               </div>
             </div>
             <p className="text-xs text-text-muted">
-              Showing {visibleList.length} of {listTotal} assignments for the selected term
+              Showing {visibleList.length} of {listTotal} matching assignments for the selected term
             </p>
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {visibleList.map((a) => (
@@ -734,7 +742,7 @@ export default function TmaPage({ role }) {
             {!visibleList.length && (
               <Card className="p-8 text-center text-sm text-text-muted">
                 {list.length
-                  ? "No matching assignments on this page."
+                  ? "No assignments match these filters."
                   : "No assignments yet on this page. Create an assignment to start building your questions."}
               </Card>
             )}

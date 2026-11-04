@@ -784,11 +784,13 @@ class ParentInvitationService:
         skip: int = 0,
         limit: int = 50,
         status: ParentInvitationStatus | None = None,
+        search: str | None = None,
     ) -> tuple[list[ParentInvitationResponse], int]:
         rows, total = await ParentInvitationRepository.list_for_tenant(
             db,
             tenant_id,
             status=status,
+            search=search,
             offset=skip,
             limit=min(limit, 100),
         )
