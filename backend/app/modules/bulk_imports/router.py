@@ -179,6 +179,7 @@ async def list_bulk_import_jobs(
     limit: int = Query(default=50, ge=1, le=200),
     resource_type: ImportResourceType | None = Query(default=None),
     status_filter: ImportJobStatus | None = Query(default=None, alias="status"),
+    search: str | None = Query(default=None, max_length=160),
 ) -> ImportJobListResponse:
     return await BulkImportService.list_jobs(
         db=db,
@@ -187,6 +188,7 @@ async def list_bulk_import_jobs(
         limit=limit,
         resource_type=resource_type,
         status=status_filter,
+        search=search,
     )
 
 
