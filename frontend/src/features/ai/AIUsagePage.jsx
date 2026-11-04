@@ -10,10 +10,6 @@ import { canRequestAICredits } from "../tma/aiCredits";
 import "./ai-usage.css";
 
 const PAGE_SIZE = 20;
-const matchesTeacher = (query, ...values) => {
-  const term = query.trim().toLocaleLowerCase();
-  return !term || values.some((value) => String(value ?? "").toLocaleLowerCase().includes(term));
-};
 const number = (value) => Number(value || 0).toLocaleString("en-NG");
 const money = (value) => new Intl.NumberFormat("en-NG", {
   style: "currency", currency: "NGN",
