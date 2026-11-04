@@ -8,12 +8,16 @@ const source = await readFile(
 );
 
 test("admin AI searches names and emails globally through separate paginated endpoints", () => {
-  assert.match(source, /aria-label="Search staff AI credits"/);
-  assert.match(source, /aria-label="Search teacher credit requests"/);
-  assert.match(source, /filteredActors\\.map/);
-  assert.match(source, /filteredRequests\\.map/);
-  assert.match(source, /\/ai\/admin\/quota\/actors\\?\\$\\{params\\}/);
-  assert.match(source, /\/ai\/admin\/quota\/requests\\?\\$\\{params\\}/);
-  assert.match(source, /params\\.set\\("search", staffQuery\\)/);
-  assert.match(source, /params\\.set\\("search", requestQuery\\)/);
+  for (const expected of [
+    'aria-label="Search staff AI credits"',
+    'aria-label="Search teacher credit requests"',
+    "filteredActors.map",
+    "filteredRequests.map",
+    "/ai/admin/quota/actors?",
+    "/ai/admin/quota/requests?",
+    'params.set("search", staffQuery)',
+    'params.set("search", requestQuery)',
+  ]) {
+    assert.ok(source.includes(expected), `Missing AI search contract: ${expected}`);
+  }
 });
