@@ -432,15 +432,20 @@ export function RecordList({
   onRetry,
   recordLabel = "Record",
   detailsLabel = "Details",
+  searchValue,
+  onSearchChange,
 }) {
   const [query, setQuery] = useState("");
+  const serverSearch = typeof onSearchChange === "function";
+  const effectiveQuery = serverSearch ? (searchValue || "") : query;
   const items = useMemo(() => {
+    if (serverSearch) return records;
     const search = query.trim().toLowerCase();
     return search ? records.filter((item) =>
       [renderTitle(item), renderMeta?.(item), renderDescription?.(item), renderStatus?.(item)]
         .filter((value) => typeof value === "string").join(" ").toLowerCase().includes(search),
     ) : records;
-  }, [query, records, renderTitle, renderMeta, renderDescription, renderStatus]);
+  }, [serverSearch, query, records, renderTitle, renderMeta, renderDescription, renderStatus]);
   const [selectedRecordId, setSelectedRecordId] = useState(items[0]?.id || "");
 
   useEffect(() => {
@@ -463,7 +468,7 @@ export function RecordList({
     <WorkspacePanel title={title} description={description} actions={actions}>
       {toolbar}
       <div className="mb-3 flex items-end gap-3">
-        <Input label={`Search ${title}`} value={query} onChange={(event) => setQuery(event.target.value)} />
+        <Input label={`Search ${title}`} value={effectiveQuery} onChange={(event) => serverSearch ? onSearchChange(event.target.value) : setQuery(event.target.value)} />
         <span className="shrink-0 pb-3 text-xs text-text-muted" role="status">{items.length} of {records.length}</span>
       </div>
       {error ? (
