@@ -2,90 +2,10 @@
 
 from __future__ import annotations
 
-import fcntl
-import json
-import os
-from datetime import datetime, timezone
 from ipaddress import ip_address
 from typing import Any
 
-from app.config.logging import get_logger
 from app.config.settings import settings
-
-
-logger = get_logger(__name__)
-
-# TEMPORARY DIAGNOSTIC: remove after investigating Railway forwarding.
-# Files are local to each Railway replica and disappear on redeployment.
-_IP_DIAGNOSTIC_MAX_BYTES = 5 * 1024 * 1024
-_IP_DIAGNOSTIC_PATHS = frozenset({"/api/v1/auth/login", "/health/live"})
-_IP_DIAGNOSTIC_FILES = {
-    "stg": "/tmp/weave-ip-resolution-staging.jsonl",
-    "prod": "/tmp/weave-ip-resolution-production.jsonl",
-}
-
-
-def _write_ip_diagnostic(scope: dict[str, Any], resolved_ip: str | None) -> None:
-    """Write relevant proxy identity details to a private container file, not deploy logs."""
-    diagnostic_file = _IP_DIAGNOSTIC_FILES.get(settings.ENV.value)
-    if diagnostic_file is None or scope.get("path") not in _IP_DIAGNOSTIC_PATHS:
-        return
-
-    headers = scope.get("headers") or []
-
-    def first_header(name: bytes) -> str | None:
-        return next(
-            (value.decode("latin-1") for key, value in headers if key.lower() == name),
-            None,
-        )
-
-    forwarded_for = first_header(b"x-forwarded-for")
-    real_ip = first_header(b"x-real-ip")
-    test_id = first_header(b"x-weave-ip-test-id")
-    asgi_client = scope.get("client")
-    asgi_client_ip = asgi_client[0] if asgi_client else None
-
-    # The auth router reads the normalized XFF if this middleware resolved a client.
-    auth_ip = (
-        resolved_ip
-        or (forwarded_for.split(",", 1)[0].strip() if forwarded_for else None)
-        or asgi_client_ip
-    )
-    record = {
-        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-        "method": scope.get("method"),
-        "path": scope.get("path"),
-        "test_id": test_id[:80] if test_id else None,
-        "asgi_client_before_weave": asgi_client_ip,
-        "x_forwarded_for": forwarded_for[:512] if forwarded_for else None,
-        "x_real_ip": real_ip[:80] if real_ip else None,
-        "trust_proxy_headers": settings.TRUST_PROXY_HEADERS,
-        "trusted_proxy_hops": settings.TRUSTED_PROXY_HOPS,
-        "middleware_resolved_ip": resolved_ip,
-        "auth_rate_limit_ip": auth_ip,
-    }
-
-    try:
-        data = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
-        fd = os.open(diagnostic_file, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-        try:
-            # Serialize size checks and appends across worker processes.
-            fcntl.flock(fd, fcntl.LOCK_EX)
-            try:
-                if os.fstat(fd).st_size + len(data) <= _IP_DIAGNOSTIC_MAX_BYTES:
-                    view = memoryview(data)
-                    while view:
-                        written = os.write(fd, view)
-                        if written <= 0:
-                            raise OSError("IP diagnostic write made no progress")
-                        view = view[written:]
-            finally:
-                fcntl.flock(fd, fcntl.LOCK_UN)
-        finally:
-            os.close(fd)
-    except OSError:
-        # Diagnostic failures must never prevent a real login.
-        logger.warning("ip_diagnostic_file_write_failed")
 
 
 class TrustedProxyHeadersMiddleware:
@@ -131,7 +51,6 @@ class TrustedProxyHeadersMiddleware:
             return
 
         resolved_ip = self._resolved_ip(scope)
-        _write_ip_diagnostic(scope, resolved_ip)
         if resolved_ip:
             original_client = scope.get("client")
             port = original_client[1] if original_client else 0
