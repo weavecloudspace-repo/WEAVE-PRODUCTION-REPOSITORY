@@ -56,7 +56,23 @@ export default function AIUsagePage({ role }) {
   const [tab, setTab] = useState("overview");
   const [staffSearch, setStaffSearch] = useState("");
   const [requestSearch, setRequestSearch] = useState("");
+  const [staffQuery, setStaffQuery] = useState("");
+  const [requestQuery, setRequestQuery] = useState("");
+  const [staffPage, setStaffPage] = useState(0);
+  const [requestPage, setRequestPage] = useState(0);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [requestLoading, setRequestLoading] = useState(false);
+  const actorVersion = useRef(0);
+  const requestVersion = useRef(0);
   const [page, setPage] = useState(0);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setStaffQuery(staffSearch.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [staffSearch]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setRequestQuery(requestSearch.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [requestSearch]);
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -67,6 +83,47 @@ export default function AIUsagePage({ role }) {
   const version = useRef(0);
   const activeRequest = useRef(false);
   const lastLoadError = useRef("");
+  const loadStaff = useCallback(async () => {
+    if (!admin) return;
+    const current = ++actorVersion.current;
+    setStaffLoading(true);
+    try {
+      const params = new URLSearchParams({ offset: String(staffPage * PAGE_SIZE), limit: String(PAGE_SIZE) });
+      if (staffQuery) params.set("search", staffQuery);
+      const result = await api.get(`/ai/admin/quota/actors?${params}`);
+      if (actorVersion.current === current) setData((previous) => ({ ...previous, actors: result }));
+    } catch (error) {
+      if (actorVersion.current === current) showError(`Staff usage: ${errorText(error)}`);
+    } finally {
+      if (actorVersion.current === current) setStaffLoading(false);
+    }
+  }, [admin, staffPage, staffQuery, showError]);
+
+  const loadCreditRequests = useCallback(async () => {
+    if (!admin) return;
+    const current = ++requestVersion.current;
+    setRequestLoading(true);
+    try {
+      const params = new URLSearchParams({ offset: String(requestPage * PAGE_SIZE), limit: String(PAGE_SIZE) });
+      if (requestQuery) params.set("search", requestQuery);
+      const result = await api.get(`/ai/admin/quota/requests?${params}`);
+      if (requestVersion.current === current) setData((previous) => ({ ...previous, requests: result }));
+    } catch (error) {
+      if (requestVersion.current === current) showError(`Credit requests: ${errorText(error)}`);
+    } finally {
+      if (requestVersion.current === current) setRequestLoading(false);
+    }
+  }, [admin, requestPage, requestQuery, showError]);
+
+  useEffect(() => {
+    void loadStaff();
+    return () => { actorVersion.current += 1; };
+  }, [loadStaff]);
+  useEffect(() => {
+    void loadCreditRequests();
+    return () => { requestVersion.current += 1; };
+  }, [loadCreditRequests]);
+
   const reload = useCallback(async ({ silent = false } = {}) => {
     const current = ++version.current;
     if (!silent) setLoading(true);
@@ -76,8 +133,6 @@ export default function AIUsagePage({ role }) {
         : `/ai/teacher/purchases?offset=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`,
       ...(admin ? {
         summary: "/ai/admin/quota/summary",
-        actors: "/ai/admin/quota/actors?offset=0&limit=100",
-        requests: "/ai/admin/quota/requests?offset=0&limit=100",
         allocations: "/ai/admin/quota/allocations?offset=0&limit=50",
       } : { requests: "/ai/quota/requests?offset=0&limit=100" }),
     };
@@ -93,7 +148,7 @@ export default function AIUsagePage({ role }) {
         if (message) failed.push(`${label}: ${message}`);
       }
     });
-    setData(next);
+    setData((previous) => ({ ...previous, ...next }));
     const failure = failed.join(" · ");
     if (failure && (!silent || failure !== lastLoadError.current)) showError(failure);
     lastLoadError.current = failure;
@@ -108,6 +163,10 @@ export default function AIUsagePage({ role }) {
       window.removeEventListener("focus", refresh);
     };
   }, [reload]);
+  const refreshAll = () => Promise.allSettled([
+    reload({ silent: true }),
+    ...(admin ? [loadStaff(), loadCreditRequests()] : []),
+  ]);
   const act = async (fn, success) => {
     if (activeRequest.current) return;
     activeRequest.current = true;
@@ -116,10 +175,10 @@ export default function AIUsagePage({ role }) {
       await fn();
       setAction(null);
       showSuccess(success);
-      await reload({ silent: true });
+      await refreshAll();
     } catch (failure) {
       showError(errorText(failure));
-      await reload({ silent: true });
+      await refreshAll();
     } finally {
       setBusy(false);
       activeRequest.current = false;
@@ -160,11 +219,10 @@ export default function AIUsagePage({ role }) {
   const actors = data.actors?.items || [];
   const requests = data.requests?.items || [];
   const pending = requests.filter((item) => item.status === "pending");
-  const filteredActors = actors.filter((item) => matchesTeacher(staffSearch, item.display_name, item.email));
-  const filteredRequests = requests.filter((item) => matchesTeacher(requestSearch, item.requester_name, item.requester_email));
+  const filteredActors = actors;
+  const filteredRequests = requests;
   const weekly = quota?.weekly;
-  const staffUsage = actors.reduce((sum, item) => sum + Number(item.weekly_used_credits || 0), 0);
-  const staffUsageLimited = Number(data.actors?.total || 0) > actors.length;
+  const staffUsage = data.actors?.weekly_used_credits_total ?? null;
   const tabs = admin
     ? [{ id: "overview", label: "School usage" }, { id: "requests", label: `Requests${pending.length ? ` (${pending.length})` : ""}` }, { id: "transactions", label: "Transactions" }]
     : [{ id: "overview", label: "My credits" }, { id: "transactions", label: "Transactions" }];
@@ -179,7 +237,7 @@ export default function AIUsagePage({ role }) {
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" disabled={loading || busy} onClick={() => reload()}><RefreshCw size={16} /> Refresh</Button>
+        <Button variant="outline" disabled={loading || busy} onClick={() => { void refreshAll(); }}><RefreshCw size={16} /> Refresh</Button>
         <Button onClick={() => setPurchaseOpen(true)}><CreditCard size={16} /> Buy credits</Button>
       </div>
     </header>
@@ -188,8 +246,8 @@ export default function AIUsagePage({ role }) {
         value={data.summary ? number(summary.tenant_reserve_credits) : admin ? "—" : quota ? number(quota.total_available_credits) : "—"}
         detail={admin ? "Credits ready to allocate" : "Weekly and personal credits combined"} />
       <Metric icon={BarChart3} label={admin ? "Staff usage this week" : "Used this week"}
-        value={admin ? (data.actors ? number(staffUsage) : "—") : weekly ? number(weekly.used_credits) : "—"}
-        detail={admin ? (staffUsageLimited ? "Across the first 100 accounts shown" : "Weekly credits spent across staff") : "Weekly free allocation spent"} />
+        value={admin ? (staffUsage !== null ? number(staffUsage) : "—") : weekly ? number(weekly.used_credits) : "—"}
+        detail={admin ? "Weekly credits spent across all staff" : "Weekly free allocation spent"} />
       <Metric icon={Users} label={admin ? "Pending requests" : "Personal top-ups"}
         value={admin ? (summary ? number(summary.pending_request_count) : "—") : quota ? number(quota.extra?.available_credits) : "—"}
         detail={admin ? "Awaiting administrator review" : "Purchased or allocated extra credits"} />
@@ -213,7 +271,7 @@ export default function AIUsagePage({ role }) {
         {admin ? <>
           <label className="ai-usage-search"><Search size={16} aria-hidden="true" />
             <input type="search" aria-label="Search staff AI credits" placeholder="Search staff by name or email"
-              value={staffSearch} onChange={(event) => setStaffSearch(event.target.value)} />
+              value={staffSearch} onChange={(event) => { setStaffPage(0); setStaffSearch(event.target.value); }} />
           </label>
           <div className="ai-usage-table-wrap"><table className="ai-usage-table"><thead><tr>
             <th>Staff member</th><th>Used this week</th><th>Available</th><th>Action</th>
@@ -223,9 +281,9 @@ export default function AIUsagePage({ role }) {
             <td><Button variant="outline" size="sm" disabled={busy || summary?.tenant_reserve_credits === 0}
               onClick={() => openAction("allocate", item)}>Allocate</Button></td>
           </tr>)}</tbody></table></div>
-          {!actors.length && <p className="ai-usage-empty">No AI accounts found yet.</p>}
-          {actors.length > 0 && !filteredActors.length && <p className="ai-usage-empty">No matching staff in loaded results.</p>}
-          {data.actors?.total > 100 && <p className="text-xs text-text-muted">Showing the first 100 staff accounts.</p>}
+          {staffLoading && <p className="ai-usage-empty">Searching staff…</p>}
+          {!staffLoading && !actors.length && <p className="ai-usage-empty">{staffQuery ? "No staff match this search." : "No AI accounts found yet."}</p>}
+          <Pager page={staffPage} total={data.actors?.total || 0} onChange={setStaffPage} />
         </> : <>
           <div className="ai-usage-weekly">
             <div className="flex justify-between"><span>Weekly usage</span><strong>{number(weekly?.used_credits)} used</strong></div>
@@ -264,7 +322,7 @@ export default function AIUsagePage({ role }) {
         <p>Review requests before transferring credits from your reserve.</p></div></div>
       <label className="ai-usage-search"><Search size={16} aria-hidden="true" />
         <input type="search" aria-label="Search teacher credit requests" placeholder="Search requests by teacher or email"
-          value={requestSearch} onChange={(event) => setRequestSearch(event.target.value)} />
+          value={requestSearch} onChange={(event) => { setRequestPage(0); setRequestSearch(event.target.value); }} />
       </label>
       <div className="ai-usage-table-wrap"><table className="ai-usage-table"><thead>
         <tr><th>Teacher</th><th>Requested</th><th>Created</th><th>Status</th><th>Actions</th></tr></thead>
@@ -277,9 +335,9 @@ export default function AIUsagePage({ role }) {
               <Button size="sm" variant="outline" disabled={busy} onClick={() => openAction("reject", item)}>
                 <X size={14} /> Reject</Button></div>}</td>
         </tr>)}</tbody></table></div>
-      {!requests.length && <p className="ai-usage-empty">No teacher requests found.</p>}
-      {requests.length > 0 && !filteredRequests.length && <p className="ai-usage-empty">No matching teacher requests in loaded results.</p>}
-      {Number(data.requests?.total || 0) > requests.length && <p className="text-xs text-text-muted">Search filters the first {requests.length} requests shown.</p>}
+      {requestLoading && <p className="ai-usage-empty">Searching requests…</p>}
+      {!requestLoading && !requests.length && <p className="ai-usage-empty">{requestQuery ? "No requests match this search." : "No teacher requests found."}</p>}
+      <Pager page={requestPage} total={data.requests?.total || 0} onChange={setRequestPage} />
     </section>}
     {!loading && tab === "transactions" && <section className="ai-usage-panel">
       <div className="ai-usage-panel-heading"><div><h2>Payment history</h2>
@@ -300,7 +358,7 @@ export default function AIUsagePage({ role }) {
       <Pager page={page} total={data.purchases?.total || 0} onChange={setPage} />
     </section>}
     <AICreditPurchaseFlow role={role} open={purchaseOpen}
-      onClose={() => setPurchaseOpen(false)} onVerified={() => reload({ silent: true })} />
+      onClose={() => setPurchaseOpen(false)} onVerified={() => { void refreshAll(); }} />
     <Modal open={Boolean(action)} title={action?.kind === "request" ? "Request AI credits" :
       action?.kind === "reject" ? "Reject request" : action?.kind === "approve" ? "Approve request" : "Allocate credits"}
       onClose={() => !busy && setAction(null)} className="ai-credit-compact-modal">
