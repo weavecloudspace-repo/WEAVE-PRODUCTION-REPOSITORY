@@ -30,6 +30,15 @@ def test_trigram_indexes_compile_for_postgresql():
         assert "USING gin" in sql
         assert "gin_trgm_ops" in sql
 
+    full_name = next(
+        index for index in Student.__table__.indexes
+        if index.name == "ix_students_tma_full_name_trgm"
+    )
+    assert full_name.dialect_options["postgresql"]["ops"] == {
+        "tma_full_name": "gin_trgm_ops"
+    }
+    assert "gin_trgm_ops" not in str(full_name.expressions[0])
+
 
 def test_student_name_lookup_uses_the_immutable_expression_indexed_by_migration():
     source = inspect.getsource(TMAReportingRepository._query)
