@@ -136,6 +136,7 @@ class AcademicLevel(BaseModel):
         Index("ix_academic_levels_tenant_status", "tenant_id", "status"),
         Index("ix_academic_levels_tenant_category_position", "tenant_id", "category", "position"),
         Index("ix_academic_levels_tenant_archived", "tenant_id", "archived_at"),
+        Index("ix_academic_levels_tma_name_trgm", "name", postgresql_using="gin", postgresql_ops={"name": "gin_trgm_ops"}),
     )
 
 
