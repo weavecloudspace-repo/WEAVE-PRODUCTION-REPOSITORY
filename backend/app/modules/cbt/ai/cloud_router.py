@@ -104,6 +104,7 @@ async def admin_cloud_quota_summary(
 async def admin_cloud_actor_balances(
     db: DbSession,
     actor: Author,
+    search: str | None = Query(default=None, max_length=100),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
 ) -> AIActorQuotaBalanceListResponse:
@@ -111,7 +112,14 @@ async def admin_cloud_actor_balances(
         db,
         actor=to_existing_ai_actor(actor),
     )
-    return balances.model_copy(update={"items": balances.items[offset : offset + limit]})
+    # Balance snapshots are already cached tenant-wide; search the complete
+    # authorized snapshot before slicing rather than only the first 100.
+    term = (search or "").strip().casefold()
+    matches = [
+        item for item in balances.items
+        if not term or term in item.display_name.casefold() or term in (item.email or "").casefold()
+    ]
+    return balances.model_copy(update={"items": matches[offset : offset + limit], "total": len(matches)})
 
 
 @router.get("/admin/quota/requests", response_model=AIQuotaRequestListResponse)
@@ -119,6 +127,7 @@ async def admin_cloud_credit_requests(
     db: DbSession,
     actor: Author,
     request_status: AIQuotaRequestStatus | None = Query(default=None, alias="status"),
+    search: str | None = Query(default=None, max_length=100),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
 ) -> AIQuotaRequestListResponse:
@@ -126,6 +135,7 @@ async def admin_cloud_credit_requests(
         db,
         actor=to_existing_ai_actor(actor),
         status=request_status,
+        search=search,
         offset=offset,
         limit=limit,
     )
