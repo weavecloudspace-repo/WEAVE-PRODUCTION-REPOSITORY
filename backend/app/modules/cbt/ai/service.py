@@ -317,6 +317,7 @@ class CBTAIService:
         *,
         actor: AuthenticatedCBTActor,
         status: AIQuotaRequestStatus | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> AIQuotaRequestListResponse:
@@ -327,6 +328,7 @@ class CBTAIService:
                 tenant_id=actor.tenant_id,
                 tenant_admin_id=admin_id,
                 status=status,
+                search=search,
                 offset=offset,
                 limit=limit,
             )

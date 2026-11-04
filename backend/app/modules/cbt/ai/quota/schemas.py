@@ -127,6 +127,7 @@ class AIActorQuotaBalance(AIQuotaSchemaBase):
 class AIActorQuotaBalanceListResponse(AIQuotaSchemaBase):
     items: list[AIActorQuotaBalance]
     total: int = Field(ge=0)
+    weekly_used_credits_total: int = Field(default=0, ge=0)
 
 
 class AITenantQuotaSummaryResponse(AIQuotaSchemaBase):
