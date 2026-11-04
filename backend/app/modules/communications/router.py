@@ -268,8 +268,12 @@ async def list_conversations(
 ) -> ConversationListResponse:
     current = await _active_communication_actor(actor, db)
     items, total = await MessagingService.list_conversations(
-        db, actor=current, offset=skip, limit=limit,
-        search=search, counterpart_type=counterpart_type
+        db,
+        actor=current,
+        offset=skip,
+        limit=limit,
+        search=search,
+        counterpart_type=counterpart_type,
     )
     responses = [await _conversation_response(db, item, current) for item in items]
     return ConversationListResponse(
