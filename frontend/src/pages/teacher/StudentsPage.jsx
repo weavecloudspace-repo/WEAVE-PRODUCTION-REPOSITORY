@@ -28,6 +28,7 @@ import { getErrorMessage } from "../../services/api";
 import { academicService } from "../../services/academicService";
 import { classService } from "../../services/academicsService";
 import { studentService } from "../../services/studentService";
+import { loadAllItems } from "./resultsWorkspace";
 import { cn } from "../../utils/cn";
 
 const studentName = (student) =>
@@ -142,11 +143,10 @@ function StudentsPage() {
         return;
       }
       try {
-        const response = await studentService.getStudents({
-          classId: selectedClassId,
-          limit: 100,
-        });
-        if (mounted) setClassStudents(response?.items || []);
+        const students = await loadAllItems((params) =>
+          studentService.getStudents({ classId: selectedClassId, ...params }),
+        );
+        if (mounted) setClassStudents(students);
       } catch (err) {
         if (mounted) setClassStudents([]);
         if (mounted)
@@ -170,11 +170,10 @@ function StudentsPage() {
       }
       setIsRosterLoading(true);
       try {
-        const response = await academicService.listMyAssignmentStudents(
-          selectedAssignmentId,
-          { limit: 100 },
+        const students = await loadAllItems((params) =>
+          academicService.listMyAssignmentStudents(selectedAssignmentId, params),
         );
-        if (mounted) setSubjectStudents(response?.items || []);
+        if (mounted) setSubjectStudents(students);
       } catch (err) {
         if (mounted) {
           setSubjectStudents([]);
