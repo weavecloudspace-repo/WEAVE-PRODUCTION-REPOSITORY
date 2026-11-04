@@ -114,7 +114,7 @@ async def admin_cloud_actor_balances(
     )
     # Balance snapshots are already cached tenant-wide; search the complete
     # authorized snapshot before slicing rather than only the first 100.
-    term = (search or "").strip().casefold()
+    term = search.strip().casefold() if isinstance(search, str) else ""
     matches = [
         item for item in balances.items
         if not term or term in item.display_name.casefold() or term in (item.email or "").casefold()
@@ -135,7 +135,7 @@ async def admin_cloud_credit_requests(
         db,
         actor=to_existing_ai_actor(actor),
         status=request_status,
-        search=search,
+        search=search if isinstance(search, str) else None,
         offset=offset,
         limit=limit,
     )
