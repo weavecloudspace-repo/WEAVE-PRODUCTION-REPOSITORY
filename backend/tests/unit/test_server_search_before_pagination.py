@@ -13,6 +13,9 @@ from app.modules.tma.repository import TMAAssignmentRepository
 
 
 class _Rows:
+    def __iter__(self):
+        return iter(())
+
     def all(self):
         return []
 
@@ -51,7 +54,7 @@ async def test_tma_filters_search_before_offset_and_counts_matches() -> None:
     )
     assert rows == [] and total == 42
     count, page = db.queries
-    assert "FROM tma_assignments" in count
+    assert "FROM public.tma_assignments" in count
     assert "EXISTS" in count and "subjects" in count and "academic_levels" in count
     assert "tma_assignments.status" in count
     assert "LIMIT" not in count and "OFFSET" not in count
@@ -70,6 +73,6 @@ async def test_report_cards_search_before_offset_and_counts_matches() -> None:
     )
     assert rows == [] and total == 42
     count, page = db.queries
-    assert "FROM report_cards" in count and "EXISTS" in count and "students" in count
+    assert "FROM public.report_cards" in count and "EXISTS" in count and "students" in count
     assert "LIMIT" not in count and "OFFSET" not in count
     assert "LIMIT" in page and "OFFSET" in page
