@@ -155,16 +155,20 @@ class ReportCardRepository:
             pattern = f"%{escaped}%"
             filters.append(
                 exists(
-                    select(Student.id).where(
+                    select(Student.id)
+                    .where(
                         Student.id == ReportCard.student_id,
                         Student.tenant_id == tenant_id,
                         or_(
-                            func.concat(Student.first_name, " ", Student.last_name).ilike(pattern, escape="\\"),
+                            func.concat(Student.first_name, " ", Student.last_name).ilike(
+                                pattern, escape="\\"
+                            ),
                             Student.first_name.ilike(pattern, escape="\\"),
                             Student.last_name.ilike(pattern, escape="\\"),
                             Student.admission_number.ilike(pattern, escape="\\"),
                         ),
-                    ).correlate(ReportCard)
+                    )
+                    .correlate(ReportCard)
                 )
             )
 
