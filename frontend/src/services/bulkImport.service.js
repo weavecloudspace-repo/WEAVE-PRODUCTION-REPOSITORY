@@ -112,12 +112,13 @@ export const bulkImportService = {
     });
   },
 
-  listJobs: ({ skip = 0, limit = 20, status, signal } = {}) => {
+  listJobs: ({ skip = 0, limit = 20, status, search, signal } = {}) => {
     const params = new URLSearchParams({
       skip: String(skip),
       limit: String(limit),
     });
     if (status) params.set("status", status);
+    if (search?.trim()) params.set("search", search.trim());
     return api.get(`/tenant-admin/imports?${params.toString()}`, { signal });
   },
 
