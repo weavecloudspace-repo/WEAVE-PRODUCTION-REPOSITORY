@@ -1292,6 +1292,7 @@ class BulkImportService:
         limit: int = 50,
         resource_type: ImportResourceType | None = None,
         status: ImportJobStatus | None = None,
+        search: str | None = None,
     ) -> ImportJobListResponse:
         """List tenant import jobs."""
 
@@ -1302,6 +1303,7 @@ class BulkImportService:
             limit=limit,
             resource_type=resource_type,
             status=status,
+            search=search,
         )
 
         return ImportJobListResponse(
