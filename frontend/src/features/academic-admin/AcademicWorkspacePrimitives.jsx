@@ -434,6 +434,7 @@ export function RecordList({
   detailsLabel = "Details",
   searchValue,
   onSearchChange,
+  hideSearch = false,
 }) {
   const [query, setQuery] = useState("");
   const serverSearch = typeof onSearchChange === "function";
@@ -467,10 +468,12 @@ export function RecordList({
   return (
     <WorkspacePanel title={title} description={description} actions={actions}>
       {toolbar}
-      <div className="mb-3 flex items-end gap-3">
-        <Input label={`Search ${title}`} value={effectiveQuery} onChange={(event) => serverSearch ? onSearchChange(event.target.value) : setQuery(event.target.value)} />
-        <span className="shrink-0 pb-3 text-xs text-text-muted" role="status">{items.length} of {records.length}</span>
-      </div>
+      {!hideSearch ? (
+        <div className="mb-3 flex items-end gap-3">
+          <Input label={`Search ${title}`} value={effectiveQuery} onChange={(event) => serverSearch ? onSearchChange(event.target.value) : setQuery(event.target.value)} />
+          <span className="shrink-0 pb-3 text-xs text-text-muted" role="status">{items.length} of {records.length}</span>
+        </div>
+      ) : null}
       {error ? (
         <div role="alert" className="space-y-2 text-sm text-error">
           <p>{error}</p>
