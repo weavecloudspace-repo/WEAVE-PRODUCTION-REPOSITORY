@@ -30,7 +30,7 @@ No migration or deployment configuration change is required. Deploy the backend 
 
 ## Redis caching
 
-Staff configuration and image metadata use 60-second TTLs; assignment lists and question payloads use 15 seconds; revision history uses 30 seconds. Keys include tenant, actor type/ID, resource and normalized filters/pagination. Current teacher authorization is checked before cached staff records are returned. Assignment details, student attempts/answers/results, submissions, readiness, cancellation status and signed image URLs remain live reads. No browser cache is added.
+Staff configuration and image metadata use 60-second TTLs; assignment lists and question payloads use 15 seconds; revision history uses 30 seconds. Keys include tenant, actor type/ID, resource and normalized filters/pagination. Current teacher authorization is checked before cached staff records are returned. Assignment details, student attempts/answers/results, submissions, readiness, cancellation status and signed image URLs remain live reads. The assignment overview uses an admin-only browser cache, described below.
 
 The central model registry installs transaction-aware TMA invalidation listeners. Flushed assignment, question, revision, media and related academic/curriculum/class/teacher/enrollment changes queue tenant-generation invalidation. The existing cache event pipeline deletes the generation key after a successful commit; TMA services flush it immediately after their own commits, including cancellation worker paths. The Core SQL media-delete path queues invalidation explicitly. A rollback discards queued TMA invalidation; a savepoint rollback preserves outer transaction events.
 
