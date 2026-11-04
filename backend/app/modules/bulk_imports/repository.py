@@ -116,6 +116,7 @@ class ImportJobRepository:
         limit: int = 50,
         resource_type: ImportResourceType | None = None,
         status: ImportJobStatus | None = None,
+        search: str | None = None,
     ) -> tuple[list[ImportJob], int]:
         """List import jobs for a tenant with optional filters."""
 
@@ -127,10 +128,13 @@ class ImportJobRepository:
         if status is not None:
             conditions.append(ImportJob.status == status)
 
+        if search and search.strip():
+            conditions.append(ImportJob.original_filename.ilike(f"%{search.strip()}%"))
+
         result = await db.execute(
             select(ImportJob)
             .where(*conditions)
-            .order_by(ImportJob.created_at.desc())
+            .order_by(ImportJob.created_at.desc(), ImportJob.id.desc())
             .offset(skip)
             .limit(limit)
         )
