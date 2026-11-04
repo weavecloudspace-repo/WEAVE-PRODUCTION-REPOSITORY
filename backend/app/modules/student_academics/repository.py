@@ -210,6 +210,7 @@ class StudentAcademicRepository:
         statuses: set[AcademicTermStatus] | None = None,
         *,
         name: str | None = None,
+        search: str | None = None,
         is_current: bool | None = None,
         start_date_from: date | None = None,
         start_date_to: date | None = None,
@@ -221,6 +222,7 @@ class StudentAcademicRepository:
             limit=limit,
             statuses=statuses,
             name=name,
+            search=search,
             is_current=is_current,
             start_date_from=start_date_from,
             start_date_to=start_date_to,
@@ -236,6 +238,7 @@ class StudentAcademicRepository:
         statuses: set[AcademicTermStatus] | None = None,
         *,
         name: str | None = None,
+        search: str | None = None,
         is_current: bool | None = None,
         start_date_from: date | None = None,
         start_date_to: date | None = None,
@@ -248,6 +251,7 @@ class StudentAcademicRepository:
             limit=limit,
             statuses=statuses,
             name=name,
+            search=search,
             is_current=is_current,
             start_date_from=start_date_from,
             start_date_to=start_date_to,
@@ -261,6 +265,7 @@ class StudentAcademicRepository:
         academic_session_id: uuid.UUID | None = None,
         statuses: set[AcademicTermStatus] | None = None,
         name: str | None = None,
+        search: str | None = None,
         is_current: bool | None = None,
         start_date_from: date | None = None,
         start_date_to: date | None = None,
@@ -276,6 +281,12 @@ class StudentAcademicRepository:
             filters.append(AcademicTerm.status.in_(statuses))
         if name is not None:
             filters.append(AcademicTerm.name == name)
+        if search and search.strip():
+            # Search must run before counting and paging the tenant's term records.
+            from sqlalchemy import String, cast
+            normalized = search.strip().replace(" ", "_")
+            pattern = f"%{normalized}%"
+            filters.append(cast(AcademicTerm.name, String).ilike(pattern))
         if is_current is not None:
             filters.append(AcademicTerm.is_current.is_(is_current))
         if start_date_from is not None:
