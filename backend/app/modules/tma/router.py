@@ -18,6 +18,7 @@ from app.modules.tma.cache import cached_staff_read
 from app.modules.students.models import Student
 from app.modules.teachers.models import TeacherMembership
 from app.modules.tenant_admins.models import TenantAdmin
+from app.modules.tma.models import TMAAssignmentStatus
 from app.modules.tma.assignment_service import TMAAssignmentService
 from app.modules.tma.cancellation_service import TMACancellationService
 from app.modules.tma.attempt_service import TMAAttemptService
