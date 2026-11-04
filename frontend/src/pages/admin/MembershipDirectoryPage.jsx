@@ -754,6 +754,7 @@ function MembershipDirectoryPage({ role }) {
         response = await config.service.listInvitations({
           skip,
           limit: PAGE_SIZE,
+          search: appliedSearch.trim() || undefined,
           status: appliedStatus || undefined,
         });
       } else {
@@ -763,14 +764,6 @@ function MembershipDirectoryPage({ role }) {
         });
       }
       let nextItems = asItems(response);
-      if (activeTab === "invitations" && appliedSearch.trim()) {
-        const term = appliedSearch.trim().toLowerCase();
-        nextItems = nextItems.filter((item) =>
-          String(item.invited_email || "")
-            .toLowerCase()
-            .includes(term),
-        );
-      }
       setItems(nextItems);
       setTotal(
         Number.isFinite(response?.total)
