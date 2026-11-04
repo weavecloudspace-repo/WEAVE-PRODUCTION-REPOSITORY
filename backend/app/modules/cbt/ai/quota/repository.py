@@ -619,6 +619,7 @@ class AIQuotaRequestRepository:
         *,
         tenant_id: uuid.UUID,
         status: AIQuotaRequestStatus | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[
@@ -642,6 +643,30 @@ class AIQuotaRequestRepository:
         filters = [AIQuotaRequest.tenant_id == tenant_id]
         if status is not None:
             filters.append(AIQuotaRequest.status == status)
+
+        if search and search.strip():
+            pattern = f"%{search.strip()}%"
+            # Correlated EXISTS keeps COUNT and the paginated query identical
+            # without introducing duplicate request rows.
+            filters.append(
+                select(TeacherMembership.id)
+                .join(
+                    AIQuotaAccount,
+                    AIQuotaAccount.teacher_membership_id == TeacherMembership.id,
+                )
+                .join(TeacherAccount, TeacherAccount.id == TeacherMembership.teacher_account_id)
+                .where(
+                    AIQuotaAccount.id == AIQuotaRequest.requester_quota_account_id,
+                    AIQuotaAccount.tenant_id == tenant_id,
+                    TeacherMembership.tenant_id == tenant_id,
+                    (TeacherAccount.first_name.ilike(pattern))
+                    | (TeacherAccount.last_name.ilike(pattern))
+                    | (TeacherAccount.email.ilike(pattern))
+                    | (func.concat(TeacherAccount.first_name, " ", TeacherAccount.last_name).ilike(pattern)),
+                )
+                .correlate(AIQuotaRequest)
+                .exists()
+            )
 
         total = int(
             (
@@ -683,7 +708,7 @@ class AIQuotaRequestRepository:
                 ),
             )
             .where(*filters)
-            .order_by(AIQuotaRequest.created_at.desc())
+            .order_by(AIQuotaRequest.created_at.desc(), AIQuotaRequest.id.desc())
             .offset(offset)
             .limit(limit)
         )
