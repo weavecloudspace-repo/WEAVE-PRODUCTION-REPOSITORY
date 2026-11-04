@@ -41,8 +41,13 @@ class _CapturingSession:
 async def test_tma_filters_search_before_offset_and_counts_matches() -> None:
     db = _CapturingSession()
     rows, total = await TMAAssignmentRepository.list_for_scope(
-        db, uuid.uuid4(), academic_term_id=uuid.uuid4(),
-        status=TMAAssignmentStatus.ACTIVE, search="Mathematics", offset=24, limit=24,
+        db,
+        uuid.uuid4(),
+        academic_term_id=uuid.uuid4(),
+        status=TMAAssignmentStatus.ACTIVE,
+        search="Mathematics",
+        offset=24,
+        limit=24,
     )
     assert rows == [] and total == 42
     count, page = db.queries
@@ -57,7 +62,11 @@ async def test_tma_filters_search_before_offset_and_counts_matches() -> None:
 async def test_report_cards_search_before_offset_and_counts_matches() -> None:
     db = _CapturingSession()
     rows, total = await ReportCardRepository.list_cards(
-        db, uuid.uuid4(), search="Ade", skip=24, limit=24,
+        db,
+        uuid.uuid4(),
+        search="Ade",
+        skip=24,
+        limit=24,
     )
     assert rows == [] and total == 42
     count, page = db.queries
