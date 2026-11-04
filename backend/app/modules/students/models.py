@@ -280,7 +280,9 @@ class Student(BaseModel):
         ),
         Index(
             "ix_students_tma_full_name_trgm",
-            text("(btrim(coalesce(first_name, '') || ' ' || coalesce(last_name, ''))) gin_trgm_ops"),
+            text(
+                "(btrim(coalesce(first_name, '') || ' ' || coalesce(last_name, ''))) gin_trgm_ops"
+            ),
             postgresql_using="gin",
         ),
         Index("ix_students_tenant_status", "tenant_id", "status"),
