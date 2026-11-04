@@ -2,18 +2,18 @@ import { api } from "./api";
 import { tmaReadRequest } from "./tmaReadRequest";
 
 const path = (id, suffix = "") => `/tma/assignments/${id}${suffix}`;
-const read = (endpoint) =>
-  tmaReadRequest((signal) => api.get(endpoint, { signal }));
+const read = (endpoint, options = {}) =>
+  tmaReadRequest((signal) => api.get(endpoint, { signal }), options);
 export const tmaService = {
   configuration: () => read("/tma/configuration"),
   terms: () => read("/tma/terms"),
-  list: (offset = 0, termId = null, filters = {}) => {
+  list: (offset = 0, termId = null, filters = {}, options = {}) => {
     const params = new URLSearchParams({ offset: String(offset), limit: "24" });
     if (termId) params.set("academic_term_id", termId);
     if (filters.search?.trim()) params.set("search", filters.search.trim());
     if (filters.status) params.set("status", filters.status);
     if (filters.academic_level_id) params.set("academic_level_id", filters.academic_level_id);
-    return read(`/tma/assignments?${params.toString()}`);
+    return read(`/tma/assignments?${params.toString()}`, options);
   },
   create: (body) => api.post("/tma/assignments", body),
   get: (id) => read(path(id)),
@@ -38,8 +38,8 @@ export const tmaService = {
   retryCancellation: (id) => api.post(path(id, "/cancellation/retry"), {}),
   revise: (id) => api.post(path(id, "/revisions"), {}),
   revisions: (id) => read(path(id, "/revisions")),
-  submissions: (id, params) =>
-    read(path(id, `/submissions?${new URLSearchParams(params)}`)),
+  submissions: (id, params, options = {}) =>
+    read(path(id, `/submissions?${new URLSearchParams(params)}`), options),
   images: (id) => read(path(id, "/images")),
   uploadImage: (id, file) => {
     const body = new FormData();

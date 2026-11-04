@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import and_, case, exists, func, or_, select, union
+from sqlalchemy import and_, case, exists, func, literal_column, or_, select, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.classes.models import AcademicLevel, ArmLabel, ClassRoom
@@ -177,7 +177,12 @@ class TMAReportingRepository:
             (history.c.attempt_status == TMAAttemptStatus.IN_PROGRESS, "in_progress"),
             else_="not_started",
         )
-        name = func.trim(func.concat_ws(" ", Student.first_name, Student.last_name))
+        # Keep the substring expression identical to the immutable trigram index.
+        name = func.btrim(
+            func.coalesce(Student.first_name, literal_column("''"))
+            + literal_column("' '")
+            + func.coalesce(Student.last_name, literal_column("''"))
+        )
         base = (
             select(
                 Student.id.label("student_id"),

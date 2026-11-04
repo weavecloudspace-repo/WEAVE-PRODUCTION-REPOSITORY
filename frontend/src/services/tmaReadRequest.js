@@ -1,8 +1,11 @@
 // Bound TMA reads, including response parsing and authentication retries.
 // Reject explicitly as well as aborting: a refresh or custom transport may not
 // settle immediately when its original request's signal is aborted.
-export async function tmaReadRequest(read, { timeoutMs = 20000 } = {}) {
+export async function tmaReadRequest(read, { timeoutMs = 20000, signal } = {}) {
   const controller = new AbortController();
+  const abortOnCaller = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  signal?.addEventListener("abort", abortOnCaller, { once: true });
   const navigationTarget = typeof window === "undefined" ? null : window;
   const requestLocation = navigationTarget?.location.href;
   const abortOnNavigation = () => {
@@ -27,6 +30,7 @@ export async function tmaReadRequest(read, { timeoutMs = 20000 } = {}) {
     ]);
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener("abort", abortOnCaller);
     navigationTarget?.removeEventListener(
       "weave:navigation-start",
       abortOnNavigation,

@@ -76,4 +76,16 @@ class Subject(BaseModel):
             "tenant_id",
             "archived_at",
         ),
+        Index(
+            "ix_subjects_tma_name_trgm",
+            "name",
+            postgresql_using="gin",
+            postgresql_ops={"name": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_subjects_tma_code_trgm",
+            "code",
+            postgresql_using="gin",
+            postgresql_ops={"code": "gin_trgm_ops"},
+        ),
     )

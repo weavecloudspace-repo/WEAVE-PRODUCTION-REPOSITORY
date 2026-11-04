@@ -261,6 +261,8 @@ export default function TmaPage({ role }) {
   const [assignment, setAssignment] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
+  const [submissionLoading, setSubmissionLoading] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState(null);
@@ -276,6 +278,7 @@ export default function TmaPage({ role }) {
   const [assets, setAssets] = useState([]);
   const [report, setReport] = useState(null);
   const [search, setSearch] = useState("");
+  const [debouncedSubmissionQuery, setDebouncedSubmissionQuery] = useState("");
   const [participation, setParticipation] = useState("");
   const [classFilter, setClassFilter] = useState("");
   const [reportOffset, setReportOffset] = useState(0);
@@ -292,28 +295,28 @@ export default function TmaPage({ role }) {
   useEffect(() => {
     setOffset(0);
   }, [debouncedQuery, statusFilter, levelFilter]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSubmissionQuery(search.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
   const loadVersion = useRef(0);
+  const listCache = useRef(new Map());
   const load = useCallback(
     async ({ background = false } = {}) => {
       const version = ++loadVersion.current;
       if (!background) setLoading(true);
       setLoadFailed(false);
       try {
-        const [c, termOptions] = await Promise.all([
-          service.configuration(),
-          assignmentId ? Promise.resolve([]) : service.terms(),
-        ]);
-        if (version !== loadVersion.current) return;
-        setConfig(c);
-        if (!assignmentId) setTerms(termOptions);
         if (assignmentId) {
-          const [a, q, images, revisions] = await Promise.all([
+          const [c, a, q, images, revisions] = await Promise.all([
+            service.configuration(),
             service.get(assignmentId),
             service.questions(assignmentId),
             service.images(assignmentId),
             service.revisions(assignmentId),
           ]);
           if (version !== loadVersion.current) return;
+          setConfig(c);
           setAssignment(a);
           setQuestions(q);
           setAssets(images);
@@ -323,21 +326,19 @@ export default function TmaPage({ role }) {
             if (version === loadVersion.current) setCancellation(status);
           }
         } else {
-          const selected = termOptions.some((term) => term.id === termId)
-            ? termId
-            : (termOptions.find((term) => term.is_current)?.id || termOptions[0]?.id || "");
-          if (selected !== termId) setTermId(selected);
-          const response = selected
-            ? await service.list(offset, selected, {
-                search: debouncedQuery,
-                status: statusFilter,
-                academic_level_id: levelFilter,
-              })
-            : { items: [], total: 0 };
-          if (version === loadVersion.current) {
-            setList(rows(response));
-            setListTotal(response.total || 0);
-          }
+          // Metadata does not depend on search, pagination or filters.
+          const [c, termOptions] = await Promise.all([
+            service.configuration(),
+            service.terms(),
+          ]);
+          if (version !== loadVersion.current) return;
+          setConfig(c);
+          setTerms(termOptions);
+          setTermId((current) =>
+            termOptions.some((term) => term.id === current)
+              ? current
+              : (termOptions.find((term) => term.is_current)?.id || termOptions[0]?.id || "")
+          );
         }
       } catch (e) {
         if (version === loadVersion.current) {
@@ -348,7 +349,7 @@ export default function TmaPage({ role }) {
         if (version === loadVersion.current) setLoading(false);
       }
     },
-    [assignmentId, offset, showError, termId, debouncedQuery, statusFilter, levelFilter],
+    [assignmentId, showError],
   );
   useEffect(() => {
     load();
@@ -356,6 +357,57 @@ export default function TmaPage({ role }) {
       loadVersion.current += 1;
     };
   }, [load]);
+
+  // Searching updates only results; keep controls and existing cards mounted.
+  useEffect(() => {
+    if (assignmentId || !config) return;
+    if (!termId) {
+      setList([]);
+      setListTotal(0);
+      setListLoading(false);
+      return;
+    }
+    const key = JSON.stringify([termId, offset, debouncedQuery, statusFilter, levelFilter]);
+    // Teacher results must always revalidate current authorization on the server.
+    const cached = role === "admin" ? listCache.current.get(key) : null;
+    if (cached && Date.now() - cached.at < 15_000) {
+      setList(cached.items);
+      setListTotal(cached.total);
+      setListLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    let active = true;
+    setListLoading(true);
+    service.list(offset, termId, {
+      search: debouncedQuery,
+      status: statusFilter,
+      academic_level_id: levelFilter,
+    }, { signal: controller.signal })
+      .then((response) => {
+        if (!active) return;
+        const items = rows(response);
+        const total = response.total || 0;
+        setList(items);
+        setListTotal(total);
+        if (role === "admin") {
+          if (listCache.current.size >= 30) {
+            listCache.current.delete(listCache.current.keys().next().value);
+          }
+          listCache.current.set(key, { items, total, at: Date.now() });
+        }
+      })
+      .catch((e) => {
+        if (active) showError(getErrorMessage(e));
+      })
+      .finally(() => {
+        if (active) setListLoading(false);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [assignmentId, config, termId, offset, debouncedQuery, statusFilter, levelFilter, role, showError]);
   useEffect(() => {
     setDraft(null);
     setDeleteTarget(null);
@@ -369,6 +421,8 @@ export default function TmaPage({ role }) {
     setAiOpen(false);
     setAssignment(null);
     setSearch("");
+    setDebouncedSubmissionQuery("");
+    setReport(null);
     setParticipation("");
     setClassFilter("");
     setReportOffset(0);
@@ -404,30 +458,36 @@ export default function TmaPage({ role }) {
   }, [assignmentId, assignment?.status, cancellation?.status, load, showError]);
   useEffect(() => {
     if (!assignmentId || tab !== "submissions") return;
+    const controller = new AbortController();
     let active = true;
-    setReport(null);
+    setSubmissionLoading(true);
     service
       .submissions(assignmentId, {
-        search,
+        search: debouncedSubmissionQuery,
         ...(participation ? { status: participation } : {}),
         ...(classFilter ? { class_id: classFilter } : {}),
         offset: reportOffset,
         limit: 25,
-      })
+      }, { signal: controller.signal })
       .then((r) => {
         if (active) setReport(r);
       })
       .catch((e) => {
         if (active) showError(getErrorMessage(e));
+      })
+      .finally(() => {
+        if (active) setSubmissionLoading(false);
       });
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [assignmentId, tab, search, participation, classFilter, reportOffset, showError]);
+  }, [assignmentId, tab, debouncedSubmissionQuery, participation, classFilter, reportOffset, showError]);
   const run = async (fn, message = "") => {
     setBusy(true);
     try {
       await fn();
+      listCache.current.clear();
       if (message) showSuccess(message);
     } catch (e) {
       showError(getErrorMessage(e));
@@ -721,6 +781,7 @@ export default function TmaPage({ role }) {
                 </Select>
               </div>
             </div>
+            {listLoading && <p role="status" className="text-xs text-text-muted">Updating assignments…</p>}
             <p className="text-xs text-text-muted">
               Showing {visibleList.length} of {listTotal} matching assignments for the selected term
             </p>
@@ -739,7 +800,7 @@ export default function TmaPage({ role }) {
                 />
               ))}
             </div>
-            {!visibleList.length && (
+            {!visibleList.length && !listLoading && (
               <Card className="p-8 text-center text-sm text-text-muted">
                 {list.length
                   ? "No assignments match these filters."
@@ -982,7 +1043,8 @@ export default function TmaPage({ role }) {
                         ))}
                     </Select>
                   </div>
-                  <div className="tma-submission-list">
+                  {submissionLoading && <p role="status" className="px-4 py-2 text-xs text-text-muted">Updating students…</p>}
+                  <div className="tma-submission-list" aria-busy={submissionLoading}>
                     <div className="tma-submission-columns" aria-hidden="true">
                       <span>Student</span>
                       <span>Participation</span>
@@ -1013,7 +1075,7 @@ export default function TmaPage({ role }) {
                         </div>
                       </div>
                     ))}
-                    {report?.items.length === 0 && (
+                    {report?.items.length === 0 && !submissionLoading && (
                       <p className="px-4 py-8 text-center text-sm text-text-muted">
                         No students match the current filters.
                       </p>
