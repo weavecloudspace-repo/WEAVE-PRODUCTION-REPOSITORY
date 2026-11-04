@@ -355,7 +355,11 @@ class AIQuotaService:
                     total_available_credits=weekly_available + extra_available,
                 )
             )
-        return AIActorQuotaBalanceListResponse(items=items, total=len(items))
+        return AIActorQuotaBalanceListResponse(
+            items=items,
+            total=len(items),
+            weekly_used_credits_total=sum(item.weekly_used_credits for item in items),
+        )
 
     @classmethod
     async def list_quota_requests(
@@ -365,6 +369,7 @@ class AIQuotaService:
         tenant_id: uuid.UUID,
         tenant_admin_id: uuid.UUID,
         status: AIQuotaRequestStatus | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> AIQuotaRequestListResponse:
@@ -379,6 +384,7 @@ class AIQuotaService:
             db,
             tenant_id=tenant_id,
             status=status,
+            search=search,
             offset=offset,
             limit=limit,
         )
