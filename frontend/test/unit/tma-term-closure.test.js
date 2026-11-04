@@ -34,7 +34,7 @@ test("teacher and admin overview share the active-term default and historical te
   assert.match(tmaPage, /termOptions\.find\(\(term\) => term\.is_current\)/);
   assert.match(tmaPage, /label="Academic term"/);
   assert.match(tmaPage, /setTermId\(value\)/);
-  assert.match(tmaPage, /service\.list\(offset, selected, \{/);
+  assert.match(tmaPage, /service\.list\(offset, termId, \{/);
   assert.match(client, /academic_term_id/);
 });
 

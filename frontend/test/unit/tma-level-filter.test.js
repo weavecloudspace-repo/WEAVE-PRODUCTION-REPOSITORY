@@ -6,7 +6,7 @@ const page = await readFile(new URL("../../src/features/tma/TmaPage.jsx", import
 const service = await readFile(new URL("../../src/services/tmaService.js", import.meta.url), "utf8");
 
 test("assignment search, level and status are sent to the server before pagination", () => {
-  assert.match(page, /service\.list\(offset, selected, \{/);
+  assert.match(page, /service\.list\(offset, termId, \{/);
   assert.match(page, /search: debouncedQuery/);
   assert.match(page, /status: statusFilter/);
   assert.match(page, /academic_level_id: levelFilter/);
