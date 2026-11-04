@@ -753,7 +753,9 @@ function MembershipDirectoryPage({ role }) {
       } else if (activeTab === "invitations") {
         response = await config.service.listInvitations({
           skip,
-          limit: PAGE_SIZE,
+          // Teacher invitation API returns an array instead of a total.
+          // Fetch one extra row to determine whether a next page exists.
+          limit: role === "teacher" ? PAGE_SIZE + 1 : PAGE_SIZE,
           search: appliedSearch.trim() || undefined,
           status: appliedStatus || undefined,
         });
@@ -763,12 +765,13 @@ function MembershipDirectoryPage({ role }) {
           limit: PAGE_SIZE,
         });
       }
-      let nextItems = asItems(response);
+      const pageRows = asItems(response);
+      let nextItems = pageRows.slice(0, PAGE_SIZE);
       setItems(nextItems);
       setTotal(
         Number.isFinite(response?.total)
           ? response.total
-          : skip + nextItems.length + (nextItems.length === PAGE_SIZE ? 1 : 0),
+          : skip + nextItems.length + (pageRows.length > PAGE_SIZE ? 1 : 0),
       );
     } catch (requestError) {
       const message = getErrorMessage(
