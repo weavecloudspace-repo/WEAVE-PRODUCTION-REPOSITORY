@@ -107,6 +107,7 @@ async def list_report_cards(
     academic_term_id: UUID | None = Query(default=None),
     status: ReportCardStatus | None = Query(default=None),
     is_outdated: bool | None = Query(default=None),
+    search: str | None = Query(default=None, max_length=100),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=100),
 ) -> ReportCardListResponse:
@@ -120,6 +121,7 @@ async def list_report_cards(
         academic_term_id=academic_term_id,
         status=status,
         is_outdated=is_outdated,
+        search=search,
         skip=skip,
         limit=limit,
     )
