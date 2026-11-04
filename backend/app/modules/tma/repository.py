@@ -152,7 +152,9 @@ class TMAAssignmentRepository:
         search_term = (search or "").strip()
         if search_term:
             # Correlated EXISTS avoids duplicating assignments before pagination.
-            escaped_search = search_term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            escaped_search = (
+                search_term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             pattern = f"%{escaped_search}%"
             filters.append(
                 or_(
