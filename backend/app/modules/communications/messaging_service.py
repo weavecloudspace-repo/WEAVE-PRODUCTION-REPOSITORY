@@ -116,7 +116,11 @@ class MessagingService:
 
     @staticmethod
     async def list_conversations(
-        db: AsyncSession, *, actor, offset: int, limit: int,
+        db: AsyncSession,
+        *,
+        actor,
+        offset: int,
+        limit: int,
         search: str | None = None,
         counterpart_type: CommunicationActorType | None = None,
     ):
