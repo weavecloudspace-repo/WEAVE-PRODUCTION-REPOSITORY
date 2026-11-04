@@ -272,6 +272,12 @@ class Student(BaseModel):
             name="ck_students_graduated_has_date",
         ),
         Index("ix_students_tenant_admission_number", "tenant_id", "admission_number"),
+        Index("ix_students_tma_admission_trgm", "admission_number", postgresql_using="gin", postgresql_ops={"admission_number": "gin_trgm_ops"}),
+        Index(
+            "ix_students_tma_full_name_trgm",
+            text("(btrim(coalesce(first_name, '') || ' ' || coalesce(last_name, ''))) gin_trgm_ops"),
+            postgresql_using="gin",
+        ),
         Index("ix_students_tenant_status", "tenant_id", "status"),
         Index("ix_students_tenant_account_status", "tenant_id", "account_status"),
         Index("ix_students_tenant_archived", "tenant_id", "is_archived"),
