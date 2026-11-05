@@ -174,6 +174,12 @@ class TMAAssignment(BaseModel):
 
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # The start of reliable closure-time tracking for this assignment.
+    # A prior deadline cannot be assigned marks using later mutable records.
+    closure_tracking_started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("statement_timestamp()")
+    )
+
     # Enforced UTC deadline. The worker persists CLOSED; student writes reject
     # overdue assignments immediately, even if the worker has not run yet.
     closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
