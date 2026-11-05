@@ -37,6 +37,7 @@ from app.modules.tma.schemas import (
     TMAAssignmentListResponse,
     TMAAssignmentResponse,
     TMAAssignmentStatusResponse,
+    TMAReopenRequest,
     TMAAssignmentUpdate,
     TMACancellationRequest,
     TMACancellationConflictResponse,
