@@ -371,6 +371,7 @@ class TMAAttemptService:
             attempt.total_questions = None
         if attempt.student_started_at is None:
             attempt.student_started_at = datetime.now(timezone.utc)
+        attempt.started_by_student = True
         await TMAAttemptRepository.save(db, attempt)
         try:
             await db.commit()
