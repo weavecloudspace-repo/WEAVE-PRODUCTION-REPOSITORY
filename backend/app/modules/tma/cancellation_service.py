@@ -132,8 +132,10 @@ class TMACancellationService:
             return run
         if assignment.status != TMAAssignmentStatus.CLOSED:
             raise ConflictException("Close the assignment before cancelling it.")
-        if (assignment.zero_grading_requested_at is not None
-                and assignment.zero_grading_completed_at is None):
+        if (
+            assignment.zero_grading_requested_at is not None
+            and assignment.zero_grading_completed_at is None
+        ):
             raise ConflictException(
                 "Wait for missed-deadline grading to finish or resolve its errors "
                 "before cancelling this assignment."
