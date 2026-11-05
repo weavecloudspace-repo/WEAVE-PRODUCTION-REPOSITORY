@@ -167,8 +167,7 @@ class TMAReportingRepository:
                 "submitted",
             ),
             (
-                history.c.auto_zeroed_at.is_not(None)
-                & (history.c.started_by_student.is_(False)),
+                history.c.auto_zeroed_at.is_not(None) & (history.c.started_by_student.is_(False)),
                 "not_started",
             ),
             # Old system-issued attempts with no start provenance remain
