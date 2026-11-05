@@ -271,6 +271,8 @@ async def tma_committed_world(_create_test_tables, test_engine):
                 "tma_question_options",
                 "tma_questions",
                 "tma_deadline_eligibility",
+                "tma_closure_eligibility",
+                "tma_closure_runs",
                 "tma_zero_grading_failures",
                 "tma_cancellation_runs",
                 "tma_assignment_revisions",
