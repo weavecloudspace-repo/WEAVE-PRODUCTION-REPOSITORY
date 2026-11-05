@@ -183,8 +183,8 @@ async def test_worker_finishes_when_all_current_students_are_submitted(monkeypat
     db = AsyncMock()
     db.execute.side_effect = [
         SimpleNamespace(scalar_one_or_none=lambda: item),
-        SimpleNamespace(scalar_one_or_none=lambda: None),
         SimpleNamespace(scalar_one=lambda: 0),
+        SimpleNamespace(scalar_one_or_none=lambda: None),
     ]
     monkeypatch.setattr(
         mod.TMARevisionRepository,
