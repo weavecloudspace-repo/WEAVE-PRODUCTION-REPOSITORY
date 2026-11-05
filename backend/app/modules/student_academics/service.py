@@ -2972,11 +2972,19 @@ class StudentAcademicService:
         result_id: uuid.UUID,
         payload: StudentSubjectResultReopenRequest,
     ) -> StudentSubjectResultResponse:
+        # Serialize with TMA publication and result finalization before loading the result.
+        await TMAAcademicGuard.lock(db, actor.tenant_id)
         result = await StudentAcademicRepository.get_result_by_id(db, actor.tenant_id, result_id)
         if result is None:
             raise NotFoundException("Result not found.")
-        if result.status != AcademicResultStatus.LOCKED:
-            raise BadRequestException("Only locked results can be reopened.")
+        if result.status not in (
+            AcademicResultStatus.SUBMITTED,
+            AcademicResultStatus.APPROVED,
+            AcademicResultStatus.LOCKED,
+        ):
+            raise BadRequestException(
+                "Only submitted, approved or locked results can be returned to draft."
+            )
         session = await StudentAcademicRepository.get_academic_session_by_id(
             db, actor.tenant_id, result.academic_session_id
         )
