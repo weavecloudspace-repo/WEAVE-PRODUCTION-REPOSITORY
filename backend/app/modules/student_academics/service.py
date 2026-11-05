@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.tma.academic_guard import TMAAcademicGuard
 from app.core.exceptions import (
     BadRequestException,
     ConflictException,
@@ -465,8 +466,7 @@ class StudentAcademicService:
         if term.status in {AcademicTermStatus.OPEN, AcademicTermStatus.CLOSING}:
             # Do not close a term while active TMAs, cancellation reversals,
             # or scheduled zeros are still waiting to update academic scores.
-            from app.modules.tma.academic_guard import TMAAcademicGuard
-from app.modules.tma.models import TMAAssignment, TMAAssignmentStatus
+            from app.modules.tma.models import TMAAssignment, TMAAssignmentStatus
 
             tma_base = (
                 TMAAssignment.tenant_id == tenant_id,
