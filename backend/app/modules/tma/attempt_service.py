@@ -398,8 +398,8 @@ class TMAAttemptService:
         )
         if (
             observed.status == TMAAttemptStatus.SUBMITTED
-            and observed.auto_zeroed_at is not None
-            and observed.auto_zero_resolved_at is None
+            and getattr(observed, "auto_zeroed_at", None) is not None
+            and getattr(observed, "auto_zero_resolved_at", None) is None
         ):
             return await TMAAttemptService.start_or_resume_attempt(
                 db, student=student, assignment_id=revision.assignment_id
@@ -533,7 +533,10 @@ class TMAAttemptService:
             attempt.submitted_at = datetime.now(timezone.utc)
             attempt.correct_answers = correct
             attempt.total_questions = total
-            if attempt.auto_zeroed_at is not None and attempt.auto_zero_resolved_at is None:
+            if (
+                getattr(attempt, "auto_zeroed_at", None) is not None
+                and getattr(attempt, "auto_zero_resolved_at", None) is None
+            ):
                 attempt.auto_zero_resolved_at = attempt.submitted_at
             await TMAAttemptRepository.save(db, attempt)
             await db.commit()
