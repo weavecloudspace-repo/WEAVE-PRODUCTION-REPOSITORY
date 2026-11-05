@@ -85,12 +85,15 @@ def test_reporting_scope_constrains_live_roster_history_and_deadline_snapshot():
 
 def test_failure_uniqueness_and_foreign_key_include_revision():
     table = TMAZeroGradingFailure.__table__
-    unique = next(c for c in table.constraints if c.name == "uq_tma_zero_failure_revision_student")
+    unique = next(c for c in table.constraints if c.name == "uq_tma_zero_failure_cycle_student")
     assert {c.name for c in unique.columns} == {
         "tenant_id",
         "assignment_id",
         "revision_number",
+        "closure_run_id",
         "student_id",
     }
     foreign = next(c for c in table.constraints if c.name == "fk_tma_zero_failure_revision")
     assert {c.name for c in foreign.columns} == {"tenant_id", "assignment_id", "revision_number"}
+    closure_fk = next(c for c in table.constraints if c.name == "fk_tma_zero_failure_closure_run")
+    assert {c.name for c in closure_fk.columns} == {"tenant_id", "closure_run_id"}
