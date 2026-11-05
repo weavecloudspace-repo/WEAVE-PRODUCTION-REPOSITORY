@@ -351,6 +351,10 @@ class TMADeadlineZeroService:
             )
             await db.commit()
             await flush_cache_invalidation_events(db)
+            # Let the same poll continue draining a healthy large assignment.
+            # Blocked assignments remain excluded from this polling cycle.
+            if more and not blocked and not unresolved and skip_assignment_ids is not None:
+                skip_assignment_ids.discard(assignment.id)
             return {
                 "zeroed": processed,
                 "blocked": blocked,

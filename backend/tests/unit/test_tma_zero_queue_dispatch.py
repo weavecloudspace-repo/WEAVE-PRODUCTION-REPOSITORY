@@ -132,3 +132,66 @@ async def test_stale_closure_is_filtered_and_failed_retry_is_cooled_down():
     assert "tma_assignments.closed_at = " in compiled
     assert "zero_grading_last_processed_at" in compiled
     assert "zero_grading_error IS NULL" in compiled
+
+
+@pytest.mark.asyncio
+async def test_healthy_large_batch_remains_eligible_in_same_poll(monkeypatch):
+    from app.modules.tma import deadline_zero_service as zero
+
+    now = datetime.now(timezone.utc)
+    assignment = SimpleNamespace(
+        id=uuid.uuid4(),
+        tenant_id=uuid.uuid4(),
+        current_revision_number=1,
+        zero_grading_completed_at=None,
+        zero_grading_error=None,
+    )
+    db = AsyncMock()
+    db.execute.side_effect = [
+        SimpleNamespace(scalar_one_or_none=lambda: assignment),
+        SimpleNamespace(scalar_one=lambda: 0),
+    ]
+    monkeypatch.setattr(zero.TMADeadlineZeroService, "MAX_WRITES", 1)
+    monkeypatch.setattr(
+        zero.TMARevisionRepository,
+        "get_by_number",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                id=uuid.uuid4(), published_at=now, invalidated_at=None
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        zero.TMAQuestionRepository,
+        "list_for_revision_with_options",
+        AsyncMock(return_value=[(SimpleNamespace(), [])]),
+    )
+    monkeypatch.setattr(
+        zero.TMAAuthorizationService, "require_open_term", AsyncMock()
+    )
+    monkeypatch.setattr(
+        zero.TMADeadlineEligibilityRepository,
+        "_closure",
+        AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
+    )
+    monkeypatch.setattr(
+        zero.TMADeadlineEligibilityRepository,
+        "pending",
+        AsyncMock(return_value=[(uuid.uuid4(), None), (uuid.uuid4(), None)]),
+    )
+
+    @asynccontextmanager
+    async def nested():
+        yield
+
+    db.begin_nested = nested
+    monkeypatch.setattr(
+        zero.TMADeadlineZeroService, "_write_zero", AsyncMock(return_value=True)
+    )
+    monkeypatch.setattr(zero, "flush_cache_invalidation_events", AsyncMock())
+    seen = set()
+    result = await zero.TMADeadlineZeroService.process_pending(
+        db, skip_assignment_ids=seen
+    )
+    assert result == {"zeroed": 1, "blocked": 0, "pending": 1}
+    assert seen == set()
