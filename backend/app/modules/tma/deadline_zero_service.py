@@ -197,8 +197,8 @@ class TMADeadlineZeroService:
             if not questions:
                 raise ConflictException("Cannot record zero without published questions.")
             await TMAAuthorizationService.require_open_term(db, assignment)
-            # New closures use a time-scoped roster rather than a revision-wide
-            # immutable snapshot. Legacy snapshot rows are retained for audit.
+            # Reopened revisions must never inherit an old closure's exemptions.
+            closure = await TMADeadlineEligibilityRepository._closure(db, assignment)
             students = await TMADeadlineEligibilityRepository.pending(
                 db, assignment=assignment, revision_id=revision.id, limit=cls.MAX_WRITES + 1
             )
@@ -230,6 +230,7 @@ class TMADeadlineZeroService:
                         tenant_id=assignment.tenant_id,
                         assignment_id=assignment.id,
                         revision_number=assignment.current_revision_number,
+                        closure_run_id=closure.id,
                         student_id=student_id,
                         reason=error,
                         attempts=1,
@@ -237,7 +238,7 @@ class TMADeadlineZeroService:
                     )
                     await db.execute(
                         stmt.on_conflict_do_update(
-                            constraint="uq_tma_zero_failure_revision_student",
+                            constraint="uq_tma_zero_failure_cycle_student",
                             set_={
                                 "reason": error,
                                 "attempts": TMAZeroGradingFailure.attempts + 1,
@@ -274,6 +275,7 @@ class TMADeadlineZeroService:
                         TMAZeroGradingFailure.tenant_id == assignment.tenant_id,
                         TMAZeroGradingFailure.assignment_id == assignment.id,
                         TMAZeroGradingFailure.revision_number == assignment.current_revision_number,
+                        TMAZeroGradingFailure.closure_run_id == closure.id,
                         TMAZeroGradingFailure.resolved_at.is_(None),
                     )
                 )
