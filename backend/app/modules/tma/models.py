@@ -954,6 +954,11 @@ class TMAAttempt(BaseModel):
     student_started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # None = historical origin unknown; False = worker-generated only;
+    # True = student actually opened the attempt.
+    started_by_student: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True
+    )
 
     correct_answers: Mapped[int | None] = mapped_column(
         Integer,
