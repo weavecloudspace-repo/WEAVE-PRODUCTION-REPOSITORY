@@ -197,6 +197,11 @@ async def test_worker_finishes_when_all_current_students_are_submitted(monkeypat
         AsyncMock(return_value=[(SimpleNamespace(), [])]),
     )
     monkeypatch.setattr(mod.TMADeadlineEligibilityRepository, "capture", AsyncMock())
+    monkeypatch.setattr(
+        mod.TMADeadlineEligibilityRepository,
+        "_closure",
+        AsyncMock(return_value=SimpleNamespace(id=uid())),
+    )
     monkeypatch.setattr(mod.TMAAuthorizationService, "require_open_term", AsyncMock())
     monkeypatch.setattr(mod.TMADeadlineEligibilityRepository, "pending", AsyncMock(return_value=[]))
     grade = AsyncMock()
@@ -231,6 +236,11 @@ async def test_worker_does_not_drop_reconciliation_errors(monkeypatch):
         AsyncMock(return_value=[(SimpleNamespace(), [])]),
     )
     monkeypatch.setattr(mod.TMADeadlineEligibilityRepository, "capture", AsyncMock())
+    monkeypatch.setattr(
+        mod.TMADeadlineEligibilityRepository,
+        "_closure",
+        AsyncMock(return_value=SimpleNamespace(id=uid())),
+    )
     monkeypatch.setattr(mod.TMAAuthorizationService, "require_open_term", AsyncMock())
     monkeypatch.setattr(
         mod.TMADeadlineEligibilityRepository, "pending", AsyncMock(return_value=[(uid(), None)])
