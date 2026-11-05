@@ -23,7 +23,7 @@ export function positionDeadlinePopover(trigger, popover, viewport) {
   const floatInViewport = availableSpace < Math.min(280, popover.height);
   const maxHeight = floatInViewport
     ? viewportHeight
-    : Math.min(viewportHeight, availableSpace);
+    : Math.min(viewportHeight, availableSpace, popover.height);
   const height = Math.min(popover.height, maxHeight);
   const width = Math.min(popover.width, Math.max(0, right - left));
   const desiredTop = floatInViewport
