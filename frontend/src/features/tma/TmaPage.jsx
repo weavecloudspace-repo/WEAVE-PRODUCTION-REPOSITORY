@@ -1261,14 +1261,11 @@ export default function TmaPage({ role }) {
             {dialog === "reopen" && (
               <label className="grid gap-2 text-sm">
                 New submission deadline
-                <input
-                  aria-label="New submission deadline"
-                  type="datetime-local"
-                  className={field}
+                <TmaDeadlinePicker
                   value={reopenDeadline}
-                  min={dateInput(new Date().toISOString())}
-                  onChange={(event) => setReopenDeadline(event.target.value)}
-                  required
+                  onChange={setReopenDeadline}
+                  disabled={busy}
+                  invalid={!reopenDeadline}
                 />
                 <span className="text-xs text-text-muted">
                   This must be in the future. Previously recorded automatic zeros
@@ -1294,7 +1291,8 @@ export default function TmaPage({ role }) {
                 (dialog === "reopen" && (
                   !reopenDeadline ||
                   !Number.isFinite(new Date(reopenDeadline).getTime()) ||
-                  new Date(reopenDeadline).getTime() <= Date.now()
+                  new Date(reopenDeadline).getTime() <=
+                    new Date(assignment?.closed_at || assignment?.closes_at || 0).getTime()
                 )) ||
                 (dialog === "cancel" && reason.trim().length < 5) ||
                 (dialog === "zeroExempt" && reason.trim().length < 10)
