@@ -56,15 +56,21 @@ async def due(w, item, *, capture=True):
     ).scalar_one()
     revision.eligibility_tracking_started_at = now - timedelta(minutes=1)
     closure = TMAClosureRun(
-        tenant_id=w.tenant.id, assignment_id=item.id, revision_id=revision.id,
-        closed_at=now, cutoff_at=item.closes_at,
-        original_deadline_at=item.closes_at, kind="automatic",
+        tenant_id=w.tenant.id,
+        assignment_id=item.id,
+        revision_id=revision.id,
+        closed_at=now,
+        cutoff_at=item.closes_at,
+        original_deadline_at=item.closes_at,
+        kind="automatic",
     )
     w.db.add(closure)
     await w.db.flush()
     if capture:
         await TMADeadlineEligibilityRepository.capture(
-            w.db, tenant_id=w.tenant.id, assignment_id=item.id,
+            w.db,
+            tenant_id=w.tenant.id,
+            assignment_id=item.id,
             closure_id=closure.id,
         )
     await w.db.commit()
@@ -286,13 +292,18 @@ async def test_changes_after_deadline_preserve_roster(tma_world, change):
     await w.db.flush()
     snapshot = (
         await w.db.execute(
-            select(TMAClosureEligibility).where(TMAClosureEligibility.closure_run_id == (
+            select(TMAClosureEligibility).where(
+                TMAClosureEligibility.closure_run_id
+                == (
                     select(TMAClosureRun.id)
-                    .where(TMAClosureRun.tenant_id == w.tenant.id,
-                           TMAClosureRun.assignment_id == item.id,
-                           TMAClosureRun.closed_at == item.closed_at)
+                    .where(
+                        TMAClosureRun.tenant_id == w.tenant.id,
+                        TMAClosureRun.assignment_id == item.id,
+                        TMAClosureRun.closed_at == item.closed_at,
+                    )
                     .scalar_subquery()
-                ))
+                )
+            )
         )
     ).scalar_one()
     assert snapshot.student_id == student.id and snapshot.student_enrollment_id == enrollment.id
@@ -312,13 +323,16 @@ async def test_late_admission_excluded_and_pre_deadline_admission_included(tma_w
         (
             await w.db.execute(
                 select(TMAClosureEligibility.student_id).where(
-                    TMAClosureEligibility.closure_run_id == (
-                    select(TMAClosureRun.id)
-                    .where(TMAClosureRun.tenant_id == w.tenant.id,
-                           TMAClosureRun.assignment_id == item.id,
-                           TMAClosureRun.closed_at == item.closed_at)
-                    .scalar_subquery()
-                )
+                    TMAClosureEligibility.closure_run_id
+                    == (
+                        select(TMAClosureRun.id)
+                        .where(
+                            TMAClosureRun.tenant_id == w.tenant.id,
+                            TMAClosureRun.assignment_id == item.id,
+                            TMAClosureRun.closed_at == item.closed_at,
+                        )
+                        .scalar_subquery()
+                    )
                 )
             )
         ).scalars()
@@ -713,13 +727,16 @@ async def test_deadline_specialization_snapshot_matches_canonical_curriculum(tma
         (
             await w.db.execute(
                 select(TMAClosureEligibility.student_id).where(
-                    TMAClosureEligibility.closure_run_id == (
-                    select(TMAClosureRun.id)
-                    .where(TMAClosureRun.tenant_id == w.tenant.id,
-                           TMAClosureRun.assignment_id == item.id,
-                           TMAClosureRun.closed_at == item.closed_at)
-                    .scalar_subquery()
-                )
+                    TMAClosureEligibility.closure_run_id
+                    == (
+                        select(TMAClosureRun.id)
+                        .where(
+                            TMAClosureRun.tenant_id == w.tenant.id,
+                            TMAClosureRun.assignment_id == item.id,
+                            TMAClosureRun.closed_at == item.closed_at,
+                        )
+                        .scalar_subquery()
+                    )
                 )
             )
         ).scalars()
@@ -771,8 +788,10 @@ async def test_draft_edit_delete_and_manual_close_reopen(tma_world):
     assert item.status == TMAAssignmentStatus.CLOSED
     with pytest.raises(ConflictException):
         await TMALifecycleService.reopen_assignment(
-            w.db, actor=w.admin, assignment_id=item.id,
-            closes_at=datetime.now(timezone.utc) + timedelta(days=2)
+            w.db,
+            actor=w.admin,
+            assignment_id=item.id,
+            closes_at=datetime.now(timezone.utc) + timedelta(days=2),
         )
     await TMADeadlineZeroService.process_pending(w.db, tenant_ids={w.tenant.id})
     await TMALifecycleService.reopen_assignment(
@@ -931,9 +950,7 @@ async def test_concurrent_cancellation_and_grading_finish_without_orphaned_score
         )
     else:
         assert not isinstance(cancel_result, BaseException)
-    await TMACancellationService.process(
-        w.db, tenant_id=w.tenant.id, run_id=cancel_result.id
-    )
+    await TMACancellationService.process(w.db, tenant_id=w.tenant.id, run_id=cancel_result.id)
     assert (
         await w.db.execute(
             select(func.count(StudentAssessmentScore.id)).where(
