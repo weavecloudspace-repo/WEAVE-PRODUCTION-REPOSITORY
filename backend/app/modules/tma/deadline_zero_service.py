@@ -84,9 +84,16 @@ class TMADeadlineZeroService:
             )
         if participant is None:
             raise ConflictException("Unable to register missed TMA participation.")
+        # Only a brand-new worker-created attempt is known NOT to have been
+        # opened by the student. Old attempts with unknown origin stay NULL.
+        existing_attempt = await TMAAttemptRepository.get_by_participant(
+            db, tenant_id, participant.id
+        )
         attempt = await TMAAttemptRepository.create_if_missing(
             db, tenant_id, participant.id, revision_id
         )
+        if existing_attempt is None:
+            attempt.started_by_student = False
         if attempt.status == TMAAttemptStatus.SUBMITTED:
             return False
         # This writes a genuine 0 CA component and captures the exact score ID
