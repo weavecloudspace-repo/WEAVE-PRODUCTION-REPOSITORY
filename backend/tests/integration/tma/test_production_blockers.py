@@ -990,9 +990,7 @@ async def test_overdue_curriculum_mutation_captures_before_worker(tma_world):
             )
         )
     ).scalar_one() == student.id
-    outcome = await TMADeadlineZeroService.process_pending(
-        w.db, tenant_ids={w.tenant.id}
-    )
+    outcome = await TMADeadlineZeroService.process_pending(w.db, tenant_ids={w.tenant.id})
     assert outcome == {"zeroed": 1, "blocked": 0, "pending": 0}
 
 
@@ -1025,7 +1023,8 @@ async def test_reopened_tma_maintains_separate_closure_rosters(tma_world):
     runs = list(
         (
             await w.db.execute(
-                select(TMAClosureRun).where(
+                select(TMAClosureRun)
+                .where(
                     TMAClosureRun.tenant_id == w.tenant.id,
                     TMAClosureRun.assignment_id == item.id,
                 )
@@ -1057,7 +1056,5 @@ async def test_reopened_tma_maintains_separate_closure_rosters(tma_world):
     )
     assert first_ids == {first_student.id}
     assert second_ids == {first_student.id, new_student.id}
-    outcome = await TMADeadlineZeroService.process_pending(
-        w.db, tenant_ids={w.tenant.id}
-    )
+    outcome = await TMADeadlineZeroService.process_pending(w.db, tenant_ids={w.tenant.id})
     assert outcome == {"zeroed": 1, "blocked": 0, "pending": 0}
