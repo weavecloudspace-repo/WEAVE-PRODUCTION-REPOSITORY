@@ -905,7 +905,9 @@ class TMAClosureRun(BaseModel):
     original_deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    eligibility_captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    eligibility_captured_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (
         ForeignKeyConstraint(
