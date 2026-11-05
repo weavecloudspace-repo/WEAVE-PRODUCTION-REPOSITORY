@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.cache.events import flush_cache_invalidation_events
 from app.modules.tma.models import TMAAssignment, TMAAssignmentStatus, TMAClosureRun
 from app.modules.tma.repository import TMARevisionRepository
+from app.modules.tma.deadline_eligibility_repository import TMADeadlineEligibilityRepository
+from app.core.exceptions import ConflictException
 
 
 class TMAExpirationService:
@@ -66,6 +68,17 @@ class TMAExpirationService:
                 )
             )
         if due:
+            await db.flush()
+            for assignment in due:
+                if assignment.status != TMAAssignmentStatus.CLOSED:
+                    continue
+                try:
+                    await TMADeadlineEligibilityRepository.capture(
+                        db, tenant_id=assignment.tenant_id, assignment_id=assignment.id
+                    )
+                except ConflictException as exc:
+                    # Preserve the closure, but never zero-grade unverified history.
+                    assignment.zero_grading_error = str(exc)
             await db.commit()
             await flush_cache_invalidation_events(db)
         return {"closed": sum(a.status == TMAAssignmentStatus.CLOSED for a in due)}
