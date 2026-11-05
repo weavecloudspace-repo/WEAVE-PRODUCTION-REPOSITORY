@@ -144,12 +144,9 @@ class TMADeadlineEligibilityRepository:
                     .join(
                         TMAAssignment,
                         and_(
-                            TMAClosureRun.tenant_id
-                            == TMAAssignment.tenant_id,
-                            TMAClosureRun.assignment_id
-                            == TMAAssignment.id,
-                            TMAClosureRun.closed_at
-                            == TMAAssignment.closed_at,
+                            TMAClosureRun.tenant_id == TMAAssignment.tenant_id,
+                            TMAClosureRun.assignment_id == TMAAssignment.id,
+                            TMAClosureRun.closed_at == TMAAssignment.closed_at,
                         ),
                     )
                     .where(
