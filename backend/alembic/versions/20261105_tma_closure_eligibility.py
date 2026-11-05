@@ -2,6 +2,7 @@
 
 No existing scores, attempts or revision-wide snapshots are modified.
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -137,19 +138,31 @@ END $$;
 """
 
 TRACKED_TABLES = (
-    "students", "student_enrollments", "student_elective_selections",
-    "classes", "academic_levels", "curricula", "curriculum_subjects",
-    "subjects", "curriculum_subject_departments",
-    "class_term_department_assignments", "academic_level_departments",
-    "departments", "academic_terms",
+    "students",
+    "student_enrollments",
+    "student_elective_selections",
+    "classes",
+    "academic_levels",
+    "curricula",
+    "curriculum_subjects",
+    "subjects",
+    "curriculum_subject_departments",
+    "class_term_department_assignments",
+    "academic_level_departments",
+    "departments",
+    "academic_terms",
 )
 
+
 def upgrade() -> None:
-    op.add_column("tma_closure_runs", sa.Column(
-        "eligibility_captured_at", sa.DateTime(timezone=True), nullable=True
-    ), schema="public")
-    op.create_unique_constraint("uq_tma_closure_tenant_id", "tma_closure_runs",
-                                ["tenant_id", "id"], schema="public")
+    op.add_column(
+        "tma_closure_runs",
+        sa.Column("eligibility_captured_at", sa.DateTime(timezone=True), nullable=True),
+        schema="public",
+    )
+    op.create_unique_constraint(
+        "uq_tma_closure_tenant_id", "tma_closure_runs", ["tenant_id", "id"], schema="public"
+    )
     op.create_table(
         "tma_closure_eligibility",
         sa.Column("tenant_id", sa.UUID(as_uuid=True), nullable=False),
@@ -159,13 +172,20 @@ def upgrade() -> None:
         sa.Column("class_id", sa.UUID(as_uuid=True), nullable=False),
         sa.Column("subject_id", sa.UUID(as_uuid=True), nullable=False),
         sa.PrimaryKeyConstraint("tenant_id", "closure_run_id", "student_id"),
-        sa.ForeignKeyConstraint(["tenant_id", "closure_run_id"],
+        sa.ForeignKeyConstraint(
+            ["tenant_id", "closure_run_id"],
             ["public.tma_closure_runs.tenant_id", "public.tma_closure_runs.id"],
-            name="fk_tma_closure_eligibility_run", ondelete="RESTRICT"),
+            name="fk_tma_closure_eligibility_run",
+            ondelete="RESTRICT",
+        ),
         sa.ForeignKeyConstraint(
             ["tenant_id", "student_enrollment_id", "student_id", "class_id"],
-            ["public.student_enrollments.tenant_id", "public.student_enrollments.id",
-             "public.student_enrollments.student_id", "public.student_enrollments.class_id"],
+            [
+                "public.student_enrollments.tenant_id",
+                "public.student_enrollments.id",
+                "public.student_enrollments.student_id",
+                "public.student_enrollments.class_id",
+            ],
             name="fk_tma_closure_eligibility_enrollment",
         ),
         schema="public",
@@ -180,6 +200,7 @@ def upgrade() -> None:
             f"BEFORE INSERT OR UPDATE OR DELETE ON public.{table} "
             "FOR EACH ROW EXECUTE FUNCTION public.tma_preserve_closure_eligibility()"
         )
+
 
 def downgrade() -> None:
     raise RuntimeError("Closure rosters are academic history; use a forward repair.")
