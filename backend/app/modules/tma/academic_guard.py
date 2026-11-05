@@ -4,6 +4,7 @@ Every TMA publish/reopen/cancel and result finalization path acquires the
 same tenant-level advisory lock *before* loading rows FOR UPDATE. This prevents
 a check/commit race without creating a permanent roster or schema dependency.
 """
+
 from __future__ import annotations
 
 from sqlalchemy import and_, select, text
@@ -56,9 +57,7 @@ class TMAAcademicGuard:
             )
 
     @staticmethod
-    async def require_grading_finalized(
-        db: AsyncSession, result: StudentSubjectResult
-    ) -> None:
+    async def require_grading_finalized(db: AsyncSession, result: StudentSubjectResult) -> None:
         """Never finalize a result while its level/subject has unfinished TMA work."""
         level_id = (
             await db.execute(
