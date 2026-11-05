@@ -25,6 +25,8 @@ def context(monkeypatch):
         activated_at=datetime.now(timezone.utc),
         closed_at=datetime.now(timezone.utc),
         closes_at=datetime.now(timezone.utc) + timedelta(days=3),
+        zero_grading_requested_at=None,
+        zero_grading_completed_at=None,
         created_by_actor_type=TMAActorType.TEACHER,
         created_by_actor_id=uuid.uuid4(),
     )
