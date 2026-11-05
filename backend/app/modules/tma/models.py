@@ -894,7 +894,7 @@ class TMAParticipant(BaseModel):
 
 
 class TMAClosureRun(BaseModel):
-    """One manual or automatic closure event; does not freeze students."""
+    """One manual or automatic closure event with independent immutable eligibility."""
 
     __tablename__ = "tma_closure_runs"
 
@@ -905,6 +905,7 @@ class TMAClosureRun(BaseModel):
     original_deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    eligibility_captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -922,6 +923,7 @@ class TMAClosureRun(BaseModel):
             name="fk_tma_closure_tenant_revision",
             ondelete="RESTRICT",
         ),
+        UniqueConstraint("tenant_id", "id", name="uq_tma_closure_tenant_id"),
         UniqueConstraint(
             "tenant_id", "assignment_id", "closed_at", name="uq_tma_closure_assignment_closed_at"
         ),
@@ -1297,6 +1299,38 @@ class TMAZeroGradingFailure(BaseModel):
             "tenant_id",
             "assignment_id",
             "resolved_at",
+        ),
+    )
+
+
+class TMAClosureEligibility(Base):
+    """Immutable student enrollment and subject at one specific TMA closure."""
+
+    __tablename__ = "tma_closure_eligibility"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    closure_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    student_enrollment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    class_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    subject_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "closure_run_id"],
+            [f"{PUBLIC_SCHEMA}.tma_closure_runs.tenant_id", f"{PUBLIC_SCHEMA}.tma_closure_runs.id"],
+            name="fk_tma_closure_eligibility_run",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "student_enrollment_id", "student_id", "class_id"],
+            [
+                f"{PUBLIC_SCHEMA}.student_enrollments.tenant_id",
+                f"{PUBLIC_SCHEMA}.student_enrollments.id",
+                f"{PUBLIC_SCHEMA}.student_enrollments.student_id",
+                f"{PUBLIC_SCHEMA}.student_enrollments.class_id",
+            ],
+            name="fk_tma_closure_eligibility_enrollment",
         ),
     )
 
