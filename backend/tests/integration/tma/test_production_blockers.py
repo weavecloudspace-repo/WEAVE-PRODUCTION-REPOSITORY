@@ -1067,6 +1067,7 @@ async def test_reopened_tma_maintains_separate_closure_rosters(tma_world):
 async def test_pre_tracking_deadline_is_not_reconstructed_from_mutable_records(tma_world):
     """Never invent historical eligibility for production deadlines before tracking."""
     w = tma_world
+    tenant_id = w.tenant.id
     await w.student()
     item, _ = await w.assignment()
     await due(w, item, capture=False)
@@ -1075,10 +1076,10 @@ async def test_pre_tracking_deadline_is_not_reconstructed_from_mutable_records(t
 
     with pytest.raises(ConflictException, match="predates this closure"):
         await TMADeadlineEligibilityRepository.capture(
-            w.db, tenant_id=w.tenant.id, assignment_id=item.id
+            w.db, tenant_id=tenant_id, assignment_id=item.id
         )
     await w.db.rollback()
-    result = await TMADeadlineZeroService.process_pending(w.db, tenant_ids={w.tenant.id})
+    result = await TMADeadlineZeroService.process_pending(w.db, tenant_ids={tenant_id})
     assert result["zeroed"] == 0
     assert result["blocked"] == 1
     assert result["pending"] == 1
