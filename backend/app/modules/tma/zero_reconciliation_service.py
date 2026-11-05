@@ -198,13 +198,19 @@ class TMAZeroReconciliationService:
                 reconciliation_id=str(failure.id),
             )
             if not queued:
-                logger.warning("tma.deadline_zero.reconcile_enqueue_deferred", extra={
-                    "assignment_id": str(assignment.id),
-                })
+                logger.warning(
+                    "tma.deadline_zero.reconcile_enqueue_deferred",
+                    extra={
+                        "assignment_id": str(assignment.id),
+                    },
+                )
         except Exception:
             # The exemption has committed. The database sweep will recover
             # pending grading even when Redis is temporarily unavailable.
-            logger.exception("tma.deadline_zero.reconcile_enqueue_failed", extra={
-                "assignment_id": str(assignment.id),
-            })
+            logger.exception(
+                "tma.deadline_zero.reconcile_enqueue_failed",
+                extra={
+                    "assignment_id": str(assignment.id),
+                },
+            )
         return failure

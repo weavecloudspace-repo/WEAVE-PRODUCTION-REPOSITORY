@@ -160,8 +160,11 @@ async def test_exemption_remains_successful_if_redis_dispatch_fails(monkeypatch)
     monkeypatch.setattr(arq, "enqueue_tma_zero_grading_job", enqueue)
 
     result = await mod.TMAZeroReconciliationService.exempt(
-        db, actor=actor, assignment_id=assignment.id,
-        student_id=student, reason="Recorded academic exception",
+        db,
+        actor=actor,
+        assignment_id=assignment.id,
+        student_id=student,
+        reason="Recorded academic exception",
     )
     assert result is failure
     assert result.resolution == "exempt"

@@ -506,10 +506,15 @@ async def test_retry_dispatches_fresh_job_id_after_committing_pending_state(monk
 
     assignment, actor = fake(TMAAssignmentStatus.CANCELLING)
     run = SimpleNamespace(
-        id=uid(), tenant_id=actor.tenant_id,
-        assignment_id=assignment.id, status="failed", error_message="previous error",
+        id=uid(),
+        tenant_id=actor.tenant_id,
+        assignment_id=assignment.id,
+        status="failed",
+        error_message="previous error",
     )
-    monkeypatch.setattr(mod.TMACancellationService, "_assignment", AsyncMock(return_value=assignment))
+    monkeypatch.setattr(
+        mod.TMACancellationService, "_assignment", AsyncMock(return_value=assignment)
+    )
     monkeypatch.setattr(mod.TMACancellationService, "_run", AsyncMock(return_value=run))
     monkeypatch.setattr(mod, "flush_cache_invalidation_events", AsyncMock())
     enqueue = AsyncMock(return_value=True)
@@ -517,7 +522,9 @@ async def test_retry_dispatches_fresh_job_id_after_committing_pending_state(monk
     db = AsyncMock()
 
     result = await mod.TMACancellationService.retry(
-        db, actor=actor, assignment_id=assignment.id,
+        db,
+        actor=actor,
+        assignment_id=assignment.id,
     )
     assert result is run
     assert run.status == "pending"
