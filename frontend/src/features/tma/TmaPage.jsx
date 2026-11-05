@@ -1290,9 +1290,7 @@ export default function TmaPage({ role }) {
                 busy ||
                 (dialog === "reopen" && (
                   !reopenDeadline ||
-                  !Number.isFinite(new Date(reopenDeadline).getTime()) ||
-                  new Date(reopenDeadline).getTime() <=
-                    new Date(assignment?.closed_at || assignment?.closes_at || 0).getTime()
+                  !Number.isFinite(new Date(reopenDeadline).getTime())
                 )) ||
                 (dialog === "cancel" && reason.trim().length < 5) ||
                 (dialog === "zeroExempt" && reason.trim().length < 10)
