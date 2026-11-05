@@ -497,3 +497,33 @@ async def test_reversal_never_deletes_modified_or_submitted_academic_result(monk
     db.commit.assert_not_awaited()
     assert run.status == "pending"
     assert assignment.status == TMAAssignmentStatus.CANCELLING
+
+
+@pytest.mark.asyncio
+async def test_retry_dispatches_fresh_job_id_after_committing_pending_state(monkeypatch):
+    from app.modules.tma import cancellation_service as mod
+    from app.core.queue import arq
+
+    assignment, actor = fake(TMAAssignmentStatus.CANCELLING)
+    run = SimpleNamespace(
+        id=uid(), tenant_id=actor.tenant_id,
+        assignment_id=assignment.id, status="failed", error_message="previous error",
+    )
+    monkeypatch.setattr(mod.TMACancellationService, "_assignment", AsyncMock(return_value=assignment))
+    monkeypatch.setattr(mod.TMACancellationService, "_run", AsyncMock(return_value=run))
+    monkeypatch.setattr(mod, "flush_cache_invalidation_events", AsyncMock())
+    enqueue = AsyncMock(return_value=True)
+    monkeypatch.setattr(arq, "enqueue_tma_cancellation_job", enqueue)
+    db = AsyncMock()
+
+    result = await mod.TMACancellationService.retry(
+        db, actor=actor, assignment_id=assignment.id,
+    )
+    assert result is run
+    assert run.status == "pending"
+    assert run.error_message is None
+    db.commit.assert_awaited_once()
+    enqueue.assert_awaited_once()
+    assert enqueue.await_args.kwargs["run_id"] == str(run.id)
+    assert enqueue.await_args.kwargs["tenant_id"] == str(run.tenant_id)
+    assert len(enqueue.await_args.kwargs["retry_token"]) == 32

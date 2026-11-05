@@ -134,19 +134,24 @@ async def enqueue_attendance_retention_job(*, tenant_id: str | None = None) -> b
     return job is not None
 
 
-async def enqueue_tma_cancellation_job(*, run_id: str, tenant_id: str) -> bool:
-    """Persistent pending runs are recovered by the heavy-worker poll."""
+async def enqueue_tma_cancellation_job(
+    *, run_id: str, tenant_id: str, retry_token: str | None = None
+) -> bool:
+    """Dispatch a durable cancellation; explicit retries use fresh ARQ IDs."""
     redis = await create_pool(
         get_arq_redis_settings(),
         default_queue_name=HEAVY_QUEUE_NAME,
     )
+    job_id = f"tma-cancel:{run_id}"
+    if retry_token is not None:
+        job_id = f"{job_id}:retry:{retry_token}"
     try:
         job = await redis.enqueue_job(
             "process_tma_cancellation_job",
             run_id,
             tenant_id,
             _queue_name=HEAVY_QUEUE_NAME,
-            _job_id=f"tma-cancel:{run_id}",
+            _job_id=job_id,
         )
     finally:
         await redis.close()
@@ -154,10 +159,17 @@ async def enqueue_tma_cancellation_job(*, run_id: str, tenant_id: str) -> bool:
 
 
 async def enqueue_tma_zero_grading_job(
-    *, assignment_id: str, tenant_id: str, closed_at: str
+    *,
+    assignment_id: str,
+    tenant_id: str,
+    closed_at: str,
+    reconciliation_id: str | None = None,
 ) -> bool:
-    """Enqueue the exact committed closure on the heavy worker."""
+    """Enqueue one closure; a resolved conflict gets its own deduplicated wake-up."""
     redis = await create_pool(get_arq_redis_settings(), default_queue_name=HEAVY_QUEUE_NAME)
+    job_id = f"tma-zero:{assignment_id}:{closed_at}"
+    if reconciliation_id is not None:
+        job_id = f"{job_id}:reconcile:{reconciliation_id}"
     try:
         job = await redis.enqueue_job(
             "process_tma_zero_grading_job",
@@ -165,7 +177,7 @@ async def enqueue_tma_zero_grading_job(
             tenant_id,
             closed_at,
             _queue_name=HEAVY_QUEUE_NAME,
-            _job_id=f"tma-zero:{assignment_id}:{closed_at}",
+            _job_id=job_id,
         )
     finally:
         await redis.close()

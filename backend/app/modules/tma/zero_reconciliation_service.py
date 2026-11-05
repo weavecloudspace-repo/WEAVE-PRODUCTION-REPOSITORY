@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -23,6 +24,9 @@ from app.modules.tma.models import (
     TMAZeroGradingFailure,
 )
 from app.modules.tma.repository import TMAAssignmentRepository
+
+
+logger = logging.getLogger(__name__)
 
 
 class TMAZeroReconciliationService:
@@ -180,4 +184,27 @@ class TMAZeroReconciliationService:
         failure.resolved_by_actor_id = actor.id
         await db.commit()
         await flush_cache_invalidation_events(db)
+
+        # A successful exemption can unblock completion. Wake the worker now
+        # rather than waiting for the periodic sweep/cooldown. The immutable
+        # closure timestamp still prevents a stale job from grading a new cycle.
+        from app.core.queue.arq import enqueue_tma_zero_grading_job
+
+        try:
+            queued = await enqueue_tma_zero_grading_job(
+                assignment_id=str(assignment.id),
+                tenant_id=str(actor.tenant_id),
+                closed_at=assignment.closed_at.isoformat(),
+                reconciliation_id=str(failure.id),
+            )
+            if not queued:
+                logger.warning("tma.deadline_zero.reconcile_enqueue_deferred", extra={
+                    "assignment_id": str(assignment.id),
+                })
+        except Exception:
+            # The exemption has committed. The database sweep will recover
+            # pending grading even when Redis is temporarily unavailable.
+            logger.exception("tma.deadline_zero.reconcile_enqueue_failed", extra={
+                "assignment_id": str(assignment.id),
+            })
         return failure

@@ -194,13 +194,14 @@ class TMACancellationService:
         return run
 
     @staticmethod
-    async def _enqueue(run: TMACancellationRun) -> None:
+    async def _enqueue(run: TMACancellationRun, *, retry: bool = False) -> None:
         from app.core.queue.arq import enqueue_tma_cancellation_job
 
         try:
             queued = await enqueue_tma_cancellation_job(
                 run_id=str(run.id),
                 tenant_id=str(run.tenant_id),
+                **({"retry_token": uuid.uuid4().hex} if retry else {}),
             )
             if not queued:
                 logger.warning("TMA cancellation enqueue deferred to recovery poll: %s", run.id)
@@ -241,7 +242,7 @@ class TMACancellationService:
         run.error_message = None
         await db.commit()
         await flush_cache_invalidation_events(db)
-        await cls._enqueue(run)
+        await cls._enqueue(run, retry=True)
         return run
 
     @staticmethod

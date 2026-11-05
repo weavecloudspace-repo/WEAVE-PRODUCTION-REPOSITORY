@@ -187,3 +187,37 @@ async def test_healthy_large_batch_remains_eligible_in_same_poll(monkeypatch):
     result = await zero.TMADeadlineZeroService.process_pending(db, skip_assignment_ids=seen)
     assert result == {"zeroed": 1, "blocked": 0, "pending": 1}
     assert seen == set()
+
+
+@pytest.mark.asyncio
+async def test_explicit_reconciliation_uses_unique_closure_scoped_arq_id(monkeypatch):
+    redis = SimpleNamespace(enqueue_job=AsyncMock(return_value=object()), close=AsyncMock())
+    monkeypatch.setattr(arq, "create_pool", AsyncMock(return_value=redis))
+    assignment_id, tenant_id, reconciliation_id = _uid(), _uid(), _uid()
+    closed_at = "2026-11-05T20:00:00+00:00"
+    assert await arq.enqueue_tma_zero_grading_job(
+        assignment_id=assignment_id,
+        tenant_id=tenant_id,
+        closed_at=closed_at,
+        reconciliation_id=reconciliation_id,
+    )
+    assert redis.enqueue_job.call_args.kwargs["_job_id"] == (
+        f"tma-zero:{assignment_id}:{closed_at}:reconcile:{reconciliation_id}"
+    )
+    assert redis.enqueue_job.call_args.kwargs["_queue_name"] == arq.HEAVY_QUEUE_NAME
+    redis.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_cancellation_retries_have_new_arq_ids_without_changing_initial_dedup(monkeypatch):
+    redis = SimpleNamespace(enqueue_job=AsyncMock(return_value=object()), close=AsyncMock())
+    monkeypatch.setattr(arq, "create_pool", AsyncMock(return_value=redis))
+    run_id, tenant_id = _uid(), _uid()
+    assert await arq.enqueue_tma_cancellation_job(run_id=run_id, tenant_id=tenant_id)
+    assert redis.enqueue_job.call_args.kwargs["_job_id"] == f"tma-cancel:{run_id}"
+    assert await arq.enqueue_tma_cancellation_job(
+        run_id=run_id, tenant_id=tenant_id, retry_token="second-attempt"
+    )
+    assert redis.enqueue_job.call_args.kwargs["_job_id"] == (
+        f"tma-cancel:{run_id}:retry:second-attempt"
+    )
