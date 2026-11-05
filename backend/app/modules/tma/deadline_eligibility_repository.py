@@ -245,6 +245,7 @@ class TMADeadlineEligibilityRepository:
                             failure.tenant_id == assignment.tenant_id,
                             failure.assignment_id == assignment.id,
                             failure.revision_number == assignment.current_revision_number,
+                            failure.closure_run_id == closure.id,
                             failure.student_id == roster.student_id,
                         ),
                     )
