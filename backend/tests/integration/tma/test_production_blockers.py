@@ -959,6 +959,7 @@ async def test_concurrent_cancellation_and_grading_finish_without_orphaned_score
         )
     ).scalar_one() == 0
 
+
 @pytest.mark.asyncio
 async def test_overdue_curriculum_mutation_captures_before_worker(tma_world):
     """The first post-deadline write must freeze the pre-write roster."""
