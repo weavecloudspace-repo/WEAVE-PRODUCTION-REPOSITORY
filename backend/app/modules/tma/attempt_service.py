@@ -185,7 +185,9 @@ class TMAAttemptService:
                         and is_open
                         and attempt.auto_zeroed_at is not None
                         and attempt.auto_zero_resolved_at is None
-                        else attempt.status if attempt else None
+                        else attempt.status
+                        if attempt
+                        else None
                     ),
                     attempt_id=attempt.id if attempt else None,
                     auto_zeroed_at=getattr(attempt, "auto_zeroed_at", None) if attempt else None,
