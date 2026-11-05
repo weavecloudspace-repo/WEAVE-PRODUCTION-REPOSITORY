@@ -89,7 +89,7 @@ export default function StudentSubjectTma({ subject }) {
                   {item.availability_issue
                     ? item.availability_issue
                     : item.attempt_status === "submitted"
-                      ? item.auto_zeroed_at
+                      ? item.auto_zeroed_at && !item.auto_zero_resolved_at
                       ? "Missed deadline · zero recorded"
                       : "Submitted · your result is ready"
                     : item.status === "closed"

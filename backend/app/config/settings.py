@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     TMA_ZERO_BATCH_SIZE: int = Field(default=200, ge=1, le=500)
     TMA_ZERO_BATCHES_PER_POLL: int = Field(default=8, ge=1, le=32)
     TMA_ZERO_POLL_BUDGET_SECONDS: float = Field(default=90, ge=1, le=100)
+    TMA_ZERO_RETRY_COOLDOWN_SECONDS: int = Field(default=120, ge=0, le=3600)
     APP_NAME: str = "School Management System"
     API_V1_PREFIX: str = "/api/v1"
 

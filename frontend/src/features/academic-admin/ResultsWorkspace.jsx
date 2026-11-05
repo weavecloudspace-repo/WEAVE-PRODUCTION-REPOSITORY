@@ -5,6 +5,7 @@ import { useSearchParams } from "react-router-dom";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
+import ResultLifecycleMenu from "./ResultLifecycleMenu";
 import { useToast } from "../../hooks/useToast";
 import { academicService } from "../../services/academicService";
 import { classService } from "../../services/academicsService";
@@ -107,8 +108,10 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
   const [results, setResults] = useState([]);
   const [resultTotal, setResultTotal] = useState(0);
   const [resultPage, setResultPage] = useState(0);
-  const [resultSearch, setResultSearch] = useState("");
-  const [appliedResultSearch, setAppliedResultSearch] = useState("");
+  const [resultSearch, setResultSearch] = useState(() => searchParams.get("search") || "");
+  const [appliedResultSearch, setAppliedResultSearch] = useState(
+    () => (searchParams.get("search") || "").trim(),
+  );
   const resultsRequestVersion = useRef(0);
 
   useEffect(() => {
@@ -119,13 +122,13 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
   const [entryResults, setEntryResults] = useState([]);
   const [entryResultsLoading, setEntryResultsLoading] = useState(false);
   const [entryResultsError, setEntryResultsError] = useState("");
-  const [filters, setFilters] = useState({
-    class_id: "",
-    academic_session_id: "",
-    academic_term_id: "",
+  const [filters, setFilters] = useState(() => ({
+    class_id: searchParams.get("class_id") || "",
+    academic_session_id: searchParams.get("academic_session_id") || "",
+    academic_term_id: searchParams.get("academic_term_id") || "",
     status: "",
     subject_id: "",
-  });
+  }));
   const [form, setForm] = useState(BLANK_FORM);
   const [pendingAction, setPendingAction] = useState(null);
   const [reopenTarget, setReopenTarget] = useState(null);
@@ -619,25 +622,25 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
     setSaving(reopenTarget.id);
     try {
       await academicService.reopenResult(reopenTarget.id, { reason: reopenReason.trim() });
-      showSuccess("Result reopened to draft for correction.");
+      showSuccess("Result returned to draft for correction.");
       setReopenTarget(null);
       setReopenReason("");
       await loadResults();
     } catch (requestError) {
-      showError(getErrorMessage(requestError, "Could not reopen result."));
+      showError(getErrorMessage(requestError, "Could not return result to draft."));
     } finally {
       setSaving("");
     }
   };
 
   const rowActions = (item) => (
-    <ResultActions
+    <ResultLifecycleMenu
       item={item}
       periodEditable={periodEditable}
-      busy={saving === item.id}
-      onEdit={editResult}
+      busy={Boolean(saving)}
+      onEdit={() => editResult(item)}
       onTransition={(status) => setPendingAction({ item, status })}
-      onReopen={() => {
+      onReturnToDraft={() => {
         setReopenTarget(item);
         setReopenReason("");
       }}
@@ -919,7 +922,7 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
 
       <RecordList
         title={`Results${loading ? "" : ` (${resultTotal})`}`}
-        description="Inspect score details and move each result through Draft → Submitted → Approved → Locked from its row."
+        description="Review each result and use the actions menu to advance its lifecycle or return it to draft for corrections."
         actions={
           <Button type="button" disabled={!limitsConfigured} onClick={() => { resetForm(); selectView("entry"); }}>
             <Plus className="h-4 w-4" /> Create result
@@ -971,14 +974,17 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
 
       <Modal
         open={Boolean(reopenTarget)}
-        title="Reopen locked result"
-        description="Reopening returns the result to draft and marks affected generated reports outdated without altering published evidence."
+        title={reopenTarget?.status === "locked" ? "Reopen locked result" : "Return result to draft"}
+        description={reopenTarget?.status === "locked"
+          ? "Reopening this locked result returns it to draft and marks generated reports outdated. Published evidence is preserved. An audit reason is required."
+          : "This result will return to draft for corrections. Submission and approval metadata will be reset, and the reason will be recorded in the audit history."
+        }
         onClose={saving ? undefined : () => setReopenTarget(null)}
         footer={
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" disabled={Boolean(saving)} onClick={() => setReopenTarget(null)}>Cancel</Button>
             <Button type="button" variant="danger" disabled={Boolean(saving) || reopenReason.trim().length < 3} onClick={reopenResult}>
-              {saving ? "Reopening..." : "Reopen result"}
+              {saving ? "Updating..." : "Return to draft"}
             </Button>
           </div>
         }
@@ -987,24 +993,6 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
       </Modal>
     </>
   );
-}
-
-function ResultActions({ item, periodEditable, busy, onEdit, onTransition, onReopen }) {
-  if (item.status === "draft") {
-    return (
-      <>
-        <Button type="button" size="small" variant="outline" disabled={!periodEditable || busy} onClick={() => onEdit(item)}>Edit</Button>
-        <Button type="button" size="small" variant="success" disabled={!periodEditable || busy} onClick={() => onTransition("submitted")}>Submit</Button>
-      </>
-    );
-  }
-  if (item.status === "submitted") {
-    return <Button type="button" size="small" variant="success" disabled={!periodEditable || busy} onClick={() => onTransition("approved")}>Approve</Button>;
-  }
-  if (item.status === "approved") {
-    return <Button type="button" size="small" variant="danger" disabled={!periodEditable || busy} onClick={() => onTransition("locked")}>Lock</Button>;
-  }
-  return <Button type="button" size="small" variant="outline" disabled={!periodEditable || busy} onClick={onReopen}>Reopen</Button>;
 }
 
 function ResultInspector({ item, actions }) {

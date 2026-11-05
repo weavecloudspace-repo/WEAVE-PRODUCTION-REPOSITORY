@@ -25,6 +25,8 @@ def context(monkeypatch):
         activated_at=datetime.now(timezone.utc),
         closed_at=datetime.now(timezone.utc),
         closes_at=datetime.now(timezone.utc) + timedelta(days=3),
+        zero_grading_requested_at=None,
+        zero_grading_completed_at=None,
         created_by_actor_type=TMAActorType.TEACHER,
         created_by_actor_id=uuid.uuid4(),
     )
@@ -34,6 +36,8 @@ def context(monkeypatch):
     readiness = AsyncMock(return_value=[])
     save = AsyncMock()
     invalidation = AsyncMock()
+    monkeypatch.setattr(mod.TMAAcademicGuard, "lock", AsyncMock())
+    monkeypatch.setattr(mod.TMAAcademicGuard, "require_draft_results", AsyncMock())
     monkeypatch.setattr(mod.TMAAssignmentRepository, "get_by_id", lookup)
     monkeypatch.setattr(mod.TMAAuthorizationService, "require_assignment_access", access)
     monkeypatch.setattr(mod.TMALifecycleService, "_readiness_errors", readiness)
@@ -58,7 +62,10 @@ def context(monkeypatch):
 
 async def reopen(c):
     return await mod.TMALifecycleService.reopen_assignment(
-        c.db, actor=c.actor, assignment_id=c.assignment.id
+        c.db,
+        actor=c.actor,
+        assignment_id=c.assignment.id,
+        closes_at=datetime.now(timezone.utc) + timedelta(days=5),
     )
 
 

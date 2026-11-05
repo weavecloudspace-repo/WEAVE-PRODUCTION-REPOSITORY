@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ from app.modules.tma.grading_service import TMAGradingService
 from app.modules.tma.models import (
     TMAAssignment,
     TMAAssignmentStatus,
+    TMAClosureRun,
     TMAAttemptStatus,
     TMAParticipant,
     TMAZeroGradingFailure,
@@ -57,7 +58,11 @@ class TMADeadlineZeroService:
     ) -> bool:
         tenant_id = assignment.tenant_id
         historical = await TMADeadlineEligibilityRepository.enrollment(
-            db, tenant_id=tenant_id, revision_id=revision_id, student_id=student_id
+            db,
+            tenant_id=tenant_id,
+            revision_id=revision_id,
+            student_id=student_id,
+            assignment=assignment,
         )
         if historical is None:
             raise ConflictException("Student was not eligible at this revision's deadline.")
@@ -84,10 +89,35 @@ class TMADeadlineZeroService:
             )
         if participant is None:
             raise ConflictException("Unable to register missed TMA participation.")
+        # Only a brand-new worker-created attempt is known NOT to have been
+        # opened by the student. Old attempts with unknown origin stay NULL.
+        existing_attempt = await TMAAttemptRepository.get_by_participant(
+            db, tenant_id, participant.id
+        )
         attempt = await TMAAttemptRepository.create_if_missing(
             db, tenant_id, participant.id, revision_id
         )
+        if existing_attempt is None:
+            attempt.started_by_student = False
         if attempt.status == TMAAttemptStatus.SUBMITTED:
+            return False
+        if (
+            getattr(attempt, "auto_zeroed_at", None) is not None
+            and getattr(attempt, "auto_zero_resolved_at", None) is None
+            and getattr(attempt, "score_reversed_at", None) is None
+            and attempt.score_id is not None
+        ):
+            # The student missed another closure. The original zero is still
+            # authoritative: do not duplicate the score or erase its history.
+            # Reopened attempts can retain an authoritative original zero.
+            # Restore every required submission field rather than only status.
+            if getattr(attempt, "score_snapshot", None) is not None and attempt.score_snapshot != 0:
+                raise ConflictException("Existing automatic zero has unexpected score provenance.")
+            attempt.status = TMAAttemptStatus.SUBMITTED
+            attempt.submitted_at = attempt.auto_zeroed_at
+            attempt.correct_answers = 0
+            attempt.total_questions = total_questions
+            await TMAAttemptRepository.save(db, attempt)
             return False
         # This writes a genuine 0 CA component and captures the exact score ID
         # on the attempt for the existing cancellation worker to reverse.
@@ -100,7 +130,9 @@ class TMADeadlineZeroService:
             correct=0,
             total=total_questions,
             attempt=attempt,
-            scoring_date=assignment.closes_at.date(),
+            scoring_date=min(
+                assignment.closes_at, getattr(assignment, "closed_at", None) or assignment.closes_at
+            ).date(),
             deadline_subject_id=subject_id,
         )
         attempt.status = TMAAttemptStatus.SUBMITTED
@@ -119,6 +151,10 @@ class TMADeadlineZeroService:
         *,
         now: datetime | None = None,
         tenant_ids: set[uuid.UUID] | None = None,
+        assignment_id: uuid.UUID | None = None,
+        closed_at: datetime | None = None,
+        skip_assignment_ids: set[uuid.UUID] | None = None,
+        retry_cooldown_seconds: int = 0,
     ) -> dict[str, int]:
         current = now or datetime.now(timezone.utc)
         # Existing CLOSED TMAs are not backfilled: only assignments closed by
@@ -137,11 +173,30 @@ class TMADeadlineZeroService:
                 .join(tenant_turn, tenant_turn.c.tenant_id == TMAAssignment.tenant_id)
                 .where(
                     *([TMAAssignment.tenant_id.in_(tenant_ids)] if tenant_ids is not None else []),
+                    *([TMAAssignment.id == assignment_id] if assignment_id is not None else []),
+                    *([TMAAssignment.closed_at == closed_at] if closed_at is not None else []),
+                    *(
+                        [TMAAssignment.id.not_in(skip_assignment_ids)]
+                        if skip_assignment_ids
+                        else []
+                    ),
+                    *(
+                        [
+                            or_(
+                                TMAAssignment.zero_grading_error.is_(None),
+                                TMAAssignment.zero_grading_last_processed_at.is_(None),
+                                TMAAssignment.zero_grading_last_processed_at
+                                <= current - timedelta(seconds=retry_cooldown_seconds),
+                            )
+                        ]
+                        if retry_cooldown_seconds > 0
+                        else []
+                    ),
                     TMAAssignment.status == TMAAssignmentStatus.CLOSED,
                     TMAAssignment.zero_grading_requested_at.is_not(None),
                     TMAAssignment.zero_grading_completed_at.is_(None),
                     TMAAssignment.closes_at.is_not(None),
-                    TMAAssignment.closes_at <= current,
+                    TMAAssignment.closed_at.is_not(None),
                 )
                 .order_by(
                     tenant_turn.c.last_processed.asc().nullsfirst(),
@@ -155,6 +210,8 @@ class TMADeadlineZeroService:
         ).scalar_one_or_none()
         if assignment is None:
             return {"zeroed": 0, "blocked": 0, "pending": 0}
+        if skip_assignment_ids is not None:
+            skip_assignment_ids.add(assignment.id)
 
         try:
             revision = await TMARevisionRepository.get_by_number(
@@ -172,9 +229,8 @@ class TMADeadlineZeroService:
             if not questions:
                 raise ConflictException("Cannot record zero without published questions.")
             await TMAAuthorizationService.require_open_term(db, assignment)
-            await TMADeadlineEligibilityRepository.capture(
-                db, tenant_id=assignment.tenant_id, assignment_id=assignment.id
-            )
+            # Reopened revisions must never inherit an old closure's exemptions.
+            closure = await TMADeadlineEligibilityRepository._closure(db, assignment)
             students = await TMADeadlineEligibilityRepository.pending(
                 db, assignment=assignment, revision_id=revision.id, limit=cls.MAX_WRITES + 1
             )
@@ -206,6 +262,7 @@ class TMADeadlineZeroService:
                         tenant_id=assignment.tenant_id,
                         assignment_id=assignment.id,
                         revision_number=assignment.current_revision_number,
+                        closure_run_id=closure.id,
                         student_id=student_id,
                         reason=error,
                         attempts=1,
@@ -213,7 +270,7 @@ class TMADeadlineZeroService:
                     )
                     await db.execute(
                         stmt.on_conflict_do_update(
-                            constraint="uq_tma_zero_failure_revision_student",
+                            constraint="uq_tma_zero_failure_cycle_student",
                             set_={
                                 "reason": error,
                                 "attempts": TMAZeroGradingFailure.attempts + 1,
@@ -250,6 +307,7 @@ class TMADeadlineZeroService:
                         TMAZeroGradingFailure.tenant_id == assignment.tenant_id,
                         TMAZeroGradingFailure.assignment_id == assignment.id,
                         TMAZeroGradingFailure.revision_number == assignment.current_revision_number,
+                        TMAZeroGradingFailure.closure_run_id == closure.id,
                         TMAZeroGradingFailure.resolved_at.is_(None),
                     )
                 )
@@ -258,6 +316,19 @@ class TMADeadlineZeroService:
             if not more and not blocked and not unresolved:
                 assignment.zero_grading_completed_at = current
                 assignment.zero_grading_error = None
+                closure = (
+                    await db.execute(
+                        select(TMAClosureRun)
+                        .where(
+                            TMAClosureRun.tenant_id == assignment.tenant_id,
+                            TMAClosureRun.assignment_id == assignment.id,
+                            TMAClosureRun.closed_at == assignment.closed_at,
+                        )
+                        .with_for_update()
+                    )
+                ).scalar_one_or_none()
+                if closure is not None:
+                    closure.completed_at = current
             elif unresolved:
                 assignment.zero_grading_error = (
                     f"{unresolved} student(s) require academic reconciliation. "
@@ -280,6 +351,10 @@ class TMADeadlineZeroService:
             )
             await db.commit()
             await flush_cache_invalidation_events(db)
+            # Let the same poll continue draining a healthy large assignment.
+            # Blocked assignments remain excluded from this polling cycle.
+            if more and not blocked and not unresolved and skip_assignment_ids is not None:
+                skip_assignment_ids.discard(assignment.id)
             return {
                 "zeroed": processed,
                 "blocked": blocked,

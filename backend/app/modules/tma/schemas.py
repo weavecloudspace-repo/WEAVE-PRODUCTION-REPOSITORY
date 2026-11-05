@@ -12,7 +12,15 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from app.modules.tma.models import (
     TMAActorType,
@@ -106,6 +114,12 @@ class TMAAssignmentUpdate(TMAInput):
         return value
 
 
+class TMAReopenRequest(TMAInput):
+    """A new future deadline is required to reopen an already closed TMA."""
+
+    closes_at: AwareDatetime
+
+
 class TMAAssignmentResponse(TMAOutput):
     id: uuid.UUID
     academic_level_id: uuid.UUID
@@ -118,8 +132,19 @@ class TMAAssignmentResponse(TMAOutput):
     created_by_actor_type: TMAActorType
     created_by_actor_id: uuid.UUID
     lead_teacher_membership_id: uuid.UUID | None = None
+    zero_grading_requested_at: datetime | None = None
     zero_grading_completed_at: datetime | None = None
     zero_grading_error: str | None = None
+
+    @computed_field
+    @property
+    def grading_state(self) -> str | None:
+        if self.status != TMAAssignmentStatus.CLOSED or self.zero_grading_requested_at is None:
+            return None
+        if self.zero_grading_completed_at is not None:
+            return "completed"
+        return "needs_attention" if self.zero_grading_error else "pending"
+
     activated_at: datetime | None
     closes_at: datetime | None
     closed_at: datetime | None
@@ -171,6 +196,9 @@ class TMARevisionHistoryResponse(TMAOutput):
 
 class TMAZeroGradingConflictResponse(TMAOutput):
     student_id: uuid.UUID
+    student_name: str | None = None
+    admission_number: str | None = None
+    class_id: uuid.UUID | None = None
     reason: str
     attempts: int
     last_failed_at: datetime
@@ -185,6 +213,9 @@ class TMAZeroExemptionRequest(TMAInput):
 
 class TMACancellationConflictResponse(TMAOutput):
     student_id: uuid.UUID
+    student_name: str | None = None
+    admission_number: str | None = None
+    class_id: uuid.UUID | None = None
     attempt_id: uuid.UUID
     score_id: uuid.UUID | None = None
     reason: str
@@ -422,6 +453,7 @@ class TMASubmitResponse(TMAOutput):
     component_score: Decimal = Field(ge=0, max_digits=5, decimal_places=2)
     submitted_at: datetime
     auto_zeroed_at: datetime | None = None
+    auto_zero_resolved_at: datetime | None = None
 
 
 class TMAStudentAssignmentResponse(TMAOutput):
@@ -435,6 +467,7 @@ class TMAStudentAssignmentResponse(TMAOutput):
     attempt_status: TMAAttemptStatus | None
     attempt_id: uuid.UUID | None = None
     auto_zeroed_at: datetime | None = None
+    auto_zero_resolved_at: datetime | None = None
     closes_at: datetime | None
     can_start_or_resume: bool
     availability_issue: str | None = None

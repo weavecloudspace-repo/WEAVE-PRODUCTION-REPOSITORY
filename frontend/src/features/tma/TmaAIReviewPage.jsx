@@ -153,7 +153,7 @@ function Review({ role, assignmentId, draftId }) {
       </Link>
       <header className="my-5 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
+          <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold focus:outline-none">
             Review AI questions
           </h1>
           <p className="mt-1 text-sm text-text-muted">

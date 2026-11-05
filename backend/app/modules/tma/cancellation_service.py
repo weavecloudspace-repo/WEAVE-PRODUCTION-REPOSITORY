@@ -26,10 +26,13 @@ from app.modules.student_academics.models import (
 )
 from app.modules.student_academics.repository import StudentAcademicRepository
 from app.modules.student_academics.write_guard import ensure_academic_write_window
+from app.modules.tma.academic_guard import TMAAcademicGuard
+from app.modules.tma.deadline_eligibility_repository import TMADeadlineEligibilityRepository
 from app.modules.tma.authorization import TMAAuthor, TMAAuthorizationService
 from app.modules.tma.models import (
     TMAAssignmentRevision,
     TMAAssignmentStatus,
+    TMAClosureRun,
     TMAAttempt,
     TMAAttemptStatus,
     TMACancellationRun,
@@ -100,10 +103,33 @@ class TMACancellationService:
             return assignment
         if assignment.status != TMAAssignmentStatus.ACTIVE:
             raise ConflictException("Only an active TMA can be closed.")
+        if assignment.closes_at is None:
+            raise ConflictException("Cannot close a TMA without a submission deadline.")
+        revision = await TMARevisionRepository.get_by_number(
+            db, actor.tenant_id, assignment.id, assignment.current_revision_number
+        )
+        if revision is None:
+            raise ConflictException("Published TMA revision was not found.")
+        closed_at = datetime.now(timezone.utc)
         assignment.status = TMAAssignmentStatus.CLOSED
-        assignment.closed_at = datetime.now(timezone.utc)
-        if getattr(assignment, "closes_at", None) is not None:
-            assignment.zero_grading_requested_at = assignment.closed_at
+        assignment.closed_at = closed_at
+        assignment.zero_grading_requested_at = closed_at
+        assignment.zero_grading_completed_at = None
+        db.add(
+            TMAClosureRun(
+                tenant_id=assignment.tenant_id,
+                assignment_id=assignment.id,
+                revision_id=revision.id,
+                closed_at=closed_at,
+                cutoff_at=min(assignment.closes_at, closed_at),
+                original_deadline_at=assignment.closes_at,
+                kind="manual",
+            )
+        )
+        await db.flush()
+        await TMADeadlineEligibilityRepository.capture(
+            db, tenant_id=assignment.tenant_id, assignment_id=assignment.id
+        )
         await db.commit()
         await flush_cache_invalidation_events(db)
         return assignment
@@ -117,6 +143,8 @@ class TMACancellationService:
         assignment_id: uuid.UUID,
         reason: str,
     ) -> TMACancellationRun:
+        # Shared lock blocks concurrent result finalization while cancellation starts.
+        await TMAAcademicGuard.lock(db, actor.tenant_id)
         assignment = await cls._assignment(db, actor=actor, assignment_id=assignment_id)
         if assignment.status == TMAAssignmentStatus.CANCELLING:
             run = await cls._run(
@@ -129,6 +157,15 @@ class TMACancellationService:
             return run
         if assignment.status != TMAAssignmentStatus.CLOSED:
             raise ConflictException("Close the assignment before cancelling it.")
+        if (
+            assignment.zero_grading_requested_at is not None
+            and assignment.zero_grading_completed_at is None
+        ):
+            raise ConflictException(
+                "Wait for missed-deadline grading to finish or resolve its errors "
+                "before cancelling this assignment."
+            )
+        await TMAAcademicGuard.require_draft_results(db, assignment)
         revision = await TMARevisionRepository.get_by_number(
             db,
             actor.tenant_id,
@@ -157,13 +194,14 @@ class TMACancellationService:
         return run
 
     @staticmethod
-    async def _enqueue(run: TMACancellationRun) -> None:
+    async def _enqueue(run: TMACancellationRun, *, retry: bool = False) -> None:
         from app.core.queue.arq import enqueue_tma_cancellation_job
 
         try:
             queued = await enqueue_tma_cancellation_job(
                 run_id=str(run.id),
                 tenant_id=str(run.tenant_id),
+                **({"retry_token": uuid.uuid4().hex} if retry else {}),
             )
             if not queued:
                 logger.warning("TMA cancellation enqueue deferred to recovery poll: %s", run.id)
@@ -204,7 +242,7 @@ class TMACancellationService:
         run.error_message = None
         await db.commit()
         await flush_cache_invalidation_events(db)
-        await cls._enqueue(run)
+        await cls._enqueue(run, retry=True)
         return run
 
     @staticmethod

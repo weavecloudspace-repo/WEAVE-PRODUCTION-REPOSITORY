@@ -174,6 +174,12 @@ class TMAAssignment(BaseModel):
 
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # The start of reliable closure-time tracking for this assignment.
+    # A prior deadline cannot be assigned marks using later mutable records.
+    closure_tracking_started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("statement_timestamp()")
+    )
+
     # Enforced UTC deadline. The worker persists CLOSED; student writes reject
     # overdue assignments immediately, even if the worker has not run yet.
     closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -893,6 +899,46 @@ class TMAParticipant(BaseModel):
     )
 
 
+class TMAClosureRun(BaseModel):
+    """One manual or automatic closure event with independent immutable eligibility."""
+
+    __tablename__ = "tma_closure_runs"
+
+    assignment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    revision_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    closed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    cutoff_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    original_deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    eligibility_captured_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "assignment_id"],
+            [f"{PUBLIC_SCHEMA}.tma_assignments.tenant_id", f"{PUBLIC_SCHEMA}.tma_assignments.id"],
+            name="fk_tma_closure_tenant_assignment",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "revision_id"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_assignment_revisions.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_assignment_revisions.id",
+            ],
+            name="fk_tma_closure_tenant_revision",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("tenant_id", "id", name="uq_tma_closure_tenant_id"),
+        UniqueConstraint(
+            "tenant_id", "assignment_id", "closed_at", name="uq_tma_closure_assignment_closed_at"
+        ),
+        Index("ix_tma_closure_assignment", "tenant_id", "assignment_id", "closed_at"),
+    )
+
+
 class TMAAttempt(BaseModel):
     """
     Represents a student's attempt at a TMA assignment revision.
@@ -949,6 +995,15 @@ class TMAAttempt(BaseModel):
         nullable=True,
     )
 
+    # NULL for old records whose genuine start cannot be proven.
+    # The worker never sets this field for system-generated zero attempts.
+    student_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # None = historical origin unknown; False = worker-generated only;
+    # True = student actually opened the attempt.
+    started_by_student: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
     correct_answers: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
@@ -967,6 +1022,11 @@ class TMAAttempt(BaseModel):
         DateTime(timezone=True), nullable=True
     )
     auto_zeroed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Preserve the original missed-deadline event when a later genuine
+    # submission replaces the automatic zero.
+    auto_zero_resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (
         # Ensure the participant belongs to the same tenant.
@@ -1205,6 +1265,7 @@ class TMAZeroGradingFailure(BaseModel):
 
     assignment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    closure_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
@@ -1235,18 +1296,66 @@ class TMAZeroGradingFailure(BaseModel):
             ],
             name="fk_tma_zero_failure_revision",
         ),
+        ForeignKeyConstraint(
+            ["tenant_id", "closure_run_id"],
+            [f"{PUBLIC_SCHEMA}.tma_closure_runs.tenant_id", f"{PUBLIC_SCHEMA}.tma_closure_runs.id"],
+            name="fk_tma_zero_failure_closure_run",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint(
             "tenant_id",
             "assignment_id",
             "revision_number",
+            "closure_run_id",
             "student_id",
-            name="uq_tma_zero_failure_revision_student",
+            name="uq_tma_zero_failure_cycle_student",
+        ),
+        Index(
+            "uq_tma_zero_failure_legacy_student",
+            "tenant_id",
+            "assignment_id",
+            "revision_number",
+            "student_id",
+            unique=True,
+            postgresql_where=text("closure_run_id IS NULL"),
         ),
         Index(
             "ix_tma_zero_failure_pending",
             "tenant_id",
             "assignment_id",
             "resolved_at",
+        ),
+    )
+
+
+class TMAClosureEligibility(Base):
+    """Immutable student enrollment and subject at one specific TMA closure."""
+
+    __tablename__ = "tma_closure_eligibility"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    closure_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    student_enrollment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    class_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    subject_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "closure_run_id"],
+            [f"{PUBLIC_SCHEMA}.tma_closure_runs.tenant_id", f"{PUBLIC_SCHEMA}.tma_closure_runs.id"],
+            name="fk_tma_closure_eligibility_run",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "student_enrollment_id", "student_id", "class_id"],
+            [
+                f"{PUBLIC_SCHEMA}.student_enrollments.tenant_id",
+                f"{PUBLIC_SCHEMA}.student_enrollments.id",
+                f"{PUBLIC_SCHEMA}.student_enrollments.student_id",
+                f"{PUBLIC_SCHEMA}.student_enrollments.class_id",
+            ],
+            name="fk_tma_closure_eligibility_enrollment",
         ),
     )
 

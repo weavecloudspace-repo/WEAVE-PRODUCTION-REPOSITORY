@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -13,7 +14,8 @@ from app.core.exceptions import ConflictException, ForbiddenException, NotFoundE
 from app.modules.tenant_admins.models import TenantAdmin
 from app.modules.tma.authorization import TMAAuthor, TMAAuthorizationService
 from app.modules.tma.models import (
-    TMADeadlineEligibility,
+    TMAClosureRun,
+    TMAClosureEligibility,
     TMAAssignmentStatus,
     TMAAssignmentRevision,
     TMAAttempt,
@@ -22,6 +24,9 @@ from app.modules.tma.models import (
     TMAZeroGradingFailure,
 )
 from app.modules.tma.repository import TMAAssignmentRepository
+
+
+logger = logging.getLogger(__name__)
 
 
 class TMAZeroReconciliationService:
@@ -39,6 +44,15 @@ class TMAZeroReconciliationService:
         authorized_classes = await TMAAuthorizationService.authorized_classroom_ids(
             db, actor=actor, assignment=assignment
         )
+        current_closure = (
+            select(TMAClosureRun.id)
+            .where(
+                TMAClosureRun.tenant_id == actor.tenant_id,
+                TMAClosureRun.assignment_id == assignment.id,
+                TMAClosureRun.closed_at == assignment.closed_at,
+            )
+            .scalar_subquery()
+        )
         scope = []
         if authorized_classes is not None:
             revisions = select(TMAAssignmentRevision.id).where(
@@ -47,10 +61,10 @@ class TMAZeroReconciliationService:
                 TMAAssignmentRevision.revision_number == assignment.current_revision_number,
             )
             students = union(
-                select(TMADeadlineEligibility.student_id).where(
-                    TMADeadlineEligibility.tenant_id == actor.tenant_id,
-                    TMADeadlineEligibility.revision_id.in_(revisions),
-                    TMADeadlineEligibility.class_id.in_(authorized_classes),
+                select(TMAClosureEligibility.student_id).where(
+                    TMAClosureEligibility.tenant_id == actor.tenant_id,
+                    TMAClosureEligibility.closure_run_id == current_closure,
+                    TMAClosureEligibility.class_id.in_(authorized_classes),
                 ),
                 select(TMAParticipant.student_id).where(
                     TMAParticipant.tenant_id == actor.tenant_id,
@@ -68,6 +82,7 @@ class TMAZeroReconciliationService:
                         TMAZeroGradingFailure.tenant_id == actor.tenant_id,
                         TMAZeroGradingFailure.assignment_id == assignment_id,
                         TMAZeroGradingFailure.revision_number == assignment.current_revision_number,
+                        TMAZeroGradingFailure.closure_run_id == current_closure,
                         TMAZeroGradingFailure.resolved_at.is_(None),
                     )
                     .order_by(
@@ -112,6 +127,14 @@ class TMAZeroReconciliationService:
                     TMAZeroGradingFailure.tenant_id == actor.tenant_id,
                     TMAZeroGradingFailure.assignment_id == assignment_id,
                     TMAZeroGradingFailure.revision_number == assignment.current_revision_number,
+                    TMAZeroGradingFailure.closure_run_id
+                    == select(TMAClosureRun.id)
+                    .where(
+                        TMAClosureRun.tenant_id == actor.tenant_id,
+                        TMAClosureRun.assignment_id == assignment_id,
+                        TMAClosureRun.closed_at == assignment.closed_at,
+                    )
+                    .scalar_subquery(),
                     TMAZeroGradingFailure.student_id == student_id,
                 )
                 .with_for_update()
@@ -161,4 +184,33 @@ class TMAZeroReconciliationService:
         failure.resolved_by_actor_id = actor.id
         await db.commit()
         await flush_cache_invalidation_events(db)
+
+        # A successful exemption can unblock completion. Wake the worker now
+        # rather than waiting for the periodic sweep/cooldown. The immutable
+        # closure timestamp still prevents a stale job from grading a new cycle.
+        from app.core.queue.arq import enqueue_tma_zero_grading_job
+
+        try:
+            queued = await enqueue_tma_zero_grading_job(
+                assignment_id=str(assignment.id),
+                tenant_id=str(actor.tenant_id),
+                closed_at=assignment.closed_at.isoformat(),
+                reconciliation_id=str(failure.id),
+            )
+            if not queued:
+                logger.warning(
+                    "tma.deadline_zero.reconcile_enqueue_deferred",
+                    extra={
+                        "assignment_id": str(assignment.id),
+                    },
+                )
+        except Exception:
+            # The exemption has committed. The database sweep will recover
+            # pending grading even when Redis is temporarily unavailable.
+            logger.exception(
+                "tma.deadline_zero.reconcile_enqueue_failed",
+                extra={
+                    "assignment_id": str(assignment.id),
+                },
+            )
         return failure

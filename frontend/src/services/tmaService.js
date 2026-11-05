@@ -27,7 +27,7 @@ export const tmaService = {
     api.delete(path(id, `/questions/${question}`)),
   readiness: (id) => read(path(id, "/readiness")),
   activate: (id) => api.post(path(id, "/activate"), {}),
-  reopen: (id) => api.post(path(id, "/reopen"), {}),
+  reopen: (id, closesAt) => api.post(path(id, "/reopen"), { closes_at: closesAt }),
   close: (id) => api.post(path(id, "/close"), {}),
   cancel: (id, reason) => api.post(path(id, "/cancel"), { reason }),
   cancellation: (id) => read(path(id, "/cancellation")),

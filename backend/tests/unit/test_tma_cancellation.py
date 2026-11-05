@@ -31,6 +31,7 @@ def fake(status=TMAAssignmentStatus.CLOSED):
         tenant_id=uid(),
         status=status,
         closed_at=None,
+        closes_at=datetime.now(timezone.utc),
         current_revision_number=1,
         activated_at=None,
         zero_grading_requested_at=None,
@@ -56,6 +57,11 @@ async def test_manual_close_is_idempotent_and_does_not_change_scores(monkeypatch
         AsyncMock(return_value=assignment),
     )
     db = AsyncMock()
+    monkeypatch.setattr(
+        mod.TMARevisionRepository,
+        "get_by_number",
+        AsyncMock(return_value=SimpleNamespace(id=uid())),
+    )
     first = await mod.TMACancellationService.close(
         db,
         actor=actor,
@@ -122,6 +128,7 @@ async def test_close_can_be_cancelled_with_durable_run_and_replayed(monkeypatch)
         "actor_type",
         lambda _: TMAActorType.TENANT_ADMIN,
     )
+    monkeypatch.setattr(mod.TMAAcademicGuard, "require_draft_results", AsyncMock())
     enqueue = AsyncMock()
     monkeypatch.setattr(mod.TMACancellationService, "_enqueue", enqueue)
     db = AsyncMock()
@@ -490,3 +497,40 @@ async def test_reversal_never_deletes_modified_or_submitted_academic_result(monk
     db.commit.assert_not_awaited()
     assert run.status == "pending"
     assert assignment.status == TMAAssignmentStatus.CANCELLING
+
+
+@pytest.mark.asyncio
+async def test_retry_dispatches_fresh_job_id_after_committing_pending_state(monkeypatch):
+    from app.modules.tma import cancellation_service as mod
+    from app.core.queue import arq
+
+    assignment, actor = fake(TMAAssignmentStatus.CANCELLING)
+    run = SimpleNamespace(
+        id=uid(),
+        tenant_id=actor.tenant_id,
+        assignment_id=assignment.id,
+        status="failed",
+        error_message="previous error",
+    )
+    monkeypatch.setattr(
+        mod.TMACancellationService, "_assignment", AsyncMock(return_value=assignment)
+    )
+    monkeypatch.setattr(mod.TMACancellationService, "_run", AsyncMock(return_value=run))
+    monkeypatch.setattr(mod, "flush_cache_invalidation_events", AsyncMock())
+    enqueue = AsyncMock(return_value=True)
+    monkeypatch.setattr(arq, "enqueue_tma_cancellation_job", enqueue)
+    db = AsyncMock()
+
+    result = await mod.TMACancellationService.retry(
+        db,
+        actor=actor,
+        assignment_id=assignment.id,
+    )
+    assert result is run
+    assert run.status == "pending"
+    assert run.error_message is None
+    db.commit.assert_awaited_once()
+    enqueue.assert_awaited_once()
+    assert enqueue.await_args.kwargs["run_id"] == str(run.id)
+    assert enqueue.await_args.kwargs["tenant_id"] == str(run.tenant_id)
+    assert len(enqueue.await_args.kwargs["retry_token"]) == 32

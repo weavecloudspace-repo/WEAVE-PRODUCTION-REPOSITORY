@@ -66,7 +66,7 @@ class TMAGradingService:
         """Write only this TMA's component in the academic DRAFT result.
 
         Caller owns the transaction and holds the TMA attempt lock. Failures
-        abort submission. Existing component scores are never overwritten.
+        abort submission. Only an unchanged TMA-owned automatic zero can be replaced.
         """
         await ensure_academic_write_window(db, tenant_id=tenant_id)
         scheme = await AssessmentRepository.get_active_scheme(db, tenant_id)
@@ -104,6 +104,7 @@ class TMAGradingService:
             lock=True,
         )
         result = results.get(student_id)
+        component_row = None
         if result is not None:
             if result.status != AcademicResultStatus.DRAFT:
                 raise ConflictException("The academic result is already submitted or locked.")
@@ -119,9 +120,34 @@ class TMAGradingService:
                 lock=True,
             )
             if result.id in existing:
-                raise ConflictException(
-                    "CA component already has a score. TMA will not overwrite it."
+                current = existing[result.id]
+                # Only an unreversed, system-issued zero belonging to this exact
+                # attempt may be replaced. A manually entered zero is not enough.
+                eligible_zero = (
+                    attempt is not None
+                    and attempt.auto_zeroed_at is not None
+                    and attempt.auto_zero_resolved_at is None
+                    and attempt.score_reversed_at is None
+                    and attempt.score_id == current.id
+                    and attempt.score_snapshot == Decimal("0")
+                    and current.score == Decimal("0")
+                    and current.assessment_component_id == component.id
+                    and current.student_subject_result_id == result.id
+                    and current.cbt_score is None
+                    and current.theory_score is None
+                    and current.source_exam_id is None
                 )
+                if not eligible_zero:
+                    raise ConflictException(
+                        "CA component already contains a score. Weave will only replace "
+                        "an unchanged, verified automatic zero from this TMA."
+                    )
+                current.score = score
+                await db.flush()
+                attempt.score_snapshot = score
+                component_row = current
+            else:
+                component_row = None
         else:
             owners = await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
                 db,
@@ -175,13 +201,14 @@ class TMAGradingService:
                 recorded_by_actor_id=student_id,
             )
             await StudentAcademicRepository.upsert_result(db, result)
-        component_row = StudentAssessmentScore(
-            tenant_id=tenant_id,
-            student_subject_result_id=result.id,
-            assessment_component_id=component.id,
-            score=score,
-        )
-        await StudentAcademicRepository.add_component_scores_batch(db, [component_row])
+        if result is not None and component_row is None:
+            component_row = StudentAssessmentScore(
+                tenant_id=tenant_id,
+                student_subject_result_id=result.id,
+                assessment_component_id=component.id,
+                score=score,
+            )
+            await StudentAcademicRepository.add_component_scores_batch(db, [component_row])
         if attempt is not None:
             attempt.score_id = component_row.id
             attempt.score_snapshot = score

@@ -31,6 +31,7 @@ def assignment():
         tenant_id=uid(),
         status=TMAAssignmentStatus.CLOSED,
         closes_at=due(),
+        closed_at=due(),
         current_revision_number=1,
         academic_session_id=uid(),
         academic_term_id=uid(),
@@ -183,6 +184,7 @@ async def test_worker_finishes_when_all_current_students_are_submitted(monkeypat
     db.execute.side_effect = [
         SimpleNamespace(scalar_one_or_none=lambda: item),
         SimpleNamespace(scalar_one=lambda: 0),
+        SimpleNamespace(scalar_one_or_none=lambda: None),
     ]
     monkeypatch.setattr(
         mod.TMARevisionRepository,
@@ -195,6 +197,11 @@ async def test_worker_finishes_when_all_current_students_are_submitted(monkeypat
         AsyncMock(return_value=[(SimpleNamespace(), [])]),
     )
     monkeypatch.setattr(mod.TMADeadlineEligibilityRepository, "capture", AsyncMock())
+    monkeypatch.setattr(
+        mod.TMADeadlineEligibilityRepository,
+        "_closure",
+        AsyncMock(return_value=SimpleNamespace(id=uid())),
+    )
     monkeypatch.setattr(mod.TMAAuthorizationService, "require_open_term", AsyncMock())
     monkeypatch.setattr(mod.TMADeadlineEligibilityRepository, "pending", AsyncMock(return_value=[]))
     grade = AsyncMock()
@@ -229,6 +236,11 @@ async def test_worker_does_not_drop_reconciliation_errors(monkeypatch):
         AsyncMock(return_value=[(SimpleNamespace(), [])]),
     )
     monkeypatch.setattr(mod.TMADeadlineEligibilityRepository, "capture", AsyncMock())
+    monkeypatch.setattr(
+        mod.TMADeadlineEligibilityRepository,
+        "_closure",
+        AsyncMock(return_value=SimpleNamespace(id=uid())),
+    )
     monkeypatch.setattr(mod.TMAAuthorizationService, "require_open_term", AsyncMock())
     monkeypatch.setattr(
         mod.TMADeadlineEligibilityRepository, "pending", AsyncMock(return_value=[(uid(), None)])
@@ -246,6 +258,63 @@ async def test_worker_does_not_drop_reconciliation_errors(monkeypatch):
     assert outcome == {"zeroed": 0, "blocked": 1, "pending": 1}
     assert item.zero_grading_completed_at is None
     assert "Existing CA" in item.zero_grading_error
+
+
+@pytest.mark.asyncio
+async def test_second_closure_restores_original_zero_submission_metadata(monkeypatch):
+    item = assignment()
+    zeroed_at = datetime.now(timezone.utc) - timedelta(minutes=2)
+    attempt = SimpleNamespace(
+        status=TMAAttemptStatus.IN_PROGRESS,
+        submitted_at=None,
+        correct_answers=None,
+        total_questions=None,
+        auto_zeroed_at=zeroed_at,
+        auto_zero_resolved_at=None,
+        score_reversed_at=None,
+        score_id=uid(),
+        score_snapshot=Decimal("0.00"),
+    )
+    monkeypatch.setattr(
+        mod.TMADeadlineEligibilityRepository,
+        "enrollment",
+        AsyncMock(return_value=(SimpleNamespace(id=uid(), class_id=uid()), uid())),
+    )
+    monkeypatch.setattr(
+        mod.TMAParticipantRepository,
+        "get_by_revision_student",
+        AsyncMock(return_value=SimpleNamespace(id=uid())),
+    )
+    monkeypatch.setattr(
+        mod.TMAAttemptRepository, "get_by_participant", AsyncMock(return_value=attempt)
+    )
+    monkeypatch.setattr(
+        mod.TMAAttemptRepository, "create_if_missing", AsyncMock(return_value=attempt)
+    )
+    saved = AsyncMock()
+    grade = AsyncMock()
+    monkeypatch.setattr(mod.TMAAttemptRepository, "save", saved)
+    monkeypatch.setattr(mod.TMAGradingService, "persist_component_score", grade)
+    db = AsyncMock()
+    assert (
+        await mod.TMADeadlineZeroService._write_zero(
+            db,
+            assignment=item,
+            revision_id=uid(),
+            student_id=uid(),
+            total_questions=10,
+            current=datetime.now(timezone.utc),
+        )
+        is False
+    )
+    assert (
+        attempt.status,
+        attempt.submitted_at,
+        attempt.correct_answers,
+        attempt.total_questions,
+    ) == (TMAAttemptStatus.SUBMITTED, zeroed_at, 0, 10)
+    saved.assert_awaited_once_with(db, attempt)
+    grade.assert_not_awaited()
 
 
 def test_worker_only_scans_explicitly_queued_deadlines():

@@ -73,6 +73,9 @@ class BulkResultActionResponse(BaseModel):
     skipped: list[BulkSkippedItem]
 
 
+from app.modules.tma.academic_guard import TMAAcademicGuard
+
+
 class BulkResultLifecycleService:
     _PREVIOUS_STATUS = {
         AcademicResultStatus.SUBMITTED: AcademicResultStatus.DRAFT,
@@ -170,6 +173,7 @@ class BulkResultLifecycleService:
         actor: TenantAdmin,
         payload: AdminBulkTransitionRequest,
     ) -> BulkResultActionResponse:
+        await TMAAcademicGuard.lock(db, actor.tenant_id)
         await BulkResultLifecycleService._validate_period(
             db,
             actor.tenant_id,
@@ -199,6 +203,7 @@ class BulkResultLifecycleService:
                         result.status,
                         target,
                     )
+                    await TMAAcademicGuard.require_grading_finalized(db, result)
                     if target == AcademicResultStatus.SUBMITTED:
                         await StudentAcademicService._ensure_result_complete(db, result)
                     if (
