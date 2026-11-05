@@ -33,6 +33,8 @@ BEGIN
     IF NOT FOUND OR r.published_at IS NULL OR r.invalidated_at IS NOT NULL
         OR r.eligibility_tracking_started_at IS NULL
         OR r.eligibility_tracking_started_at > v_run.cutoff_at
+        OR a.closure_tracking_started_at IS NULL
+        OR a.closure_tracking_started_at > v_run.cutoff_at
         OR v_run.cutoff_at > v_run.closed_at THEN RETURN false; END IF;
     INSERT INTO public.tma_closure_eligibility
         (tenant_id, closure_run_id, student_id, student_enrollment_id, class_id, subject_id)
@@ -155,6 +157,19 @@ TRACKED_TABLES = (
 
 
 def upgrade() -> None:
+    # Existing overdue production assignments cannot be reconstructed safely
+    # using only mutable records. Timestamp the beginning of reliable closure
+    # tracking; future-deadline assignments become eligible automatically.
+    op.add_column(
+        "tma_assignments",
+        sa.Column(
+            "closure_tracking_started_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("statement_timestamp()"),
+        ),
+        schema="public",
+    )
     op.add_column(
         "tma_closure_runs",
         sa.Column("eligibility_captured_at", sa.DateTime(timezone=True), nullable=True),
