@@ -919,7 +919,9 @@ class TMAClosureRun(BaseModel):
             name="fk_tma_closure_tenant_revision",
             ondelete="RESTRICT",
         ),
-        UniqueConstraint("tenant_id", "assignment_id", "closed_at", name="uq_tma_closure_assignment_closed_at"),
+        UniqueConstraint(
+            "tenant_id", "assignment_id", "closed_at", name="uq_tma_closure_assignment_closed_at"
+        ),
         Index("ix_tma_closure_assignment", "tenant_id", "assignment_id", "closed_at"),
     )
 
