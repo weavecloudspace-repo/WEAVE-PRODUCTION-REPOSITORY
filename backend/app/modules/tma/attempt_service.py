@@ -388,17 +388,22 @@ class TMAAttemptService:
         student: Student,
         attempt_id: uuid.UUID,
     ) -> TMAStartResponse:
-        attempt, _, _, _, _ = await TMAAttemptService._locked_active_attempt(
+        # An automatic zero needs an assignment UPDATE lock to resume.
+        # Detect it before acquiring the normal assignment SHARE lock.
+        observed, _, revision = await TMAAttemptService._load_owned_attempt(
             db, student=student, attempt_id=attempt_id
         )
         if (
-            attempt.status == TMAAttemptStatus.SUBMITTED
-            and attempt.auto_zeroed_at is not None
-            and attempt.auto_zero_resolved_at is None
+            observed.status == TMAAttemptStatus.SUBMITTED
+            and observed.auto_zeroed_at is not None
+            and observed.auto_zero_resolved_at is None
         ):
             return await TMAAttemptService.start_or_resume_attempt(
                 db, student=student, assignment_id=revision.assignment_id
             )
+        attempt, _, _, _, _ = await TMAAttemptService._locked_active_attempt(
+            db, student=student, attempt_id=attempt_id
+        )
         if attempt.status != TMAAttemptStatus.IN_PROGRESS:
             raise ConflictException("Assignment already submitted.")
         return await TMAAttemptService._build_start_response(db, student, attempt)
