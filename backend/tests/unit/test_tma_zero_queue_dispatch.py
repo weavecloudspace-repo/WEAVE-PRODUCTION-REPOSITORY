@@ -156,9 +156,7 @@ async def test_healthy_large_batch_remains_eligible_in_same_poll(monkeypatch):
         zero.TMARevisionRepository,
         "get_by_number",
         AsyncMock(
-            return_value=SimpleNamespace(
-                id=uuid.uuid4(), published_at=now, invalidated_at=None
-            )
+            return_value=SimpleNamespace(id=uuid.uuid4(), published_at=now, invalidated_at=None)
         ),
     )
     monkeypatch.setattr(
@@ -166,9 +164,7 @@ async def test_healthy_large_batch_remains_eligible_in_same_poll(monkeypatch):
         "list_for_revision_with_options",
         AsyncMock(return_value=[(SimpleNamespace(), [])]),
     )
-    monkeypatch.setattr(
-        zero.TMAAuthorizationService, "require_open_term", AsyncMock()
-    )
+    monkeypatch.setattr(zero.TMAAuthorizationService, "require_open_term", AsyncMock())
     monkeypatch.setattr(
         zero.TMADeadlineEligibilityRepository,
         "_closure",
@@ -185,13 +181,9 @@ async def test_healthy_large_batch_remains_eligible_in_same_poll(monkeypatch):
         yield
 
     db.begin_nested = nested
-    monkeypatch.setattr(
-        zero.TMADeadlineZeroService, "_write_zero", AsyncMock(return_value=True)
-    )
+    monkeypatch.setattr(zero.TMADeadlineZeroService, "_write_zero", AsyncMock(return_value=True))
     monkeypatch.setattr(zero, "flush_cache_invalidation_events", AsyncMock())
     seen = set()
-    result = await zero.TMADeadlineZeroService.process_pending(
-        db, skip_assignment_ids=seen
-    )
+    result = await zero.TMADeadlineZeroService.process_pending(db, skip_assignment_ids=seen)
     assert result == {"zeroed": 1, "blocked": 0, "pending": 1}
     assert seen == set()
