@@ -36,6 +36,11 @@ async def test_worker_closes_due_assignments_without_touching_student_scores(mon
     db.execute.return_value = SimpleNamespace(
         scalars=lambda: SimpleNamespace(all=lambda: [first, second])
     )
+    monkeypatch.setattr(
+        expiration.TMARevisionRepository,
+        "get_by_number",
+        AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
+    )
     invalidation = AsyncMock()
     monkeypatch.setattr(expiration, "flush_cache_invalidation_events", invalidation)
 
@@ -48,6 +53,10 @@ async def test_worker_closes_due_assignments_without_touching_student_scores(mon
     assert second.status == TMAAssignmentStatus.CLOSED
     assert first.closed_at == current
     assert second.closed_at == current
+    assert db.add.call_count == 2
+    closures = [call.args[0] for call in db.add.call_args_list]
+    assert all(item.kind == "automatic" for item in closures)
+    assert closures[0].cutoff_at == first.closes_at
     db.commit.assert_awaited_once()
     invalidation.assert_awaited_once_with(db)
     query = db.execute.call_args.args[0]
