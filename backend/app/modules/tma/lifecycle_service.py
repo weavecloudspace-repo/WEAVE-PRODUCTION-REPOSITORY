@@ -50,8 +50,8 @@ class TMALifecycleService:
         if assignment.status != TMAAssignmentStatus.CLOSED:
             raise ConflictException("Only a closed TMA can be reopened.")
         if (
-            assignment.zero_grading_requested_at is not None
-            and assignment.zero_grading_completed_at is None
+            getattr(assignment, "zero_grading_requested_at", None) is not None
+            and getattr(assignment, "zero_grading_completed_at", None) is None
         ):
             raise ConflictException(
                 "Missed-deadline grading is still processing. Wait for grading "
@@ -243,7 +243,6 @@ class TMALifecycleService:
         )
         TMAAuthorizationService.require_assignment_management(actor, assignment)
         TMAAuthorizationService.require_draft_assignment(assignment)
-        await TMAAcademicGuard.require_draft_results(db, assignment)
         if assignment.closes_at is None or assignment.closes_at <= datetime.now(timezone.utc):
             raise ConflictException("Set a future submission deadline before publishing.")
         errors = await TMALifecycleService._readiness_errors(db, assignment)
