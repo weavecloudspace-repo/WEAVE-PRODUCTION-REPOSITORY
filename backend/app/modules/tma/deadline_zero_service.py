@@ -58,7 +58,10 @@ class TMADeadlineZeroService:
     ) -> bool:
         tenant_id = assignment.tenant_id
         historical = await TMADeadlineEligibilityRepository.enrollment(
-            db, tenant_id=tenant_id, revision_id=revision_id, student_id=student_id,
+            db,
+            tenant_id=tenant_id,
+            revision_id=revision_id,
+            student_id=student_id,
             assignment=assignment,
         )
         if historical is None:
