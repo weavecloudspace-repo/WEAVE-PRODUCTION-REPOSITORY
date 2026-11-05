@@ -78,8 +78,10 @@ def upgrade() -> None:
         schema="public",
     )
     op.create_index(
-        "ix_tma_closure_assignment", "tma_closure_runs",
-        ["tenant_id", "assignment_id", "closed_at"], schema="public",
+        "ix_tma_closure_assignment",
+        "tma_closure_runs",
+        ["tenant_id", "assignment_id", "closed_at"],
+        schema="public",
     )
     # Preserve already closed assignments as legacy closure events. This
     # does not change any existing attempt, mark, report card, or revision.
