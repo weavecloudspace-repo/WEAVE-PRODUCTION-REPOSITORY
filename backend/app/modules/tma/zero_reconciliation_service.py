@@ -124,11 +124,13 @@ class TMAZeroReconciliationService:
                     TMAZeroGradingFailure.assignment_id == assignment_id,
                     TMAZeroGradingFailure.revision_number == assignment.current_revision_number,
                     TMAZeroGradingFailure.closure_run_id
-                    == select(TMAClosureRun.id).where(
+                    == select(TMAClosureRun.id)
+                    .where(
                         TMAClosureRun.tenant_id == actor.tenant_id,
                         TMAClosureRun.assignment_id == assignment_id,
                         TMAClosureRun.closed_at == assignment.closed_at,
-                    ).scalar_subquery(),
+                    )
+                    .scalar_subquery(),
                     TMAZeroGradingFailure.student_id == student_id,
                 )
                 .with_for_update()
