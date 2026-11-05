@@ -131,7 +131,7 @@ async def test_submission_rejects_existing_component_score(monkeypatch) -> None:
         academic_session_id=_id(),
         academic_term_id=_id(),
     )
-    with pytest.raises(ConflictException, match="already has a score"):
+    with pytest.raises(ConflictException, match="already contains a score"):
         await TMAGradingService.persist_component_score(
             db,
             tenant_id=tenant,
