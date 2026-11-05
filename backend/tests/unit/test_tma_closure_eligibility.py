@@ -46,7 +46,7 @@ def test_roster_query_uses_enrollment_timestamps_not_revision_snapshot():
             closed_at=datetime(2026, 11, 5, tzinfo=timezone.utc),
             closes_at=datetime(2026, 11, 6, tzinfo=timezone.utc),
         )
-    ).element.text.text
+    ).element.text
     assert "e.created_at <= CAST(:cutoff AS timestamptz)" in sql
     assert "tma_deadline_eligibility" not in sql
     assert "e.started_on" in sql
