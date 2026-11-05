@@ -75,6 +75,7 @@ class BulkResultActionResponse(BaseModel):
 
 from app.modules.tma.academic_guard import TMAAcademicGuard
 
+
 class BulkResultLifecycleService:
     _PREVIOUS_STATUS = {
         AcademicResultStatus.SUBMITTED: AcademicResultStatus.DRAFT,
