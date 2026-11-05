@@ -20,6 +20,11 @@ def upgrade() -> None:
     )
     op.add_column(
         "tma_attempts",
+        sa.Column("started_by_student", sa.Boolean(), nullable=True),
+        schema="public",
+    )
+    op.add_column(
+        "tma_attempts",
         sa.Column("auto_zero_resolved_at", sa.DateTime(timezone=True), nullable=True),
         schema="public",
     )
