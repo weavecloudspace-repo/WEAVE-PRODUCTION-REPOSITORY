@@ -60,7 +60,9 @@ def context(monkeypatch):
 
 async def reopen(c):
     return await mod.TMALifecycleService.reopen_assignment(
-        c.db, actor=c.actor, assignment_id=c.assignment.id,
+        c.db,
+        actor=c.actor,
+        assignment_id=c.assignment.id,
         closes_at=datetime.now(timezone.utc) + timedelta(days=5),
     )
 
