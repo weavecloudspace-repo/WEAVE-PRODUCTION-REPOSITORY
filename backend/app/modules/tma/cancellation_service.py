@@ -31,6 +31,7 @@ from app.modules.tma.authorization import TMAAuthor, TMAAuthorizationService
 from app.modules.tma.models import (
     TMAAssignmentRevision,
     TMAAssignmentStatus,
+    TMAClosureRun,
     TMAAttempt,
     TMAAttemptStatus,
     TMACancellationRun,
@@ -101,10 +102,29 @@ class TMACancellationService:
             return assignment
         if assignment.status != TMAAssignmentStatus.ACTIVE:
             raise ConflictException("Only an active TMA can be closed.")
+        if assignment.closes_at is None:
+            raise ConflictException("Cannot close a TMA without a submission deadline.")
+        revision = await TMARevisionRepository.get_by_number(
+            db, actor.tenant_id, assignment.id, assignment.current_revision_number
+        )
+        if revision is None:
+            raise ConflictException("Published TMA revision was not found.")
+        closed_at = datetime.now(timezone.utc)
         assignment.status = TMAAssignmentStatus.CLOSED
-        assignment.closed_at = datetime.now(timezone.utc)
-        if getattr(assignment, "closes_at", None) is not None:
-            assignment.zero_grading_requested_at = assignment.closed_at
+        assignment.closed_at = closed_at
+        assignment.zero_grading_requested_at = closed_at
+        assignment.zero_grading_completed_at = None
+        db.add(
+            TMAClosureRun(
+                tenant_id=assignment.tenant_id,
+                assignment_id=assignment.id,
+                revision_id=revision.id,
+                closed_at=closed_at,
+                cutoff_at=min(assignment.closes_at, closed_at),
+                original_deadline_at=assignment.closes_at,
+                kind="manual",
+            )
+        )
         await db.commit()
         await flush_cache_invalidation_events(db)
         return assignment
