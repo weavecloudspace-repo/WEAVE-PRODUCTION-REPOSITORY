@@ -123,7 +123,9 @@ class TMADeadlineZeroService:
             correct=0,
             total=total_questions,
             attempt=attempt,
-            scoring_date=min(assignment.closes_at, getattr(assignment, "closed_at", None) or assignment.closes_at).date(),
+            scoring_date=min(
+                assignment.closes_at, getattr(assignment, "closed_at", None) or assignment.closes_at
+            ).date(),
             deadline_subject_id=subject_id,
         )
         attempt.status = TMAAttemptStatus.SUBMITTED
