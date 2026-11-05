@@ -1265,6 +1265,7 @@ class TMAZeroGradingFailure(BaseModel):
 
     assignment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    closure_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
@@ -1295,12 +1296,28 @@ class TMAZeroGradingFailure(BaseModel):
             ],
             name="fk_tma_zero_failure_revision",
         ),
+        ForeignKeyConstraint(
+            ["tenant_id", "closure_run_id"],
+            [f"{PUBLIC_SCHEMA}.tma_closure_runs.tenant_id", f"{PUBLIC_SCHEMA}.tma_closure_runs.id"],
+            name="fk_tma_zero_failure_closure_run",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint(
             "tenant_id",
             "assignment_id",
             "revision_number",
+            "closure_run_id",
             "student_id",
-            name="uq_tma_zero_failure_revision_student",
+            name="uq_tma_zero_failure_cycle_student",
+        ),
+        Index(
+            "uq_tma_zero_failure_legacy_student",
+            "tenant_id",
+            "assignment_id",
+            "revision_number",
+            "student_id",
+            unique=True,
+            postgresql_where=text("closure_run_id IS NULL"),
         ),
         Index(
             "ix_tma_zero_failure_pending",
