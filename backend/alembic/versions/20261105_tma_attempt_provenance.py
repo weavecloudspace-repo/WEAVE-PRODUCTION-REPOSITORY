@@ -3,6 +3,7 @@
 This migration is additive and intentionally leaves historical unknown starts
 NULL. It does not update academic scores, attempt statuses, or saved answers.
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -32,6 +33,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Do not discard provenance collected by a later live release.
-    raise RuntimeError(
-        "TMA attempt provenance contains academic history; use a forward repair."
-    )
+    raise RuntimeError("TMA attempt provenance contains academic history; use a forward repair.")
