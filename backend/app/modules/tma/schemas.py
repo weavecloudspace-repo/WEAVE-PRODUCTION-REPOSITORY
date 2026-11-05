@@ -106,6 +106,12 @@ class TMAAssignmentUpdate(TMAInput):
         return value
 
 
+class TMAReopenRequest(TMAInput):
+    """A new future deadline is required to reopen an already closed TMA."""
+
+    closes_at: AwareDatetime
+
+
 class TMAAssignmentResponse(TMAOutput):
     id: uuid.UUID
     academic_level_id: uuid.UUID
