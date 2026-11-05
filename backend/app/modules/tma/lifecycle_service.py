@@ -16,6 +16,7 @@ from app.modules.student_academics.curriculum_service import CurriculumResolutio
 from app.modules.student_academics.assessment_repository import AssessmentRepository
 from app.modules.student_academics.models import AcademicSessionStatus
 from app.modules.student_academics.repository import StudentAcademicRepository
+from app.modules.tma.academic_guard import TMAAcademicGuard
 from app.modules.tma.assignment_service import TMAAssignmentService
 from app.modules.tma.authorization import TMAAuthor, TMAAuthorizationService
 from app.modules.tma.models import TMAAssignment, TMAAssignmentStatus
@@ -33,7 +34,10 @@ class TMALifecycleService:
         *,
         actor: TMAAuthor,
         assignment_id: uuid.UUID,
+        closes_at: datetime,
     ) -> TMAAssignment:
+        # Serialize with result finalization before locking the TMA row.
+        await TMAAcademicGuard.lock(db, actor.tenant_id)
         assignment = await TMAAssignmentRepository.get_by_id(
             db, actor.tenant_id, assignment_id, lock=True
         )
@@ -45,21 +49,12 @@ class TMALifecycleService:
         TMAAuthorizationService.require_assignment_management(actor, assignment)
         if assignment.status != TMAAssignmentStatus.CLOSED:
             raise ConflictException("Only a closed TMA can be reopened.")
-        if getattr(assignment, "zero_grading_requested_at", None) is not None and (
-            getattr(assignment, "closes_at", None) is not None
-            and assignment.closes_at <= datetime.now(timezone.utc)
-        ):
-            raise ConflictException(
-                "Deadline scoring has started; cancel this TMA and create a corrected revision."
-            )
-        if getattr(assignment, "zero_grading_completed_at", None) is not None:
-            raise ConflictException(
-                "Missed-deadline zeros have been recorded; cancel and create a corrected revision instead."
-            )
-        if getattr(assignment, "closes_at", None) is None:
-            raise ConflictException("Set a future submission deadline before reopening.")
-        if assignment.closes_at <= datetime.now(timezone.utc):
-            raise ConflictException("Extend the passed deadline before reopening.")
+        if closes_at <= datetime.now(timezone.utc):
+            raise ConflictException("Choose a future deadline before reopening this TMA.")
+        await TMAAcademicGuard.require_draft_results(db, assignment)
+        # Readiness validates the deadline on the assignment object. The
+        # submitted deadline and the ACTIVE transition commit atomically.
+        assignment.closes_at = closes_at
         errors = await TMALifecycleService._readiness_errors(db, assignment)
         if errors:
             raise ConflictException("TMA cannot be reopened: " + "; ".join(errors))
@@ -72,6 +67,7 @@ class TMALifecycleService:
         assignment.closed_at = None
         assignment.zero_grading_error = None
         assignment.zero_grading_requested_at = None
+        assignment.zero_grading_completed_at = None
         await TMAAssignmentRepository.save(db, assignment)
         await db.commit()
         await flush_cache_invalidation_events(db)
@@ -222,6 +218,7 @@ class TMALifecycleService:
         actor: TMAAuthor,
         assignment_id: uuid.UUID,
     ) -> TMAAssignment:
+        await TMAAcademicGuard.lock(db, actor.tenant_id)
         assignment = await TMAAssignmentRepository.get_by_id(
             db,
             actor.tenant_id,
@@ -237,6 +234,7 @@ class TMALifecycleService:
         )
         TMAAuthorizationService.require_assignment_management(actor, assignment)
         TMAAuthorizationService.require_draft_assignment(assignment)
+        await TMAAcademicGuard.require_draft_results(db, assignment)
         if assignment.closes_at is None or assignment.closes_at <= datetime.now(timezone.utc):
             raise ConflictException("Set a future submission deadline before publishing.")
         errors = await TMALifecycleService._readiness_errors(db, assignment)
