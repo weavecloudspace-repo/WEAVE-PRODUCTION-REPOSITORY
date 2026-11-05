@@ -371,7 +371,7 @@ class TMAAttemptService:
             attempt.submitted_at = None
             attempt.correct_answers = None
             attempt.total_questions = None
-        if attempt.student_started_at is None:
+        if getattr(attempt, "student_started_at", None) is None:
             attempt.student_started_at = datetime.now(timezone.utc)
         attempt.started_by_student = True
         await TMAAttemptRepository.save(db, attempt)
