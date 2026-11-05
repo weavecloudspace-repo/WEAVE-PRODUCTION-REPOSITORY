@@ -170,7 +170,11 @@ function Modal({
 
       const panel = panelRef.current;
       if (!panel) return;
-      const focusable = Array.from(panel.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
+      // Deadline calendars may be portaled into the overlay to escape the
+      // panel's overflow clipping; keep their controls in the focus trap.
+      const scope = panel.parentElement?.querySelector("[data-modal-popover]")
+        ? panel.parentElement : panel;
+      const focusable = Array.from(scope.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
         (element) => element instanceof HTMLElement && !element.hidden,
       );
 
@@ -184,7 +188,7 @@ function Modal({
       const last = focusable[focusable.length - 1];
       const active = document.activeElement;
 
-      if (event.shiftKey && (active === first || !panel.contains(active))) {
+      if (event.shiftKey && (active === first || !scope.contains(active))) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && active === last) {
