@@ -31,6 +31,7 @@ def fake(status=TMAAssignmentStatus.CLOSED):
         tenant_id=uid(),
         status=status,
         closed_at=None,
+        closes_at=datetime.now(timezone.utc),
         current_revision_number=1,
         activated_at=None,
         zero_grading_requested_at=None,
@@ -56,6 +57,7 @@ async def test_manual_close_is_idempotent_and_does_not_change_scores(monkeypatch
         AsyncMock(return_value=assignment),
     )
     db = AsyncMock()
+    monkeypatch.setattr(mod.TMARevisionRepository, "get_by_number", AsyncMock(return_value=SimpleNamespace(id=uid())))
     first = await mod.TMACancellationService.close(
         db,
         actor=actor,
@@ -122,6 +124,7 @@ async def test_close_can_be_cancelled_with_durable_run_and_replayed(monkeypatch)
         "actor_type",
         lambda _: TMAActorType.TENANT_ADMIN,
     )
+    monkeypatch.setattr(mod.TMAAcademicGuard, "require_draft_results", AsyncMock())
     enqueue = AsyncMock()
     monkeypatch.setattr(mod.TMACancellationService, "_enqueue", enqueue)
     db = AsyncMock()
