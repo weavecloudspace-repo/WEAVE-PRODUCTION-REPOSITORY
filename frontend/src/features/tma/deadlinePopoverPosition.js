@@ -36,5 +36,6 @@ export function positionDeadlinePopover(trigger, popover, viewport) {
     top: Math.max(top, Math.min(desiredTop, bottom - height)),
     left: Math.max(left, Math.min(trigger.left, right - width)),
     maxHeight,
+    width,
   };
 }
