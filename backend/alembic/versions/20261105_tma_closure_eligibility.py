@@ -205,6 +205,43 @@ def upgrade() -> None:
         ),
         schema="public",
     )
+    # Existing failure evidence is revision-scoped. Retain its NULL closure
+    # provenance, but require new reconciliations to belong to one closure.
+    # Legacy failures retain their original uniqueness and are not rewritten.
+    op.add_column(
+        "tma_zero_grading_failures",
+        sa.Column("closure_run_id", sa.UUID(as_uuid=True), nullable=True),
+        schema="public",
+    )
+    op.create_foreign_key(
+        "fk_tma_zero_failure_closure_run",
+        "tma_zero_grading_failures",
+        "tma_closure_runs",
+        ["tenant_id", "closure_run_id"],
+        ["tenant_id", "id"],
+        source_schema="public",
+        referent_schema="public",
+        ondelete="RESTRICT",
+    )
+    op.drop_constraint(
+        "uq_tma_zero_failure_revision_student",
+        "tma_zero_grading_failures",
+        schema="public",
+    )
+    op.create_unique_constraint(
+        "uq_tma_zero_failure_cycle_student",
+        "tma_zero_grading_failures",
+        ["tenant_id", "assignment_id", "revision_number", "closure_run_id", "student_id"],
+        schema="public",
+    )
+    op.create_index(
+        "uq_tma_zero_failure_legacy_student",
+        "tma_zero_grading_failures",
+        ["tenant_id", "assignment_id", "revision_number", "student_id"],
+        unique=True,
+        schema="public",
+        postgresql_where=sa.text("closure_run_id IS NULL"),
+    )
     # Existing revision-wide snapshots are not automatically attributable
     # to one closure after reopens. Preserve them without assigning marks.
     op.execute(CAPTURE_SQL)
