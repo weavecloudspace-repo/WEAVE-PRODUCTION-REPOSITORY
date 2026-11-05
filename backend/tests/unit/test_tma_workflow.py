@@ -192,7 +192,9 @@ async def test_student_start_uses_existing_participant_and_attempt(monkeypatch) 
     student = SimpleNamespace(id=_id(), tenant_id=_id())
     assignment, revision = SimpleNamespace(id=_id()), SimpleNamespace(id=_id())
     participant = SimpleNamespace(id=_id())
-    existing = SimpleNamespace(id=_id(), status=TMAAttemptStatus.IN_PROGRESS, student_started_at=None)
+    existing = SimpleNamespace(
+        id=_id(), status=TMAAttemptStatus.IN_PROGRESS, student_started_at=None
+    )
     monkeypatch.setattr(
         mod.TMAAttemptService,
         "_active_assignment",
