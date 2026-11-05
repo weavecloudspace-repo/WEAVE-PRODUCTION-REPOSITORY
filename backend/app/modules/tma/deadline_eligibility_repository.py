@@ -9,6 +9,7 @@ Elective, classroom and curriculum state without historical versioning cannot
 be reconstructed perfectly after later edits; the query is intentionally
 conservative and excludes electives selected only *after* the closure.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -80,7 +81,11 @@ class TMADeadlineEligibilityRepository:
     def _roster(assignment):
         # Automatic closure uses the published deadline; manual close must
         # persist the actual early cutoff in closes_at.
-        cutoff = min(assignment.closes_at, assignment.closed_at) if assignment.closed_at else assignment.closes_at
+        cutoff = (
+            min(assignment.closes_at, assignment.closed_at)
+            if assignment.closed_at
+            else assignment.closes_at
+        )
         if cutoff is None:
             raise ValueError("TMA closure has no effective cutoff")
         return (
@@ -108,8 +113,12 @@ class TMADeadlineEligibilityRepository:
 
     @staticmethod
     async def enrollment(
-        db: AsyncSession, *, tenant_id: uuid.UUID, revision_id: uuid.UUID,
-        student_id: uuid.UUID, assignment=None,
+        db: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        revision_id: uuid.UUID,
+        student_id: uuid.UUID,
+        assignment=None,
     ):
         if assignment is None:
             raise ValueError("Historical grading requires the closure assignment scope")
