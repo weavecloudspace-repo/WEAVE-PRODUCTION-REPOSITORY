@@ -737,9 +737,11 @@ async def test_draft_edit_delete_and_manual_close_reopen(tma_world):
     await TMACancellationService.close(w.db, actor=w.admin, assignment_id=item.id)
     assert item.status == TMAAssignmentStatus.CLOSED
     await TMALifecycleService.reopen_assignment(
-            w.db, actor=w.admin, assignment_id=item.id,
-            closes_at=datetime.now(timezone.utc) + timedelta(days=2),
-        )
+        w.db,
+        actor=w.admin,
+        assignment_id=item.id,
+        closes_at=datetime.now(timezone.utc) + timedelta(days=2),
+    )
     assert item.status == TMAAssignmentStatus.ACTIVE and item.zero_grading_requested_at is None
 
 
