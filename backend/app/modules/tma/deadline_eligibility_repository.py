@@ -110,11 +110,13 @@ class TMADeadlineEligibilityRepository:
             raise ConflictException("TMA has no recorded closure.")
         closure = (
             await db.execute(
-                select(TMAClosureRun).where(
+                select(TMAClosureRun)
+                .where(
                     TMAClosureRun.tenant_id == assignment.tenant_id,
                     TMAClosureRun.assignment_id == assignment.id,
                     TMAClosureRun.closed_at == assignment.closed_at,
-                ).execution_options(populate_existing=True)
+                )
+                .execution_options(populate_existing=True)
             )
         ).scalar_one_or_none()
         if closure is None or closure.eligibility_captured_at is None:
