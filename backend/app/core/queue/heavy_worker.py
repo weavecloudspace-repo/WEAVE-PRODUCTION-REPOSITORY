@@ -238,6 +238,51 @@ async def poll_tma_cancellations(ctx: dict[str, Any]) -> dict[str, int]:
     return {"processed": len(pending)}
 
 
+@capture_worker_exceptions(queue_name=HEAVY_QUEUE_NAME)
+async def process_tma_zero_grading_job(
+    ctx: dict[str, Any], assignment_id: str, tenant_id: str, closed_at: str
+) -> dict[str, int]:
+    """Prompt, bounded grading of one immutable closure; never replay onto a new cycle."""
+    from time import monotonic
+
+    from app.config.settings import settings
+
+    _ = ctx
+    started = monotonic()
+    closure_time = datetime.fromisoformat(closed_at)
+    if closure_time.tzinfo is None:
+        raise ValueError("TMA grading closure timestamp must be timezone-aware")
+    totals = {"zeroed": 0, "blocked": 0, "pending": 0}
+    logger.info(
+        "tma.deadline_zero.job.started",
+        extra={"assignment_id": assignment_id, "tenant_id": tenant_id},
+    )
+    for _batch in range(settings.TMA_ZERO_BATCHES_PER_POLL):
+        if monotonic() - started >= settings.TMA_ZERO_POLL_BUDGET_SECONDS:
+            break
+        async with AsyncSessionLocal() as db:
+            graded = await TMADeadlineZeroService.process_pending(
+                db,
+                tenant_ids={UUID(tenant_id)},
+                assignment_id=UUID(assignment_id),
+                closed_at=closure_time,
+            )
+        for key in totals:
+            totals[key] += graded[key]
+        if graded["blocked"] or not graded["zeroed"] or not graded["pending"]:
+            break
+    logger.info(
+        "tma.deadline_zero.job.finished",
+        extra={
+            "assignment_id": assignment_id,
+            "tenant_id": tenant_id,
+            "duration_ms": round((monotonic() - started) * 1000, 2),
+            **totals,
+        },
+    )
+    return totals
+
+
 async def poll_tma_deadlines(ctx: dict[str, Any]) -> dict[str, int]:
     """Bound each transaction and rotate work across tenants and assignments."""
     from time import monotonic
@@ -248,11 +293,16 @@ async def poll_tma_deadlines(ctx: dict[str, Any]) -> dict[str, int]:
     async with AsyncSessionLocal() as db:
         closed = await TMAExpirationService.close_due_assignments(db)
     totals = {"zeroed": 0, "blocked": 0, "pending": 0}
+    seen_assignments: set[UUID] = set()
     for _batch in range(settings.TMA_ZERO_BATCHES_PER_POLL):
         if monotonic() - started >= settings.TMA_ZERO_POLL_BUDGET_SECONDS:
             break
         async with AsyncSessionLocal() as db:
-            graded = await TMADeadlineZeroService.process_pending(db)
+            graded = await TMADeadlineZeroService.process_pending(
+                db,
+                skip_assignment_ids=seen_assignments,
+                retry_cooldown_seconds=settings.TMA_ZERO_RETRY_COOLDOWN_SECONDS,
+            )
         for key in totals:
             totals[key] += graded[key]
         if not any(graded.values()):
@@ -298,6 +348,7 @@ class WorkerSettings:
         process_session_progression_job,
         process_cbt_result_rollback_job,
         process_tma_cancellation_job,
+        process_tma_zero_grading_job,
     ]
     cron_jobs = [
         cron(
