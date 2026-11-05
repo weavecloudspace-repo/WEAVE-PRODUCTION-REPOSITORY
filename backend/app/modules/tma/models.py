@@ -949,6 +949,12 @@ class TMAAttempt(BaseModel):
         nullable=True,
     )
 
+    # NULL for old records whose genuine start cannot be proven.
+    # The worker never sets this field for system-generated zero attempts.
+    student_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     correct_answers: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
@@ -967,6 +973,11 @@ class TMAAttempt(BaseModel):
         DateTime(timezone=True), nullable=True
     )
     auto_zeroed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Preserve the original missed-deadline event when a later genuine
+    # submission replaces the automatic zero.
+    auto_zero_resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (
         # Ensure the participant belongs to the same tenant.
