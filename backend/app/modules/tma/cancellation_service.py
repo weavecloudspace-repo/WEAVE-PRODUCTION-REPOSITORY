@@ -27,6 +27,7 @@ from app.modules.student_academics.models import (
 from app.modules.student_academics.repository import StudentAcademicRepository
 from app.modules.student_academics.write_guard import ensure_academic_write_window
 from app.modules.tma.academic_guard import TMAAcademicGuard
+from app.modules.tma.deadline_eligibility_repository import TMADeadlineEligibilityRepository
 from app.modules.tma.authorization import TMAAuthor, TMAAuthorizationService
 from app.modules.tma.models import (
     TMAAssignmentRevision,
@@ -124,6 +125,10 @@ class TMACancellationService:
                 original_deadline_at=assignment.closes_at,
                 kind="manual",
             )
+        )
+        await db.flush()
+        await TMADeadlineEligibilityRepository.capture(
+            db, tenant_id=assignment.tenant_id, assignment_id=assignment.id
         )
         await db.commit()
         await flush_cache_invalidation_events(db)
