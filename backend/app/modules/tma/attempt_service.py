@@ -179,13 +179,27 @@ class TMAAttemptService:
                     curriculum_subject_id=assignment.curriculum_subject_id,
                     assessment_component_id=assignment.assessment_component_id,
                     status=TMAAssignmentStatus.CLOSED if expired else assignment.status,
-                    attempt_status=attempt.status if attempt else None,
+                    attempt_status=(
+                        TMAAttemptStatus.IN_PROGRESS
+                        if attempt
+                        and is_open
+                        and attempt.auto_zeroed_at is not None
+                        and attempt.auto_zero_resolved_at is None
+                        else attempt.status if attempt else None
+                    ),
                     attempt_id=attempt.id if attempt else None,
                     auto_zeroed_at=getattr(attempt, "auto_zeroed_at", None) if attempt else None,
                     closes_at=assignment.closes_at,
                     can_start_or_resume=is_open
                     and not missing_teacher
-                    and (attempt is None or attempt.status == TMAAttemptStatus.IN_PROGRESS),
+                    and (
+                        attempt is None
+                        or attempt.status == TMAAttemptStatus.IN_PROGRESS
+                        or (
+                            attempt.auto_zeroed_at is not None
+                            and attempt.auto_zero_resolved_at is None
+                        )
+                    ),
                     availability_issue=(
                         "No subject teacher is assigned to your classroom. Contact school management."
                         if missing_teacher
@@ -345,7 +359,19 @@ class TMAAttemptService:
             revision.id,
         )
         if attempt.status == TMAAttemptStatus.SUBMITTED:
-            raise ConflictException("This assignment has already been submitted.")
+            if attempt.auto_zeroed_at is None or attempt.auto_zero_resolved_at is not None:
+                raise ConflictException(
+                    "You already submitted this TMA. Genuine submissions cannot be retaken."
+                )
+            # Reopening an automatic zero restores the unfinished attempt without
+            # deleting the original zero or any previously saved answers.
+            attempt.status = TMAAttemptStatus.IN_PROGRESS
+            attempt.submitted_at = None
+            attempt.correct_answers = None
+            attempt.total_questions = None
+        if attempt.student_started_at is None:
+            attempt.student_started_at = datetime.now(timezone.utc)
+        await TMAAttemptRepository.save(db, attempt)
         try:
             await db.commit()
             await flush_cache_invalidation_events(db)
@@ -365,6 +391,14 @@ class TMAAttemptService:
         attempt, _, _, _, _ = await TMAAttemptService._locked_active_attempt(
             db, student=student, attempt_id=attempt_id
         )
+        if (
+            attempt.status == TMAAttemptStatus.SUBMITTED
+            and attempt.auto_zeroed_at is not None
+            and attempt.auto_zero_resolved_at is None
+        ):
+            return await TMAAttemptService.start_or_resume_attempt(
+                db, student=student, assignment_id=revision.assignment_id
+            )
         if attempt.status != TMAAttemptStatus.IN_PROGRESS:
             raise ConflictException("Assignment already submitted.")
         return await TMAAttemptService._build_start_response(db, student, attempt)
@@ -432,6 +466,15 @@ class TMAAttemptService:
         observed, _, revision = await TMAAttemptService._load_owned_attempt(
             db, student=student, attempt_id=attempt_id
         )
+        if (
+            observed.status == TMAAttemptStatus.SUBMITTED
+            and observed.auto_zeroed_at is not None
+            and observed.auto_zero_resolved_at is None
+        ):
+            raise ConflictException(
+                "This was an automatic missed-deadline zero, not your submission. "
+                "When the TMA is reopened, choose Start or Continue before submitting."
+            )
         if observed.status == TMAAttemptStatus.SUBMITTED:
             return await TMAAttemptService.get_submission_result(
                 db,
@@ -482,6 +525,8 @@ class TMAAttemptService:
             attempt.submitted_at = datetime.now(timezone.utc)
             attempt.correct_answers = correct
             attempt.total_questions = total
+            if attempt.auto_zeroed_at is not None and attempt.auto_zero_resolved_at is None:
+                attempt.auto_zero_resolved_at = attempt.submitted_at
             await TMAAttemptRepository.save(db, attempt)
             await db.commit()
             await flush_cache_invalidation_events(db)
