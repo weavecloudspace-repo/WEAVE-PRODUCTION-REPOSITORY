@@ -16,7 +16,6 @@ from app.modules.student_academics.curriculum_models import StudentElectiveSelec
 from app.modules.student_academics.models import StudentAssessmentScore, StudentSubjectResult
 from app.modules.students.models import AcademicStatus, Student, StudentEnrollment
 from app.modules.tma.models import (
-    TMADeadlineEligibility,
     TMAAssignment,
     TMAAssignmentRevision,
     TMAAttempt,
@@ -81,27 +80,9 @@ class TMAReportingRepository:
                 eligible_condition,
             )
         )
-        # After capture, eligibility is the immutable deadline roster, not today's
-        # enrollment/elective state. Before capture the ordinary live roster applies.
-        captured_revision = select(TMAAssignmentRevision.id).where(
-            TMAAssignmentRevision.tenant_id == tenant_id,
-            TMAAssignmentRevision.assignment_id == assignment.id,
-            TMAAssignmentRevision.revision_number == assignment.current_revision_number,
-            TMAAssignmentRevision.eligibility_captured_at.is_not(None),
-        )
-        snapshot = select(
-            TMADeadlineEligibility.student_id,
-            TMADeadlineEligibility.class_id,
-        ).where(
-            TMADeadlineEligibility.tenant_id == tenant_id,
-            TMADeadlineEligibility.revision_id.in_(captured_revision),
-            *(
-                [TMADeadlineEligibility.class_id.in_(authorized_class_ids)]
-                if authorized_class_ids is not None
-                else []
-            ),
-        )
-        eligible = union(eligible.where(~exists(captured_revision)), snapshot).subquery("eligible")
+        # Current enrollment is always the live roster. Deadline evidence is
+        # preserved for audit and zero-grading, never used to deny access.
+        eligible = eligible.subquery("eligible")
 
         priority = case(
             (TMAAttempt.status == TMAAttemptStatus.SUBMITTED, 2),
@@ -115,6 +96,8 @@ class TMAReportingRepository:
                 TMAAttempt.status.label("attempt_status"),
                 TMAAttempt.submitted_at.label("submitted_at"),
                 TMAAttempt.auto_zeroed_at.label("auto_zeroed_at"),
+                TMAAttempt.auto_zero_resolved_at.label("auto_zero_resolved_at"),
+                TMAAttempt.started_by_student.label("started_by_student"),
                 func.row_number()
                 .over(
                     partition_by=TMAParticipant.student_id,
@@ -161,6 +144,8 @@ class TMAReportingRepository:
                 ranked.c.attempt_status,
                 ranked.c.submitted_at,
                 ranked.c.auto_zeroed_at,
+                ranked.c.auto_zero_resolved_at,
+                ranked.c.started_by_student,
             )
             .where(ranked.c.rank == 1)
             .subquery("history")
@@ -172,9 +157,23 @@ class TMAReportingRepository:
 
         display_class_id = func.coalesce(eligible.c.class_id, history.c.class_id)
         status = case(
-            (history.c.auto_zeroed_at.is_not(None), "missed"),
-            (history.c.attempt_status == TMAAttemptStatus.SUBMITTED, "submitted"),
             (history.c.attempt_status == TMAAttemptStatus.IN_PROGRESS, "in_progress"),
+            (
+                (history.c.attempt_status == TMAAttemptStatus.SUBMITTED)
+                & (
+                    history.c.auto_zeroed_at.is_(None)
+                    | history.c.auto_zero_resolved_at.is_not(None)
+                ),
+                "submitted",
+            ),
+            (
+                history.c.auto_zeroed_at.is_not(None)
+                & (history.c.started_by_student.is_(False)),
+                "not_started",
+            ),
+            # Old system-issued attempts with no start provenance remain
+            # conservatively MISSED (unknown start), not falsely NOT_STARTED.
+            (history.c.auto_zeroed_at.is_not(None), "missed"),
             else_="not_started",
         )
         # Keep the substring expression identical to the immutable trigram index.
