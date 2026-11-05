@@ -26,6 +26,7 @@ from app.modules.student_academics.models import (
 )
 from app.modules.student_academics.repository import StudentAcademicRepository
 from app.modules.student_academics.write_guard import ensure_academic_write_window
+from app.modules.tma.academic_guard import TMAAcademicGuard
 from app.modules.tma.authorization import TMAAuthor, TMAAuthorizationService
 from app.modules.tma.models import (
     TMAAssignmentRevision,
@@ -117,6 +118,8 @@ class TMACancellationService:
         assignment_id: uuid.UUID,
         reason: str,
     ) -> TMACancellationRun:
+        # Shared lock blocks concurrent result finalization while cancellation starts.
+        await TMAAcademicGuard.lock(db, actor.tenant_id)
         assignment = await cls._assignment(db, actor=actor, assignment_id=assignment_id)
         if assignment.status == TMAAssignmentStatus.CANCELLING:
             run = await cls._run(
@@ -129,6 +132,13 @@ class TMACancellationService:
             return run
         if assignment.status != TMAAssignmentStatus.CLOSED:
             raise ConflictException("Close the assignment before cancelling it.")
+        if (assignment.zero_grading_requested_at is not None
+                and assignment.zero_grading_completed_at is None):
+            raise ConflictException(
+                "Wait for missed-deadline grading to finish or resolve its errors "
+                "before cancelling this assignment."
+            )
+        await TMAAcademicGuard.require_draft_results(db, assignment)
         revision = await TMARevisionRepository.get_by_number(
             db,
             actor.tenant_id,
