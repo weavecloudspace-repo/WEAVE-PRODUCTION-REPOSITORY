@@ -157,9 +157,7 @@ async def enqueue_tma_zero_grading_job(
     *, assignment_id: str, tenant_id: str, closed_at: str
 ) -> bool:
     """Enqueue the exact committed closure on the heavy worker."""
-    redis = await create_pool(
-        get_arq_redis_settings(), default_queue_name=HEAVY_QUEUE_NAME
-    )
+    redis = await create_pool(get_arq_redis_settings(), default_queue_name=HEAVY_QUEUE_NAME)
     try:
         job = await redis.enqueue_job(
             "process_tma_zero_grading_job",

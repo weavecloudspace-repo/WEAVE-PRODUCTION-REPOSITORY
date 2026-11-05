@@ -45,7 +45,8 @@ async def test_close_enqueues_after_service_commit_even_if_redis_fails(monkeypat
     monkeypatch.setattr(router.TMACancellationService, "close", close)
     monkeypatch.setattr(arq, "enqueue_tma_zero_grading_job", enqueue)
     monkeypatch.setattr(
-        router, "TMAAssignmentStatusResponse",
+        router,
+        "TMAAssignmentStatusResponse",
         SimpleNamespace(model_validate=lambda value: value),
     )
     db, actor = AsyncMock(), SimpleNamespace()
@@ -109,9 +110,7 @@ async def test_poll_avoids_same_failed_assignment_in_one_run(monkeypatch):
         skip_assignment_ids.add(assignment)
         return {"zeroed": 0, "blocked": 1, "pending": 1}
 
-    monkeypatch.setattr(
-        heavy_worker.TMADeadlineZeroService, "process_pending", process
-    )
+    monkeypatch.setattr(heavy_worker.TMADeadlineZeroService, "process_pending", process)
     assert (await heavy_worker.poll_tma_deadlines({}))["blocked"] == 1
     assert seen == [set(), {assignment}]
 
@@ -122,8 +121,11 @@ async def test_stale_closure_is_filtered_and_failed_retry_is_cooled_down():
     db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: None)
     closed_at = datetime(2026, 11, 5, 20, 0, tzinfo=timezone.utc)
     assert await deadline_zero_service.TMADeadlineZeroService.process_pending(
-        db, assignment_id=uuid.uuid4(), closed_at=closed_at,
-        skip_assignment_ids={uuid.uuid4()}, retry_cooldown_seconds=120,
+        db,
+        assignment_id=uuid.uuid4(),
+        closed_at=closed_at,
+        skip_assignment_ids={uuid.uuid4()},
+        retry_cooldown_seconds=120,
     ) == {"zeroed": 0, "blocked": 0, "pending": 0}
     compiled = str(db.execute.await_args.args[0].compile(dialect=postgresql.dialect()))
     assert "tma_assignments.id = " in compiled
