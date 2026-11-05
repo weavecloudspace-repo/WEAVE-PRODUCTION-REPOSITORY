@@ -19,6 +19,7 @@ export default function TmaDeadlinePicker({ value, onChange, disabled = false, i
   const [opened, setOpened] = useState(false);
   const [display, setDisplay] = useState(() => initialMonth(value));
   const [placement, setPlacement] = useState(null);
+  const [portalHost, setPortalHost] = useState(null);
   const container = useRef(null);
   const popover = useRef(null);
   const day = value ? Number(value.slice(8, 10)) : null;
@@ -50,11 +51,9 @@ export default function TmaDeadlinePicker({ value, onChange, disabled = false, i
       document.removeEventListener("keydown", handle);
     };
   }, [opened]);
-  // Render the calendar beside the modal panel rather than inside its
-  // overflow-y-auto content. The overlay is a positioning and focus boundary.
-  const host = opened && typeof document !== "undefined"
-    ? container.current?.closest('[data-modal-overlay="true"]') || document.body
-    : null;
+  // The portal host is resolved in the trigger event handler; never read
+  // refs while React is rendering.
+  const host = opened ? portalHost : null;
 
   useLayoutEffect(() => {
     if (!opened) return undefined;
@@ -116,6 +115,9 @@ export default function TmaDeadlinePicker({ value, onChange, disabled = false, i
       disabled={disabled} onClick={() => {
         setDisplay(initialMonth(value));
         setPlacement(null);
+        if (!opened) {
+          setPortalHost(container.current?.closest('[data-modal-overlay="true"]') || document.body);
+        }
         setOpened((old) => !old);
       }}>
       <CalendarDays size={18} aria-hidden="true" />
