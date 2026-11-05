@@ -476,8 +476,8 @@ class TMAAttemptService:
         )
         if (
             observed.status == TMAAttemptStatus.SUBMITTED
-            and observed.auto_zeroed_at is not None
-            and observed.auto_zero_resolved_at is None
+            and getattr(observed, "auto_zeroed_at", None) is not None
+            and getattr(observed, "auto_zero_resolved_at", None) is None
         ):
             raise ConflictException(
                 "This was an automatic missed-deadline zero, not your submission. "
