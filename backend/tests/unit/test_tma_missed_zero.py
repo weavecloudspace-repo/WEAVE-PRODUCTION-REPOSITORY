@@ -259,6 +259,7 @@ async def test_worker_does_not_drop_reconciliation_errors(monkeypatch):
     assert item.zero_grading_completed_at is None
     assert "Existing CA" in item.zero_grading_error
 
+
 @pytest.mark.asyncio
 async def test_second_closure_restores_original_zero_submission_metadata(monkeypatch):
     item = assignment()
@@ -314,7 +315,6 @@ async def test_second_closure_restores_original_zero_submission_metadata(monkeyp
     ) == (TMAAttemptStatus.SUBMITTED, zeroed_at, 0, 10)
     saved.assert_awaited_once_with(db, attempt)
     grade.assert_not_awaited()
-
 
 
 def test_worker_only_scans_explicitly_queued_deadlines():
