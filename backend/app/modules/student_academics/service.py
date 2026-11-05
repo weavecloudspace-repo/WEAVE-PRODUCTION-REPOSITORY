@@ -465,7 +465,8 @@ class StudentAcademicService:
         if term.status in {AcademicTermStatus.OPEN, AcademicTermStatus.CLOSING}:
             # Do not close a term while active TMAs, cancellation reversals,
             # or scheduled zeros are still waiting to update academic scores.
-            from app.modules.tma.models import TMAAssignment, TMAAssignmentStatus
+            from app.modules.tma.academic_guard import TMAAcademicGuard
+from app.modules.tma.models import TMAAssignment, TMAAssignmentStatus
 
             tma_base = (
                 TMAAssignment.tenant_id == tenant_id,
@@ -2662,6 +2663,7 @@ class StudentAcademicService:
         tenant_id = actor.tenant_id
         if isinstance(actor, TeacherMembership):
             raise ForbiddenException("Teachers have read-only access to academic results.")
+        await TMAAcademicGuard.lock(db, tenant_id)
         assignment, curriculum_subject = await StudentAcademicService._resolve_assignment_context(
             db, tenant_id, payload
         )
@@ -2867,6 +2869,7 @@ class StudentAcademicService:
             result.recorded_by_actor_type = actor_type
             result.recorded_by_actor_id = actor.id
         if payload.status == AcademicResultStatus.SUBMITTED:
+            await TMAAcademicGuard.require_grading_finalized(db, result)
             if previous_status is not None and previous_status != payload.status:
                 StudentAcademicService._ensure_forward_result_transition(
                     previous_status, payload.status
@@ -2921,6 +2924,7 @@ class StudentAcademicService:
         result_id: uuid.UUID,
         payload: StudentSubjectResultStatusUpdate,
     ) -> StudentSubjectResultResponse:
+        await TMAAcademicGuard.lock(db, actor.tenant_id)
         result = await StudentAcademicRepository.get_result_by_id(db, actor.tenant_id, result_id)
         if result is None:
             raise NotFoundException("Result not found.")
@@ -2936,6 +2940,7 @@ class StudentAcademicService:
             raise ConflictException("Results can only be modified in the current open term.")
         previous = result.status
         StudentAcademicService._ensure_forward_result_transition(result.status, payload.status)
+        await TMAAcademicGuard.require_grading_finalized(db, result)
         if payload.status == AcademicResultStatus.SUBMITTED:
             await StudentAcademicService._ensure_result_complete(db, result)
         result.status = payload.status
