@@ -102,6 +102,7 @@ export default function StudentTmaView({
   onRetrySave,
 }) {
   const entry = useRef(null);
+  const missedZero = Boolean(result?.auto_zeroed_at && !result?.auto_zero_resolved_at);
   const [guideOpen, setGuideOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(true);
   const [mobilePickerOpen, setMobilePickerOpen] = useState(false);
@@ -215,11 +216,11 @@ export default function StudentTmaView({
             <CheckCircle2 size={32} />
           </span>
           <p className="student-tma-eyebrow">
-            {result.auto_zeroed_at ? "Missed deadline" : "Assignment submitted"}
+            {missedZero ? "Missed deadline" : "Assignment submitted"}
           </p>
-          <h2>{result.auto_zeroed_at ? "Submission deadline passed" : "Your work is complete"}</h2>
+          <h2>{missedZero ? "Submission deadline passed" : "Your work is complete"}</h2>
           <p>
-            {result.auto_zeroed_at
+            {missedZero
               ? "This assignment was not submitted by the deadline, so a zero was recorded."
               : "Your answers have been graded and your score has been recorded."}
           </p>
@@ -229,13 +230,13 @@ export default function StudentTmaView({
               <span>/ {assignment.component_maximum_score} marks</span>
             )}
           </div>
-          {!result.auto_zeroed_at && (
+          {!missedZero && (
             <p>
               {result.correct_answers} of {result.total_questions} answers correct
             </p>
           )}
           <p className="text-xs text-text-muted">
-            {result.auto_zeroed_at ? "Zero recorded" : "Submitted"}{" "}
+            {missedZero ? "Zero recorded" : "Submitted"}{" "}
             {new Date(result.submitted_at).toLocaleString()}
           </p>
           <Link className="student-tma-link" to={back + "?tab=assessment"}>

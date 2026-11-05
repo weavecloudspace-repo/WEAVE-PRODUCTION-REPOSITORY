@@ -191,6 +191,9 @@ class TMAAttemptService:
                     ),
                     attempt_id=attempt.id if attempt else None,
                     auto_zeroed_at=getattr(attempt, "auto_zeroed_at", None) if attempt else None,
+                    auto_zero_resolved_at=getattr(attempt, "auto_zero_resolved_at", None)
+                    if attempt
+                    else None,
                     closes_at=assignment.closes_at,
                     can_start_or_resume=is_open
                     and not missing_teacher
@@ -552,6 +555,7 @@ class TMAAttemptService:
             component_score=component_score,
             submitted_at=attempt.submitted_at,
             auto_zeroed_at=getattr(attempt, "auto_zeroed_at", None),
+            auto_zero_resolved_at=getattr(attempt, "auto_zero_resolved_at", None),
         )
 
     @staticmethod
@@ -613,4 +617,5 @@ class TMAAttemptService:
             component_score=stored.score,
             submitted_at=attempt.submitted_at,
             auto_zeroed_at=getattr(attempt, "auto_zeroed_at", None),
+            auto_zero_resolved_at=getattr(attempt, "auto_zero_resolved_at", None),
         )

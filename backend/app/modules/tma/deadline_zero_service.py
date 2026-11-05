@@ -109,7 +109,14 @@ class TMADeadlineZeroService:
         ):
             # The student missed another closure. The original zero is still
             # authoritative: do not duplicate the score or erase its history.
+            # Reopened attempts can retain an authoritative original zero.
+            # Restore every required submission field rather than only status.
+            if getattr(attempt, "score_snapshot", None) is not None and attempt.score_snapshot != 0:
+                raise ConflictException("Existing automatic zero has unexpected score provenance.")
             attempt.status = TMAAttemptStatus.SUBMITTED
+            attempt.submitted_at = attempt.auto_zeroed_at
+            attempt.correct_answers = 0
+            attempt.total_questions = total_questions
             await TMAAttemptRepository.save(db, attempt)
             return False
         # This writes a genuine 0 CA component and captures the exact score ID

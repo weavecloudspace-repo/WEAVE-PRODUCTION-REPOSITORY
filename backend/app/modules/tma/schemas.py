@@ -12,7 +12,15 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from app.modules.tma.models import (
     TMAActorType,
@@ -124,8 +132,19 @@ class TMAAssignmentResponse(TMAOutput):
     created_by_actor_type: TMAActorType
     created_by_actor_id: uuid.UUID
     lead_teacher_membership_id: uuid.UUID | None = None
+    zero_grading_requested_at: datetime | None = None
     zero_grading_completed_at: datetime | None = None
     zero_grading_error: str | None = None
+
+    @computed_field
+    @property
+    def grading_state(self) -> str | None:
+        if self.status != TMAAssignmentStatus.CLOSED or self.zero_grading_requested_at is None:
+            return None
+        if self.zero_grading_completed_at is not None:
+            return "completed"
+        return "needs_attention" if self.zero_grading_error else "pending"
+
     activated_at: datetime | None
     closes_at: datetime | None
     closed_at: datetime | None
@@ -428,6 +447,7 @@ class TMASubmitResponse(TMAOutput):
     component_score: Decimal = Field(ge=0, max_digits=5, decimal_places=2)
     submitted_at: datetime
     auto_zeroed_at: datetime | None = None
+    auto_zero_resolved_at: datetime | None = None
 
 
 class TMAStudentAssignmentResponse(TMAOutput):
@@ -441,6 +461,7 @@ class TMAStudentAssignmentResponse(TMAOutput):
     attempt_status: TMAAttemptStatus | None
     attempt_id: uuid.UUID | None = None
     auto_zeroed_at: datetime | None = None
+    auto_zero_resolved_at: datetime | None = None
     closes_at: datetime | None
     can_start_or_resume: bool
     availability_issue: str | None = None

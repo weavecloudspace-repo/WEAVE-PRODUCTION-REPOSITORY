@@ -54,12 +54,15 @@ export default function TmaActions({ items, busy }) {
       >
         {items
           .filter((item) => item.visible !== false)
-          .map(({ label, icon: Icon, onClick, danger }) => (
+          .map(({ label, icon: Icon, onClick, danger, disabled, reason }) => (
             <button
               key={label}
               role="menuitem"
               type="button"
-              className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm transition hover:bg-surface-muted focus:bg-surface-muted focus:outline-none ${danger ? "text-error" : "text-text"}`}
+              disabled={disabled}
+              aria-disabled={disabled}
+              title={disabled ? reason : undefined}
+              className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm transition hover:bg-surface-muted focus:bg-surface-muted focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${danger ? "text-error" : "text-text"}`}
               onClick={() => {
                 setOpen(false);
                 onClick();

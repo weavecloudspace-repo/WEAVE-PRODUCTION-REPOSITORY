@@ -409,6 +409,38 @@ export default function TmaPage({ role }) {
       controller.abort();
     };
   }, [assignmentId, config, termId, offset, debouncedQuery, statusFilter, levelFilter, role, showError]);
+  // Refresh overview cards only while at least one visible worker is pending.
+  useEffect(() => {
+    if (assignmentId || !termId || !list.some((item) =>
+      item.status === "cancelling" ||
+      (item.status === "closed" && ["pending", "needs_attention"].includes(item.grading_state))
+    )) return;
+    let active = true;
+    let timer;
+    const refreshList = async () => {
+      if (!active) return;
+      if (document.visibilityState === "visible") {
+        try {
+          const response = await service.list(offset, termId, {
+            search: debouncedQuery, status: statusFilter, academic_level_id: levelFilter,
+          });
+          if (active) {
+            setList(rows(response));
+            setListTotal(response.total || 0);
+            listCache.current.clear();
+          }
+        } catch {
+          // Retry the read after the next interval without reloading the page.
+        }
+      }
+      if (active) timer = window.setTimeout(refreshList, 5000);
+    };
+    timer = window.setTimeout(refreshList, 5000);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [assignmentId, termId, list, offset, debouncedQuery, statusFilter, levelFilter]);
   useEffect(() => {
     setDraft(null);
     setDeleteTarget(null);
@@ -428,35 +460,45 @@ export default function TmaPage({ role }) {
     setClassFilter("");
     setReportOffset(0);
   }, [assignmentId]);
+  // Poll only while a worker is processing; never overlap requests or retry mutations.
   useEffect(() => {
-    if (
-      !assignmentId ||
-      assignment?.status !== "cancelling" ||
-      cancellation?.status === "failed"
-    )
-      return;
+    const grading = assignment?.status === "closed" &&
+      ["pending", "needs_attention"].includes(assignment?.grading_state);
+    const cancelling = assignment?.status === "cancelling" && cancellation?.status !== "failed";
+    if (!assignmentId || (!grading && !cancelling)) return;
     let active = true;
-    let lastError = "";
-    const timer = window.setInterval(() => {
-      service
-        .cancellation(assignmentId)
-        .then((result) => {
+    let timer;
+    const refreshStatus = async () => {
+      if (!active) return;
+      try {
+        if (document.visibilityState !== "hidden") {
+          const next = await service.get(assignmentId);
           if (!active) return;
-          lastError = "";
-          setCancellation(result);
-          if (result.status === "completed") load();
-        })
-        .catch((e) => {
-          const message = getErrorMessage(e);
-          if (active && message && message !== lastError) showError(message);
-          lastError = message;
-        });
-    }, 5000);
+          setAssignment(next);
+          if (next.status === "cancelling") {
+            const job = await service.cancellation(assignmentId);
+            if (!active) return;
+            setCancellation(job);
+            if (job.status === "completed") {
+              await load({ background: true });
+              if (active) showSuccess("Assignment cancellation completed.");
+            }
+          } else if (grading && next.grading_state === "completed") {
+            showSuccess("Missed-deadline grading completed.");
+          }
+        }
+      } catch {
+        // A transient network error only retries the next read-only status check.
+      } finally {
+        if (active) timer = window.setTimeout(refreshStatus, 5000);
+      }
+    };
+    timer = window.setTimeout(refreshStatus, 5000);
     return () => {
       active = false;
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
     };
-  }, [assignmentId, assignment?.status, cancellation?.status, load, showError]);
+  }, [assignmentId, assignment?.status, assignment?.grading_state, cancellation?.status, load, showSuccess]);
   useEffect(() => {
     if (!assignmentId || tab !== "submissions") return;
     const controller = new AbortController();
@@ -513,6 +555,10 @@ export default function TmaPage({ role }) {
           assignment.created_by_actor_id === actorId
     ));
   const editable = assignment?.status === "draft";
+  const gradingPending = assignment?.status === "closed" &&
+    ["pending", "needs_attention"].includes(assignment?.grading_state);
+  const cancellationPending = assignment?.status === "cancelling" &&
+    cancellation?.status !== "failed";
   const canEditQuestion = (q) =>
     canManage ||
     (q.author_actor_type === "teacher" &&
@@ -659,6 +705,8 @@ export default function TmaPage({ role }) {
                   label: "Reopen assignment",
                   icon: RefreshCw,
                   visible: canManage && assignment?.status === "closed",
+                  disabled: gradingPending,
+                  reason: "Available after missed-deadline grading finishes.",
                   onClick: () => {
                     setReopenDeadline(
                       assignment?.closes_at && new Date(assignment.closes_at) > new Date()
@@ -673,6 +721,8 @@ export default function TmaPage({ role }) {
                   icon: Trash2,
                   danger: true,
                   visible: canManage && assignment?.status === "closed",
+                  disabled: gradingPending,
+                  reason: "Available after missed-deadline grading finishes.",
                   onClick: () => setDialog("cancel"),
                 },
                 {
@@ -838,15 +888,26 @@ export default function TmaPage({ role }) {
               {!draft && <>
               <div className="flex flex-wrap items-center gap-3">
                 <Badge>{assignment.status}</Badge>
-                {assignment.zero_grading_completed_at && (
-                  <span className="text-xs text-text-muted">Deadline zeros processed</span>
+                {assignment.grading_state === "pending" && <Badge>Finalizing scores</Badge>}
+                {assignment.grading_state === "completed" && <Badge>Closed · Ready</Badge>}
+                {assignment.grading_state === "needs_attention" && <Badge>Grading needs attention</Badge>}
+                {assignment.status === "cancelling" && (
+                  <Badge>{cancellation?.status === "failed" ? "Cancellation failed" : "Cancelling scores"}</Badge>
+                )}
+                {assignment.status === "cancelled" && <Badge>Cancellation complete</Badge>}
+                {(gradingPending || cancellationPending) && (
+                  <p role="status" className="w-full rounded-xl border border-border bg-surface-muted p-3 text-sm text-text">
+                    {gradingPending
+                      ? "This TMA is closed. Missed-deadline grading is being finalized. Reopening and cancellation are unavailable until it finishes. Status refreshes automatically."
+                      : "Weave is reversing eligible TMA scores. Status refreshes automatically."}
+                  </p>
                 )}
                 {cancellationConflicts.length > 0 && (
                   <div role="alert" className="w-full rounded-xl border border-border bg-surface-muted p-3 text-xs text-text">
                     <p className="font-semibold">Cancellation requires academic reconciliation:</p>
                     {cancellationConflicts.map((issue) => (
                       <p key={issue.attempt_id} className="mt-1">
-                        Student {issue.student_id}: {issue.reason}
+                        Student {issue.student_id}: academic reconciliation required
                       </p>
                     ))}
                     <p className="mt-2 text-text-muted">
@@ -859,7 +920,7 @@ export default function TmaPage({ role }) {
                     <p className="font-semibold">Missed-deadline grading needs reconciliation:</p>
                     {zeroConflicts.map((issue) => (
                       <div key={issue.student_id} className="mt-2 flex flex-wrap items-center gap-2">
-                        <span>Student {issue.student_id}: {issue.reason} ({issue.attempts} attempt(s))</span>
+                        <span>Student {issue.student_id}: academic reconciliation required ({issue.attempts} attempt(s))</span>
                         {role === "admin" && (
                           <Button variant="outline" size="sm" onClick={() => {
                             setZeroExemptTarget(issue.student_id);
@@ -876,7 +937,7 @@ export default function TmaPage({ role }) {
                 )}
                 {assignment.zero_grading_error && (
                   <span role="alert" className="text-xs text-error">
-                    Deadline grading needs reconciliation: {assignment.zero_grading_error}
+                    Deadline grading needs reconciliation. Inspect affected students; automatic retries continue.
                   </span>
                 )}
                 <span className="text-sm text-text-muted">
@@ -1154,7 +1215,7 @@ export default function TmaPage({ role }) {
                       </p>
                       {cancellation.error_message && (
                         <p className="mt-2 text-error">
-                          {cancellation.error_message}
+                          Cancellation requires academic reconciliation. Repair affected scores before retrying.
                         </p>
                       )}
                       <p className="mt-2 text-xs text-text-muted">
@@ -1292,6 +1353,7 @@ export default function TmaPage({ role }) {
                   !reopenDeadline ||
                   !Number.isFinite(new Date(reopenDeadline).getTime())
                 )) ||
+                (["reopen", "cancel"].includes(dialog) && gradingPending) ||
                 (dialog === "cancel" && reason.trim().length < 5) ||
                 (dialog === "zeroExempt" && reason.trim().length < 10)
               }

@@ -15,6 +15,14 @@ export default function TmaAssignmentCard({
   to,
 }) {
   const a = assignment;
+  const pending = a.status === "closed" && a.grading_state === "pending";
+  const attention = a.status === "closed" && a.grading_state === "needs_attention";
+  const displayStatus = pending ? "Finalizing scores" : attention ? "Needs attention" :
+    a.status === "closed" && a.grading_state === "completed" ? "Closed · Ready" :
+    a.status === "cancelling" ? "Cancelling…" : a.status;
+  const description = pending ? "Missed-deadline grading is processing" :
+    attention ? "Missed-deadline grading requires reconciliation" :
+    guidance[a.status] || "Open assignment to view details";
   return (
     <Link
       to={to}
@@ -25,7 +33,7 @@ export default function TmaAssignmentCard({
           <BookOpen size={21} />
         </span>
         <span className="tma-card-status">
-          {a.status === "cancelling" ? "Cancelling…" : a.status}
+          {displayStatus}
         </span>
         <ArrowUpRight size={18} className="tma-card-arrow" />
       </header>
@@ -34,7 +42,7 @@ export default function TmaAssignmentCard({
           {scope?.level_name || "Tutor marked assignment"}
         </span>
         <h2>{scope?.subject_name || "Assignment"}</h2>
-        <p>{guidance[a.status] || "Open assignment to view details"}</p>
+        <p>{description}</p>
       </div>
       <div className="tma-card-allocation">
         <span>{component?.name || "Assessment component"}</span>
