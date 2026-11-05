@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3 } from "lucide-react";
 import "./tma-deadline-picker.css";
+import { positionDeadlinePopover } from "./deadlinePopoverPosition";
 
 const days = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const pad = (n) => String(n).padStart(2, "0");
@@ -16,7 +18,9 @@ const formatDeadlineLocal = (year, month, day, hour, minute) =>
 export default function TmaDeadlinePicker({ value, onChange, disabled = false, invalid = false }) {
   const [opened, setOpened] = useState(false);
   const [display, setDisplay] = useState(() => initialMonth(value));
+  const [placement, setPlacement] = useState(null);
   const container = useRef(null);
+  const popover = useRef(null);
   const day = value ? Number(value.slice(8, 10)) : null;
   const hour = value ? Number(value.slice(11, 13)) : 17;
   const minute = value ? Number(value.slice(14, 16)) : 0;
@@ -29,9 +33,13 @@ export default function TmaDeadlinePicker({ value, onChange, disabled = false, i
     if (!opened) return undefined;
     const handle = (event) => {
       if (event.type === "keydown" && event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation(); // Keep Escape from also dismissing the parent modal.
         setOpened(false);
         container.current?.querySelector(".tma-deadline-trigger")?.focus();
-      } else if (event.type === "pointerdown" && !container.current?.contains(event.target)) {
+      } else if (event.type === "pointerdown"
+        && !container.current?.contains(event.target)
+        && !popover.current?.contains(event.target)) {
         setOpened(false);
       }
     };
@@ -42,6 +50,51 @@ export default function TmaDeadlinePicker({ value, onChange, disabled = false, i
       document.removeEventListener("keydown", handle);
     };
   }, [opened]);
+  // Render the calendar beside the modal panel rather than inside its
+  // overflow-y-auto content. The overlay is a positioning and focus boundary.
+  const host = opened && typeof document !== "undefined"
+    ? container.current?.closest('[data-modal-overlay="true"]') || document.body
+    : null;
+
+  useLayoutEffect(() => {
+    if (!opened) return undefined;
+    const position = () => {
+      const trigger = container.current?.querySelector(".tma-deadline-trigger");
+      const calendar = popover.current;
+      if (!trigger || !calendar) return;
+      const rect = trigger.getBoundingClientRect();
+      const visual = window.visualViewport;
+      const next = positionDeadlinePopover(
+        { top: rect.top, bottom: rect.bottom, left: rect.left },
+        { width: 342, height: calendar.scrollHeight },
+        {
+          top: visual?.offsetTop ?? 0,
+          left: visual?.offsetLeft ?? 0,
+          width: visual?.width ?? window.innerWidth,
+          height: visual?.height ?? window.innerHeight,
+        },
+      );
+      setPlacement((previous) => previous
+        && previous.top === next.top && previous.left === next.left
+        && previous.maxHeight === next.maxHeight && previous.width === next.width
+        ? previous : next);
+    };
+    position();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(position) : null;
+    if (popover.current) observer?.observe(popover.current);
+    document.addEventListener("scroll", position, true);
+    window.addEventListener("resize", position);
+    window.visualViewport?.addEventListener("resize", position);
+    window.visualViewport?.addEventListener("scroll", position);
+    return () => {
+      observer?.disconnect();
+      document.removeEventListener("scroll", position, true);
+      window.removeEventListener("resize", position);
+      window.visualViewport?.removeEventListener("resize", position);
+      window.visualViewport?.removeEventListener("scroll", position);
+    };
+  }, [opened]);
+
   const setTime = (nextHour, nextMinute) => {
     const picked = day ? new Date(`${selectedDate}T12:00:00`) : new Date();
     const y = picked.getFullYear();
@@ -62,13 +115,19 @@ export default function TmaDeadlinePicker({ value, onChange, disabled = false, i
       aria-haspopup="dialog" aria-expanded={opened} aria-invalid={invalid}
       disabled={disabled} onClick={() => {
         setDisplay(initialMonth(value));
+        setPlacement(null);
         setOpened((old) => !old);
       }}>
       <CalendarDays size={18} aria-hidden="true" />
       <span>{summary}</span>
       <Clock3 size={17} aria-hidden="true" />
     </button>
-    {opened && <div className="tma-deadline-popover" role="dialog" aria-label="Submission deadline calendar">
+    {opened && host && createPortal(<div ref={popover} data-modal-popover="true"
+      className="tma-deadline-popover" role="dialog" aria-label="Submission deadline calendar"
+      style={{ top: placement?.top ?? 0, left: placement?.left ?? 0,
+        maxHeight: placement?.maxHeight, width: placement?.width,
+        visibility: placement ? "visible" : "hidden" }}
+      onClick={(event) => event.stopPropagation()}>
       <div className="tma-deadline-month">
         <button type="button" aria-label="Previous month" onClick={() => shift(-1)}><ChevronLeft size={18} /></button>
         <strong>{new Date(display.year, display.month, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</strong>
@@ -95,6 +154,6 @@ export default function TmaDeadlinePicker({ value, onChange, disabled = false, i
         </select></label>
       </div>
       <button type="button" className="tma-deadline-done" onClick={() => setOpened(false)}>Done</button>
-    </div>}
+    </div>, host)}
   </div>;
 }
