@@ -893,6 +893,37 @@ class TMAParticipant(BaseModel):
     )
 
 
+class TMAClosureRun(BaseModel):
+    """One manual or automatic closure event; does not freeze students."""
+
+    __tablename__ = "tma_closure_runs"
+
+    assignment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    revision_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    closed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    cutoff_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    original_deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "assignment_id"],
+            [f"{PUBLIC_SCHEMA}.tma_assignments.tenant_id", f"{PUBLIC_SCHEMA}.tma_assignments.id"],
+            name="fk_tma_closure_tenant_assignment",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "revision_id"],
+            [f"{PUBLIC_SCHEMA}.tma_assignment_revisions.tenant_id", f"{PUBLIC_SCHEMA}.tma_assignment_revisions.id"],
+            name="fk_tma_closure_tenant_revision",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("tenant_id", "assignment_id", "closed_at", name="uq_tma_closure_assignment_closed_at"),
+        Index("ix_tma_closure_assignment", "tenant_id", "assignment_id", "closed_at"),
+    )
+
+
 class TMAAttempt(BaseModel):
     """
     Represents a student's attempt at a TMA assignment revision.
