@@ -114,7 +114,7 @@ class TMADeadlineEligibilityRepository:
                     TMAClosureRun.tenant_id == assignment.tenant_id,
                     TMAClosureRun.assignment_id == assignment.id,
                     TMAClosureRun.closed_at == assignment.closed_at,
-                )
+                ).execution_options(populate_existing=True)
             )
         ).scalar_one_or_none()
         if closure is None or closure.eligibility_captured_at is None:
@@ -168,6 +168,13 @@ class TMADeadlineEligibilityRepository:
                 "Deadline eligibility tracking predates this closure; "
                 "administrator reconciliation is required."
             )
+        # PL/pgSQL updated the row outside the ORM identity map. Refresh it
+        # so later reads in this transaction see the captured marker.
+        await db.execute(
+            select(TMAClosureRun)
+            .where(TMAClosureRun.tenant_id == tenant_id, TMAClosureRun.id == closure_id)
+            .execution_options(populate_existing=True)
+        )
 
     @staticmethod
     async def enrollment(
