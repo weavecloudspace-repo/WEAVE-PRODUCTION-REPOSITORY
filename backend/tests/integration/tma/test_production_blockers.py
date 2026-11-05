@@ -971,6 +971,8 @@ async def test_overdue_curriculum_mutation_captures_before_worker(tma_world):
     # BEFORE UPDATE trigger must make the closure and snapshot atomically.
     student.is_active = False
     await w.db.commit()
+    # Database trigger updates the assignment outside SQLAlchemy's identity map.
+    await w.db.refresh(item)
     closure = (
         await w.db.execute(
             select(TMAClosureRun).where(
