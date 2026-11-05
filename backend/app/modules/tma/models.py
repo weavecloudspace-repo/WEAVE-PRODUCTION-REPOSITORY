@@ -915,7 +915,10 @@ class TMAClosureRun(BaseModel):
         ),
         ForeignKeyConstraint(
             ["tenant_id", "revision_id"],
-            [f"{PUBLIC_SCHEMA}.tma_assignment_revisions.tenant_id", f"{PUBLIC_SCHEMA}.tma_assignment_revisions.id"],
+            [
+                f"{PUBLIC_SCHEMA}.tma_assignment_revisions.tenant_id",
+                f"{PUBLIC_SCHEMA}.tma_assignment_revisions.id",
+            ],
             name="fk_tma_closure_tenant_revision",
             ondelete="RESTRICT",
         ),
