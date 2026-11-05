@@ -146,7 +146,9 @@ async def test_reopening_expired_assignment_requires_new_deadline(monkeypatch):
     monkeypatch.setattr(lifecycle.TMAAcademicGuard, "lock", AsyncMock())
     with pytest.raises(ConflictException, match="Choose a future deadline"):
         await lifecycle.TMALifecycleService.reopen_assignment(
-            db, actor=owner, assignment_id=assignment.id,
+            db,
+            actor=owner,
+            assignment_id=assignment.id,
             closes_at=datetime.now(timezone.utc) - timedelta(minutes=1),
         )
     db.commit.assert_not_awaited()
