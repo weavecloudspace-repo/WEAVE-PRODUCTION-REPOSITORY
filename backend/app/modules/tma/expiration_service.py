@@ -8,7 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache.events import flush_cache_invalidation_events
-from app.modules.tma.models import TMAAssignment, TMAAssignmentStatus
+from app.modules.tma.models import TMAAssignment, TMAAssignmentStatus, TMAClosureRun
+from app.modules.tma.repository import TMARevisionRepository
 
 
 class TMAExpirationService:
@@ -42,10 +43,29 @@ class TMAExpirationService:
             .all()
         )
         for assignment in due:
+            revision = await TMARevisionRepository.get_by_number(
+                db, assignment.tenant_id, assignment.id, assignment.current_revision_number
+            )
+            if revision is None:
+                # Preserve the active assignment for investigation rather than
+                # closing it without a durable grading cycle.
+                continue
             assignment.status = TMAAssignmentStatus.CLOSED
             assignment.closed_at = current
             assignment.zero_grading_requested_at = current
+            assignment.zero_grading_completed_at = None
+            db.add(
+                TMAClosureRun(
+                    tenant_id=assignment.tenant_id,
+                    assignment_id=assignment.id,
+                    revision_id=revision.id,
+                    closed_at=current,
+                    cutoff_at=assignment.closes_at,
+                    original_deadline_at=assignment.closes_at,
+                    kind="automatic",
+                )
+            )
         if due:
             await db.commit()
             await flush_cache_invalidation_events(db)
-        return {"closed": len(due)}
+        return {"closed": sum(a.status == TMAAssignmentStatus.CLOSED for a in due)}
