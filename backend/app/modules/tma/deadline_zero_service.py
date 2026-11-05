@@ -102,9 +102,9 @@ class TMADeadlineZeroService:
         if attempt.status == TMAAttemptStatus.SUBMITTED:
             return False
         if (
-            attempt.auto_zeroed_at is not None
-            and attempt.auto_zero_resolved_at is None
-            and attempt.score_reversed_at is None
+            getattr(attempt, "auto_zeroed_at", None) is not None
+            and getattr(attempt, "auto_zero_resolved_at", None) is None
+            and getattr(attempt, "score_reversed_at", None) is None
             and attempt.score_id is not None
         ):
             # The student missed another closure. The original zero is still
@@ -123,7 +123,7 @@ class TMADeadlineZeroService:
             correct=0,
             total=total_questions,
             attempt=attempt,
-            scoring_date=min(assignment.closes_at, assignment.closed_at).date(),
+            scoring_date=min(assignment.closes_at, getattr(assignment, "closed_at", None) or assignment.closes_at).date(),
             deadline_subject_id=subject_id,
         )
         attempt.status = TMAAttemptStatus.SUBMITTED
