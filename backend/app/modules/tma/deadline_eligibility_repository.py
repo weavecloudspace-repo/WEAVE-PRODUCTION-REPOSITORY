@@ -1,13 +1,7 @@
-"""Historical closure-time eligibility derived from enrollment dates.
+"""Closure-scoped immutable eligibility; current enrollment is used only at capture.
 
-Live TMA participation uses current enrollment independently. Deadline zero
-grading derives its candidates from the effective enrollment at this specific
-closure, not a one-time revision roster. Old immutable snapshot records remain
-in PostgreSQL as historic evidence but do not grant/revoke eligibility.
-
-Elective, classroom and curriculum state without historical versioning cannot
-be reconstructed perfectly after later edits; the query is intentionally
-conservative and excludes electives selected only *after* the closure.
+Each closure records its own roster. Retained revision-wide snapshots are audit
+history only and cannot be silently attributed to a later reopening cycle.
 """
 
 from __future__ import annotations
@@ -15,12 +9,16 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import and_, select, text
+from app.core.exceptions import ConflictException
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.students.models import StudentEnrollment
 from app.modules.tma.models import (
     TMAAttempt,
+    TMAAssignment,
+    TMAClosureRun,
+    TMAClosureEligibility,
     TMAAttemptStatus,
     TMAParticipant,
     TMAZeroGradingFailure,
@@ -107,9 +105,72 @@ class TMADeadlineEligibilityRepository:
         )
 
     @staticmethod
-    async def capture(db: AsyncSession, *, tenant_id: uuid.UUID, assignment_id: uuid.UUID):
-        """Legacy compatibility hook; new closure processing never writes a roster."""
-        return None
+    async def _closure(db: AsyncSession, assignment) -> TMAClosureRun:
+        if assignment.closed_at is None:
+            raise ConflictException("TMA has no recorded closure.")
+        closure = (
+            await db.execute(
+                select(TMAClosureRun).where(
+                    TMAClosureRun.tenant_id == assignment.tenant_id,
+                    TMAClosureRun.assignment_id == assignment.id,
+                    TMAClosureRun.closed_at == assignment.closed_at,
+                )
+            )
+        ).scalar_one_or_none()
+        if closure is None or closure.eligibility_captured_at is None:
+            raise ConflictException(
+                "Closure eligibility tracking is missing or predates the deadline; "
+                "administrator reconciliation is required."
+            )
+        return closure
+
+    @staticmethod
+    async def capture(
+        db: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        assignment_id: uuid.UUID,
+        closure_id: uuid.UUID | None = None,
+    ) -> None:
+        """Freeze one closure's roster before subsequent eligibility changes.
+
+        Caller must hold the assignment row lock and commit this capture
+        in the same transaction as the CLOSED lifecycle transition.
+        """
+        if closure_id is None:
+            closure_id = (
+                await db.execute(
+                    select(TMAClosureRun.id)
+                    .join(
+                        TMAAssignment,
+                        and_(
+                            TMAClosureRun.tenant_id
+                            == TMAAssignment.tenant_id,
+                            TMAClosureRun.assignment_id
+                            == TMAAssignment.id,
+                            TMAClosureRun.closed_at
+                            == TMAAssignment.closed_at,
+                        ),
+                    )
+                    .where(
+                        TMAClosureRun.tenant_id == tenant_id,
+                        TMAClosureRun.assignment_id == assignment_id,
+                    )
+                )
+            ).scalar_one_or_none()
+        if closure_id is None:
+            raise ConflictException("Closure event is missing; cannot freeze eligibility.")
+        captured = (
+            await db.execute(
+                text("SELECT public.tma_capture_closure_eligibility(:tenant, :closure)"),
+                {"tenant": tenant_id, "closure": closure_id},
+            )
+        ).scalar_one()
+        if not captured:
+            raise ConflictException(
+                "Deadline eligibility tracking predates this closure; "
+                "administrator reconciliation is required."
+            )
 
     @staticmethod
     async def enrollment(
@@ -121,28 +182,36 @@ class TMADeadlineEligibilityRepository:
         assignment=None,
     ):
         if assignment is None:
-            raise ValueError("Historical grading requires the closure assignment scope")
-        roster = TMADeadlineEligibilityRepository._roster(assignment)
+            raise ValueError("Historical grading requires a specific closure")
+        closure = await TMADeadlineEligibilityRepository._closure(db, assignment)
+        if closure.revision_id != revision_id:
+            raise ConflictException("Closure revision differs from requested revision.")
+        roster = TMAClosureEligibility
         return (
             await db.execute(
-                select(StudentEnrollment, roster.c.subject_id)
+                select(StudentEnrollment, roster.subject_id)
                 .join(
                     roster,
                     and_(
-                        roster.c.student_enrollment_id == StudentEnrollment.id,
-                        StudentEnrollment.tenant_id == tenant_id,
+                        roster.tenant_id == StudentEnrollment.tenant_id,
+                        roster.student_enrollment_id == StudentEnrollment.id,
+                        roster.class_id == StudentEnrollment.class_id,
                     ),
                 )
                 .where(
-                    roster.c.student_id == student_id,
+                    roster.tenant_id == tenant_id,
+                    roster.closure_run_id == closure.id,
+                    roster.student_id == student_id,
                 )
-                .limit(1)
             )
         ).one_or_none()
 
     @staticmethod
     async def pending(db: AsyncSession, *, assignment, revision_id: uuid.UUID, limit: int):
-        roster = TMADeadlineEligibilityRepository._roster(assignment)
+        closure = await TMADeadlineEligibilityRepository._closure(db, assignment)
+        if closure.revision_id != revision_id:
+            raise ConflictException("Closure refers to a different published revision.")
+        roster = TMAClosureEligibility
         submitted = (
             select(TMAParticipant.student_id)
             .join(
@@ -163,21 +232,23 @@ class TMADeadlineEligibilityRepository:
         return list(
             (
                 await db.execute(
-                    select(roster.c.student_id, failure)
+                    select(roster.student_id, failure)
                     .outerjoin(
                         failure,
                         and_(
                             failure.tenant_id == assignment.tenant_id,
                             failure.assignment_id == assignment.id,
                             failure.revision_number == assignment.current_revision_number,
-                            failure.student_id == roster.c.student_id,
+                            failure.student_id == roster.student_id,
                         ),
                     )
                     .where(
-                        roster.c.student_id.not_in(submitted),
+                        roster.tenant_id == assignment.tenant_id,
+                        roster.closure_run_id == closure.id,
+                        roster.student_id.not_in(submitted),
                         failure.resolution.is_(None) | (failure.resolution != "exempt"),
                     )
-                    .order_by(failure.last_failed_at.asc().nullsfirst(), roster.c.student_id)
+                    .order_by(failure.last_failed_at.asc().nullsfirst(), roster.student_id)
                     .limit(limit)
                 )
             ).all()
