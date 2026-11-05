@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Annotated
 
@@ -588,6 +589,26 @@ async def close_assignment(
         actor=actor,
         assignment_id=assignment_id,
     )
+    # The closure is already committed; Redis failure cannot roll it back.
+    # The periodic database sweep recovers when enqueue is unavailable.
+    from app.core.queue.arq import enqueue_tma_zero_grading_job
+
+    try:
+        queued = await enqueue_tma_zero_grading_job(
+            assignment_id=str(assignment.id),
+            tenant_id=str(assignment.tenant_id),
+            closed_at=assignment.closed_at.isoformat(),
+        )
+        if not queued:
+            logging.getLogger(__name__).warning(
+                "tma.deadline_zero.enqueue_deferred",
+                extra={"assignment_id": str(assignment.id)},
+            )
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "tma.deadline_zero.enqueue_failed",
+            extra={"assignment_id": str(assignment.id)},
+        )
     return TMAAssignmentStatusResponse.model_validate(assignment)
 
 

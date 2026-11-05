@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -151,6 +151,10 @@ class TMADeadlineZeroService:
         *,
         now: datetime | None = None,
         tenant_ids: set[uuid.UUID] | None = None,
+        assignment_id: uuid.UUID | None = None,
+        closed_at: datetime | None = None,
+        skip_assignment_ids: set[uuid.UUID] | None = None,
+        retry_cooldown_seconds: int = 0,
     ) -> dict[str, int]:
         current = now or datetime.now(timezone.utc)
         # Existing CLOSED TMAs are not backfilled: only assignments closed by
@@ -169,6 +173,25 @@ class TMADeadlineZeroService:
                 .join(tenant_turn, tenant_turn.c.tenant_id == TMAAssignment.tenant_id)
                 .where(
                     *([TMAAssignment.tenant_id.in_(tenant_ids)] if tenant_ids is not None else []),
+                    *([TMAAssignment.id == assignment_id] if assignment_id is not None else []),
+                    *([TMAAssignment.closed_at == closed_at] if closed_at is not None else []),
+                    *(
+                        [TMAAssignment.id.not_in(skip_assignment_ids)]
+                        if skip_assignment_ids
+                        else []
+                    ),
+                    *(
+                        [
+                            or_(
+                                TMAAssignment.zero_grading_error.is_(None),
+                                TMAAssignment.zero_grading_last_processed_at.is_(None),
+                                TMAAssignment.zero_grading_last_processed_at
+                                <= current - timedelta(seconds=retry_cooldown_seconds),
+                            )
+                        ]
+                        if retry_cooldown_seconds > 0
+                        else []
+                    ),
                     TMAAssignment.status == TMAAssignmentStatus.CLOSED,
                     TMAAssignment.zero_grading_requested_at.is_not(None),
                     TMAAssignment.zero_grading_completed_at.is_(None),
@@ -187,6 +210,8 @@ class TMADeadlineZeroService:
         ).scalar_one_or_none()
         if assignment is None:
             return {"zeroed": 0, "blocked": 0, "pending": 0}
+        if skip_assignment_ids is not None:
+            skip_assignment_ids.add(assignment.id)
 
         try:
             revision = await TMARevisionRepository.get_by_number(

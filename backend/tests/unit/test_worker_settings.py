@@ -29,6 +29,7 @@ def test_heavy_worker_registration_imports_cleanly() -> None:
         "process_session_progression_job",
         "process_cbt_result_rollback_job",
         "process_tma_cancellation_job",
+        "process_tma_zero_grading_job",
     }
     assert HeavyWorkerSettings.max_jobs == 1
     assert HeavyWorkerSettings.job_timeout == 3600
