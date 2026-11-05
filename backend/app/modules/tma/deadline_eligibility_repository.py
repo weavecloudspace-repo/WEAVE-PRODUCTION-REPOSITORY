@@ -19,7 +19,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.students.models import StudentEnrollment
 from app.modules.tma.models import (
-    TMAAttempt, TMAParticipant, TMAAttemptStatus, TMAZeroGradingFailure,
+    TMAAttempt,
+    TMAAttemptStatus,
+    TMAParticipant,
+    TMAZeroGradingFailure,
 )
 
 # Shares the original deadline eligibility predicates; unlike
@@ -54,11 +57,10 @@ _CLOSURE_ELIGIBILITY_SQL = """
         AND l.status::text = 'active'
         AND cs.id = :curriculum_subject AND cs.is_active
         AND sub.is_active AND sub.archived_at IS NULL
-        AND (NOT cs.is_elective OR EXISTS (
+        AND (NOT cs.is_elective OR cs.elective_group_id IS NULL OR EXISTS (
             SELECT 1 FROM public.student_elective_selections es
             WHERE es.tenant_id = :tenant AND es.student_id = s.id
                 AND es.curriculum_subject_id = cs.id
-                AND es.created_at <= CAST(:cutoff AS timestamptz)
         ))
         AND (l.specialization_required_from_term_position IS NULL
             OR (CASE t.name::text WHEN 'first_term' THEN 1
@@ -78,7 +80,7 @@ class TMADeadlineEligibilityRepository:
     def _roster(assignment):
         # Automatic closure uses the published deadline; manual close must
         # persist the actual early cutoff in closes_at.
-        cutoff = assignment.closes_at
+        cutoff = min(assignment.closes_at, assignment.closed_at) if assignment.closed_at else assignment.closes_at
         if cutoff is None:
             raise ValueError("TMA closure has no effective cutoff")
         return (
