@@ -248,6 +248,7 @@ class TMALifecycleService:
         errors = await TMALifecycleService._readiness_errors(db, assignment)
         if errors:
             raise ConflictException("TMA is not ready: " + "; ".join(errors))
+        await TMAAcademicGuard.require_draft_results(db, assignment)
         revision = await TMARevisionRepository.get_by_number(
             db,
             actor.tenant_id,
