@@ -107,8 +107,10 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
   const [results, setResults] = useState([]);
   const [resultTotal, setResultTotal] = useState(0);
   const [resultPage, setResultPage] = useState(0);
-  const [resultSearch, setResultSearch] = useState("");
-  const [appliedResultSearch, setAppliedResultSearch] = useState("");
+  const [resultSearch, setResultSearch] = useState(() => searchParams.get("search") || "");
+  const [appliedResultSearch, setAppliedResultSearch] = useState(
+    () => (searchParams.get("search") || "").trim(),
+  );
   const resultsRequestVersion = useRef(0);
 
   useEffect(() => {
@@ -119,13 +121,13 @@ function ResultsWorkspace({ activeTab, onContextChange }) {
   const [entryResults, setEntryResults] = useState([]);
   const [entryResultsLoading, setEntryResultsLoading] = useState(false);
   const [entryResultsError, setEntryResultsError] = useState("");
-  const [filters, setFilters] = useState({
-    class_id: "",
-    academic_session_id: "",
-    academic_term_id: "",
+  const [filters, setFilters] = useState(() => ({
+    class_id: searchParams.get("class_id") || "",
+    academic_session_id: searchParams.get("academic_session_id") || "",
+    academic_term_id: searchParams.get("academic_term_id") || "",
     status: "",
     subject_id: "",
-  });
+  }));
   const [form, setForm] = useState(BLANK_FORM);
   const [pendingAction, setPendingAction] = useState(null);
   const [reopenTarget, setReopenTarget] = useState(null);

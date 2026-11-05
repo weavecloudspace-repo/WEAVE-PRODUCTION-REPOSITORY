@@ -25,6 +25,7 @@ import TmaAIComposer from "./TmaAIComposer";
 import TmaQuestionEditor from "./TmaQuestionEditor";
 import TmaQuestionList from "./TmaQuestionList";
 import TmaDeadlinePicker from "./TmaDeadlinePicker";
+import TmaReconciliationPanel from "./TmaReconciliationPanel";
 
 const field =
   "min-h-11 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text";
@@ -559,6 +560,15 @@ export default function TmaPage({ role }) {
     ["pending", "needs_attention"].includes(assignment?.grading_state);
   const cancellationPending = assignment?.status === "cancelling" &&
     cancellation?.status !== "failed";
+  // Load actionable conflicts once grading reports a block, without another click.
+  useEffect(() => {
+    if (!assignmentId || !canManage || assignment?.grading_state !== "needs_attention") return;
+    let active = true;
+    service.zeroConflicts(assignmentId)
+      .then((items) => { if (active) setZeroConflicts(items); })
+      .catch((error) => { if (active) showError(getErrorMessage(error)); });
+    return () => { active = false; };
+  }, [assignmentId, assignment?.grading_state, canManage, showError]);
   const canEditQuestion = (q) =>
     canManage ||
     (q.author_actor_type === "teacher" &&
@@ -898,43 +908,38 @@ export default function TmaPage({ role }) {
                 {(gradingPending || cancellationPending) && (
                   <p role="status" className="w-full rounded-xl border border-border bg-surface-muted p-3 text-sm text-text">
                     {gradingPending
-                      ? "This TMA is closed. Missed-deadline grading is being finalized. Reopening and cancellation are unavailable until it finishes. Status refreshes automatically."
+                      ? assignment.grading_state === "needs_attention"
+                        ? "Some missed-TMA grades need review. Resolve the affected students below before reopening or cancelling this assignment."
+                        : "This TMA is closed. Missed-deadline grading is being finalized. Reopening and cancellation are unavailable until it finishes. Status refreshes automatically."
                       : "Weave is reversing eligible TMA scores. Status refreshes automatically."}
                   </p>
                 )}
-                {cancellationConflicts.length > 0 && (
-                  <div role="alert" className="w-full rounded-xl border border-border bg-surface-muted p-3 text-xs text-text">
-                    <p className="font-semibold">Cancellation requires academic reconciliation:</p>
-                    {cancellationConflicts.map((issue) => (
-                      <p key={issue.attempt_id} className="mt-1">
-                        Student {issue.student_id}: academic reconciliation required
-                      </p>
-                    ))}
-                    <p className="mt-2 text-text-muted">
-                      Resolve the affected results using the normal academic approval/reopen workflow, then choose Retry cancellation.
-                    </p>
-                  </div>
-                )}
-                {zeroConflicts.length > 0 && (
-                  <div role="alert" className="w-full rounded-xl border border-border bg-surface-muted p-3 text-xs text-text">
-                    <p className="font-semibold">Missed-deadline grading needs reconciliation:</p>
-                    {zeroConflicts.map((issue) => (
-                      <div key={issue.student_id} className="mt-2 flex flex-wrap items-center gap-2">
-                        <span>Student {issue.student_id}: academic reconciliation required ({issue.attempts} attempt(s))</span>
-                        {role === "admin" && (
-                          <Button variant="outline" size="sm" onClick={() => {
-                            setZeroExemptTarget(issue.student_id);
-                            setReason("");
-                            setDialog("zeroExempt");
-                          }}>Exempt with reason</Button>
-                        )}
-                      </div>
-                    ))}
-                    <p className="mt-2 text-text-muted">
-                      First repair missing teachers or academic results; retries run automatically. Exemptions are audited and do not modify marks.
-                    </p>
-                  </div>
-                )}
+                <TmaReconciliationPanel
+                  kind="cancellation"
+                  issues={cancellationConflicts}
+                  assignment={assignment}
+                  role={role}
+                  busy={busy}
+                  onRefresh={() => run(async () => {
+                    setCancellationConflicts(await service.cancellationConflicts(assignmentId));
+                  })}
+                />
+                <TmaReconciliationPanel
+                  kind="zero"
+                  issues={zeroConflicts}
+                  assignment={assignment}
+                  role={role}
+                  busy={busy}
+                  onRefresh={() => run(async () => {
+                    setZeroConflicts(await service.zeroConflicts(assignmentId));
+                    await load({ background: true });
+                  })}
+                  onExempt={(issue) => {
+                    setZeroExemptTarget(issue.student_id);
+                    setReason("");
+                    setDialog("zeroExempt");
+                  }}
+                />
                 {assignment.zero_grading_error && (
                   <span role="alert" className="text-xs text-error">
                     Deadline grading needs reconciliation. Inspect affected students; automatic retries continue.
@@ -1333,6 +1338,19 @@ export default function TmaPage({ role }) {
                   remain in place until a student submits successfully.
                 </span>
               </label>
+            )}
+            {dialog === "zeroExempt" && zeroExemptTarget && (
+              <div className="rounded-xl border border-warning/25 bg-surface-muted p-3 text-sm">
+                <p className="font-semibold text-text">
+                  {zeroConflicts.find((item) => item.student_id === zeroExemptTarget)?.student_name || "Selected student"}
+                </p>
+                <p className="mt-1 text-xs text-text-muted">
+                  {zeroConflicts.find((item) => item.student_id === zeroExemptTarget)?.admission_number || "Admission number unavailable"}
+                </p>
+                <p className="mt-2 text-xs text-text-soft">
+                  This student will not receive an automatic zero. Existing academic scores remain unchanged.
+                </p>
+              </div>
             )}
             {(dialog === "cancel" || dialog === "zeroExempt") && (
               <label className="grid gap-2 text-sm">

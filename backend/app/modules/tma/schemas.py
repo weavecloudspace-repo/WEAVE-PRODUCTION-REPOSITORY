@@ -196,6 +196,9 @@ class TMARevisionHistoryResponse(TMAOutput):
 
 class TMAZeroGradingConflictResponse(TMAOutput):
     student_id: uuid.UUID
+    student_name: str | None = None
+    admission_number: str | None = None
+    class_id: uuid.UUID | None = None
     reason: str
     attempts: int
     last_failed_at: datetime
@@ -210,6 +213,9 @@ class TMAZeroExemptionRequest(TMAInput):
 
 class TMACancellationConflictResponse(TMAOutput):
     student_id: uuid.UUID
+    student_name: str | None = None
+    admission_number: str | None = None
+    class_id: uuid.UUID | None = None
     attempt_id: uuid.UUID
     score_id: uuid.UUID | None = None
     reason: str

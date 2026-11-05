@@ -181,3 +181,17 @@ test("abort errors remain silent and are not classified as network failures", as
   assert.equal(parsed.isNetworkError, false);
   assert.equal(parsed.message, "");
 });
+
+test("real HTTP 409 conflicts mentioning cancelled are not mistaken for request aborts", async () => {
+  installBrowserHarness();
+  const { getErrorMessage, isAbortError } = await importFreshApi();
+  const error = new Error("TMA cannot be reopened while cancellation is pending.");
+  error.response = {
+    status: 409,
+    headers: {},
+    data: { detail: "TMA cannot be reopened while cancellation is pending." },
+  };
+  assert.equal(isAbortError(error), false);
+  assert.equal(getErrorMessage(error), "TMA cannot be reopened while cancellation is pending.");
+  assert.equal(isAbortError(new DOMException("The operation was aborted", "AbortError")), true);
+});

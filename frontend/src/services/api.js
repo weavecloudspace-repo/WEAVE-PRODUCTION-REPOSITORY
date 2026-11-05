@@ -49,11 +49,13 @@ const notifyAuthTokenListeners = (token) => {
 };
 
 export const isAbortError = (error) =>
-  error?.name === "AbortError" ||
-  error?.code === 20 ||
-  error?.isAbortError === true ||
-  (typeof error?.message === "string" &&
-    /abort|aborted|cancelled|canceled/i.test(error.message));
+  !error?.response && (
+    error?.name === "AbortError" ||
+    error?.code === 20 ||
+    error?.isAbortError === true ||
+    (typeof error?.message === "string" &&
+      /^(?:the operation was aborted|this operation was aborted|request (?:was )?aborted)\.?$/i.test(error.message.trim()))
+  );
 
 const normalizeDetail = (detail) => {
   if (!detail) return null;

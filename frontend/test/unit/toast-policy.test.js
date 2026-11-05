@@ -46,3 +46,9 @@ test("new notifications never evict errors and retain only four transient toasts
     ["success-2", "success-3", "success-4", "success-5"],
   );
 });
+
+test("repeated error IDs update the existing toast", () => {
+  let toasts = appendToast([], { id: "tma-reopen", type: "error", message: "First conflict" });
+  toasts = appendToast(toasts, { id: "tma-reopen", type: "error", message: "Updated conflict" });
+  assert.deepEqual(toasts, [{ id: "tma-reopen", type: "error", message: "Updated conflict" }]);
+});

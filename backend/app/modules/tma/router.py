@@ -7,6 +7,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from sqlalchemy import and_, select
 from pydantic import TypeAdapter
 
 from app.core.dependencies.db import DbSession
@@ -17,6 +18,7 @@ from app.core.dependencies.route_guards import (
 from app.core.exceptions import ForbiddenException, ConflictException, NotFoundException
 from app.modules.tma.cache import cached_staff_read
 from app.modules.students.models import Student
+from app.modules.tma.models import TMAClosureEligibility, TMAClosureRun
 from app.modules.teachers.models import TeacherMembership
 from app.modules.tenant_admins.models import TenantAdmin
 from app.modules.tma.models import TMAAssignmentStatus
@@ -649,6 +651,59 @@ async def get_cancellation(
     return TMACancellationRunResponse.model_validate(run)
 
 
+async def _reconciliation_student_context(
+    db: DbSession,
+    *,
+    tenant_id: uuid.UUID,
+    assignment_id: uuid.UUID,
+    student_ids: set[uuid.UUID],
+) -> dict[uuid.UUID, dict]:
+    """Resolve display names and closure-time class in one tenant-scoped query."""
+    if not student_ids:
+        return {}
+    closure_id = (
+        select(TMAClosureRun.id)
+        .where(
+            TMAClosureRun.tenant_id == tenant_id,
+            TMAClosureRun.assignment_id == assignment_id,
+        )
+        .order_by(TMAClosureRun.closed_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    rows = (
+        await db.execute(
+            select(
+                Student.id,
+                Student.first_name,
+                Student.last_name,
+                Student.admission_number,
+                TMAClosureEligibility.class_id,
+            )
+            .select_from(Student)
+            .outerjoin(
+                TMAClosureEligibility,
+                and_(
+                    TMAClosureEligibility.tenant_id == tenant_id,
+                    TMAClosureEligibility.student_id == Student.id,
+                    TMAClosureEligibility.closure_run_id == closure_id,
+                ),
+            )
+            .where(Student.tenant_id == tenant_id, Student.id.in_(student_ids))
+        )
+    ).all()
+    return {
+        student_id: {
+            "student_name": " ".join(filter(None, (first_name, last_name)))
+            or admission_number
+            or "Student",
+            "admission_number": admission_number,
+            "class_id": class_id,
+        }
+        for student_id, first_name, last_name, admission_number, class_id in rows
+    }
+
+
 @author_router.get(
     "/assignments/{assignment_id}/deadline-zeros/conflicts",
     response_model=list[TMAZeroGradingConflictResponse],
@@ -663,7 +718,18 @@ async def get_deadline_zero_conflicts(
     rows = await TMAZeroReconciliationService.list_conflicts(
         db, actor=actor, assignment_id=assignment_id
     )
-    return [TMAZeroGradingConflictResponse.model_validate(row) for row in rows]
+    students = await _reconciliation_student_context(
+        db,
+        tenant_id=actor.tenant_id,
+        assignment_id=assignment_id,
+        student_ids={row.student_id for row in rows},
+    )
+    return [
+        TMAZeroGradingConflictResponse.model_validate(row).model_copy(
+            update=students.get(row.student_id, {})
+        )
+        for row in rows
+    ]
 
 
 @author_router.post(
@@ -705,7 +771,18 @@ async def get_cancellation_conflicts(
     rows = await TMACancellationReconciliationService.conflicts(
         db, actor=actor, assignment_id=assignment_id
     )
-    return [TMACancellationConflictResponse.model_validate(row) for row in rows]
+    students = await _reconciliation_student_context(
+        db,
+        tenant_id=actor.tenant_id,
+        assignment_id=assignment_id,
+        student_ids={row["student_id"] for row in rows},
+    )
+    return [
+        TMACancellationConflictResponse.model_validate(
+            {**row, **students.get(row["student_id"], {})}
+        )
+        for row in rows
+    ]
 
 
 @author_router.post(

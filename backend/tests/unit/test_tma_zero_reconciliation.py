@@ -170,3 +170,47 @@ async def test_exemption_remains_successful_if_redis_dispatch_fails(monkeypatch)
     assert result.resolution == "exempt"
     db.commit.assert_awaited_once()
     enqueue.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_context_resolves_students_without_cross_tenant_lookup():
+    from sqlalchemy.dialects import postgresql
+
+    from app.modules.tma.router import _reconciliation_student_context
+
+    tenant_id, assignment_id, student_id, class_id = uid(), uid(), uid(), uid()
+    row = MagicMock()
+    row.all.return_value = [(student_id, "Ada", "Lovelace", "ADM-102", class_id)]
+    db = AsyncMock()
+    db.execute.return_value = row
+
+    context = await _reconciliation_student_context(
+        db,
+        tenant_id=tenant_id,
+        assignment_id=assignment_id,
+        student_ids={student_id},
+    )
+    assert context[student_id] == {
+        "student_name": "Ada Lovelace",
+        "admission_number": "ADM-102",
+        "class_id": class_id,
+    }
+    sql = str(db.execute.await_args.args[0].compile(dialect=postgresql.dialect()))
+    assert "students.tenant_id" in sql
+    assert "tma_closure_eligibility" in sql
+    assert "tma_closure_runs" in sql
+    assert "students.id IN" in sql
+
+
+@pytest.mark.asyncio
+async def test_empty_reconciliation_context_does_not_hit_database():
+    from app.modules.tma.router import _reconciliation_student_context
+
+    db = AsyncMock()
+    assert (
+        await _reconciliation_student_context(
+            db, tenant_id=uid(), assignment_id=uid(), student_ids=set()
+        )
+        == {}
+    )
+    db.execute.assert_not_awaited()
