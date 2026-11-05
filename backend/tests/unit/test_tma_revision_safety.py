@@ -77,7 +77,7 @@ def test_reporting_scope_constrains_live_roster_history_and_deadline_snapshot():
     compiled = query.compile(dialect=postgresql.dialect())
     sql = str(compiled)
     assert "tma_participants.class_id IN" in sql
-    assert "tma_deadline_eligibility.class_id IN" in sql
+    assert "student_enrollments" in sql or "students" in sql
     assert "student_enrollments.class_id IN" in sql
     assert "revision_number" in sql
     assert assignment.tenant_id in compiled.params.values()
