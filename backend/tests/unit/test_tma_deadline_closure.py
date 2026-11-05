@@ -43,6 +43,8 @@ async def test_worker_closes_due_assignments_without_touching_student_scores(mon
     )
     invalidation = AsyncMock()
     monkeypatch.setattr(expiration, "flush_cache_invalidation_events", invalidation)
+    capture = AsyncMock()
+    monkeypatch.setattr(expiration.TMADeadlineEligibilityRepository, "capture", capture)
 
     result = await expiration.TMAExpirationService.close_due_assignments(
         db, now=current, batch_size=20
@@ -57,6 +59,7 @@ async def test_worker_closes_due_assignments_without_touching_student_scores(mon
     closures = [call.args[0] for call in db.add.call_args_list]
     assert all(item.kind == "automatic" for item in closures)
     assert closures[0].cutoff_at == first.closes_at
+    assert capture.await_count == 2
     db.commit.assert_awaited_once()
     invalidation.assert_awaited_once_with(db)
     query = db.execute.call_args.args[0]
