@@ -98,6 +98,17 @@ class TMADeadlineZeroService:
             attempt.started_by_student = False
         if attempt.status == TMAAttemptStatus.SUBMITTED:
             return False
+        if (
+            attempt.auto_zeroed_at is not None
+            and attempt.auto_zero_resolved_at is None
+            and attempt.score_reversed_at is None
+            and attempt.score_id is not None
+        ):
+            # The student missed another closure. The original zero is still
+            # authoritative: do not duplicate the score or erase its history.
+            attempt.status = TMAAttemptStatus.SUBMITTED
+            await TMAAttemptRepository.save(db, attempt)
+            return False
         # This writes a genuine 0 CA component and captures the exact score ID
         # on the attempt for the existing cancellation worker to reverse.
         await TMAGradingService.persist_component_score(
