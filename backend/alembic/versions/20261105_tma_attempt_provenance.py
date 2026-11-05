@@ -31,9 +31,7 @@ def upgrade() -> None:
         "departments",
         "academic_terms",
     ):
-        op.execute(
-            f"DROP TRIGGER IF EXISTS tma_preserve_deadline ON public.{table}"
-        )
+        op.execute(f"DROP TRIGGER IF EXISTS tma_preserve_deadline ON public.{table}")
 
     op.create_table(
         "tma_closure_runs",
@@ -47,26 +45,34 @@ def upgrade() -> None:
         sa.Column("kind", sa.String(length=16), nullable=False),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True),
-            nullable=False, server_default=sa.func.now(),
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True),
-            nullable=False, server_default=sa.func.now(),
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
         ),
         sa.ForeignKeyConstraint(["tenant_id"], ["public.tenants.id"]),
         sa.ForeignKeyConstraint(
             ["tenant_id", "assignment_id"],
             ["public.tma_assignments.tenant_id", "public.tma_assignments.id"],
-            name="fk_tma_closure_tenant_assignment", ondelete="RESTRICT",
+            name="fk_tma_closure_tenant_assignment",
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["tenant_id", "revision_id"],
             ["public.tma_assignment_revisions.tenant_id", "public.tma_assignment_revisions.id"],
-            name="fk_tma_closure_tenant_revision", ondelete="RESTRICT",
+            name="fk_tma_closure_tenant_revision",
+            ondelete="RESTRICT",
         ),
         sa.UniqueConstraint(
-            "tenant_id", "assignment_id", "closed_at",
+            "tenant_id",
+            "assignment_id",
+            "closed_at",
             name="uq_tma_closure_assignment_closed_at",
         ),
         schema="public",
