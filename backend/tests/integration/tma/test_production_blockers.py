@@ -1082,3 +1082,58 @@ async def test_pre_tracking_deadline_is_not_reconstructed_from_mutable_records(t
     assert result["zeroed"] == 0
     assert result["blocked"] == 1
     assert result["pending"] == 1
+
+
+@pytest.mark.asyncio
+async def test_exemption_from_first_closure_does_not_skip_reopened_zero(tma_world):
+    """An exemption never carries forward across two closures of one revision."""
+    from app.modules.tma.lifecycle_service import TMALifecycleService
+
+    w = tma_world
+    student, _ = await w.student()
+    item, _ = await w.assignment()
+    await due(w, item)
+    first = (
+        await w.db.execute(
+            select(TMAClosureRun).where(
+                TMAClosureRun.tenant_id == w.tenant.id,
+                TMAClosureRun.assignment_id == item.id,
+            )
+        )
+    ).scalar_one()
+    w.db.add(
+        TMAZeroGradingFailure(
+            tenant_id=w.tenant.id,
+            assignment_id=item.id,
+            revision_number=item.current_revision_number,
+            closure_run_id=first.id,
+            student_id=student.id,
+            reason="Admin reviewed",
+            attempts=1,
+            last_failed_at=datetime.now(timezone.utc),
+            resolved_at=datetime.now(timezone.utc),
+            resolution="exempt",
+            resolution_note="First closure only",
+        )
+    )
+    await w.db.commit()
+    first_result = await TMADeadlineZeroService.process_pending(w.db, tenant_ids={w.tenant.id})
+    assert first_result == {"zeroed": 0, "blocked": 0, "pending": 0}
+    await TMALifecycleService.reopen_assignment(
+        w.db,
+        actor=w.admin,
+        assignment_id=item.id,
+        closes_at=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    await TMACancellationService.close(w.db, actor=w.admin, assignment_id=item.id)
+    second_result = await TMADeadlineZeroService.process_pending(w.db, tenant_ids={w.tenant.id})
+    assert second_result == {"zeroed": 1, "blocked": 0, "pending": 0}
+    old = (
+        await w.db.execute(
+            select(TMAZeroGradingFailure).where(
+                TMAZeroGradingFailure.tenant_id == w.tenant.id,
+                TMAZeroGradingFailure.closure_run_id == first.id,
+            )
+        )
+    ).scalar_one()
+    assert old.resolution == "exempt"
