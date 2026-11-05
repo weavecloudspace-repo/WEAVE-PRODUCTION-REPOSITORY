@@ -25,6 +25,7 @@ from app.modules.tma.grading_service import TMAGradingService
 from app.modules.tma.models import (
     TMAAssignment,
     TMAAssignmentStatus,
+    TMAClosureRun,
     TMAAttemptStatus,
     TMAParticipant,
     TMAZeroGradingFailure,
@@ -149,7 +150,7 @@ class TMADeadlineZeroService:
                     TMAAssignment.zero_grading_requested_at.is_not(None),
                     TMAAssignment.zero_grading_completed_at.is_(None),
                     TMAAssignment.closes_at.is_not(None),
-                    TMAAssignment.closes_at <= current,
+                    TMAAssignment.closed_at.is_not(None),
                 )
                 .order_by(
                     tenant_turn.c.last_processed.asc().nullsfirst(),
@@ -180,9 +181,8 @@ class TMADeadlineZeroService:
             if not questions:
                 raise ConflictException("Cannot record zero without published questions.")
             await TMAAuthorizationService.require_open_term(db, assignment)
-            await TMADeadlineEligibilityRepository.capture(
-                db, tenant_id=assignment.tenant_id, assignment_id=assignment.id
-            )
+            # New closures use a time-scoped roster rather than a revision-wide
+            # immutable snapshot. Legacy snapshot rows are retained for audit.
             students = await TMADeadlineEligibilityRepository.pending(
                 db, assignment=assignment, revision_id=revision.id, limit=cls.MAX_WRITES + 1
             )
@@ -266,6 +266,19 @@ class TMADeadlineZeroService:
             if not more and not blocked and not unresolved:
                 assignment.zero_grading_completed_at = current
                 assignment.zero_grading_error = None
+                closure = (
+                    await db.execute(
+                        select(TMAClosureRun)
+                        .where(
+                            TMAClosureRun.tenant_id == assignment.tenant_id,
+                            TMAClosureRun.assignment_id == assignment.id,
+                            TMAClosureRun.closed_at == assignment.closed_at,
+                        )
+                        .with_for_update()
+                    )
+                ).scalar_one_or_none()
+                if closure is not None:
+                    closure.completed_at = current
             elif unresolved:
                 assignment.zero_grading_error = (
                     f"{unresolved} student(s) require academic reconciliation. "
