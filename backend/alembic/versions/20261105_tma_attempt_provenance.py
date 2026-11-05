@@ -14,6 +14,27 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # The old revision-wide capture trigger is incompatible with dynamic
+    # eligibility and repeated closure. Retain all historical snapshot rows.
+    for table in (
+        "students",
+        "student_enrollments",
+        "student_elective_selections",
+        "classes",
+        "academic_levels",
+        "curricula",
+        "curriculum_subjects",
+        "subjects",
+        "curriculum_subject_departments",
+        "class_term_department_assignments",
+        "academic_level_departments",
+        "departments",
+        "academic_terms",
+    ):
+        op.execute(
+            f"DROP TRIGGER IF EXISTS tma_preserve_deadline ON public.{table}"
+        )
+
     op.create_table(
         "tma_closure_runs",
         sa.Column("id", sa.UUID(as_uuid=True), primary_key=True, nullable=False),
