@@ -51,3 +51,40 @@ test("confirming reopen calls its service and reloads after success", async () =
   });
   assert.deepEqual(events, [["reopen", "assignment-1", new Date("2099-11-06T17:00").toISOString()], ["success", "Assignment reopened."], ["dialog", null], ["load"]]);
 });
+
+const confirmHandler = find(ast, (node) => node.type === "JSXAttribute" && node.name.name === "onClick"
+  && source.slice(...node.range).includes('dialog === "reopen"'));
+
+async function attemptReopen(deadline, reopen) {
+  const events = [];
+  await runInNewContext(`(${source.slice(...confirmHandler.value.expression.range)})()`, {
+    dialog: "reopen", assignmentId: "assignment-1", run: (fn) => fn(),
+    reopenDeadline: deadline, Date,
+    service: { reopen: async (...args) => { events.push(["reopen", ...args]); return reopen?.(); } },
+    getErrorMessage: (error) => error.message,
+    showError: (message, options) => { events.push(["error", message, options.id]); },
+    setDialog: (value) => { events.push(["dialog", value]); },
+    load: async () => { events.push(["load"]); },
+    showSuccess: (message) => { events.push(["success", message]); },
+  });
+  return events;
+}
+
+test("reopen validation failures display a global error toast without dismissing the modal", async () => {
+  for (const deadline of ["", "2020-01-01T00:00"]) {
+    const events = await attemptReopen(deadline);
+    assert.deepEqual(events, [
+      ["error", "Choose a valid future deadline before reopening this TMA.", "tma-reopen-assignment-1"],
+    ]);
+  }
+});
+
+test("reopen API failures display the backend error via a toast without closing the modal", async () => {
+  const events = await attemptReopen("2099-11-06T17:00", () => {
+    throw new Error("Cannot reopen while relevant academic results are finalized.");
+  });
+  assert.deepEqual(events, [
+    ["reopen", "assignment-1", new Date("2099-11-06T17:00").toISOString()],
+    ["error", "Cannot reopen while relevant academic results are finalized.", "tma-reopen-assignment-1"],
+  ]);
+});

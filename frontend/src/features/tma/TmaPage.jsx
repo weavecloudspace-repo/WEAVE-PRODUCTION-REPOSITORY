@@ -1349,10 +1349,6 @@ export default function TmaPage({ role }) {
             <Button
               disabled={
                 busy ||
-                (dialog === "reopen" && (
-                  !reopenDeadline ||
-                  !Number.isFinite(new Date(reopenDeadline).getTime())
-                )) ||
                 (["reopen", "cancel"].includes(dialog) && gradingPending) ||
                 (dialog === "cancel" && reason.trim().length < 5) ||
                 (dialog === "zeroExempt" && reason.trim().length < 10)
@@ -1368,11 +1364,17 @@ export default function TmaPage({ role }) {
                     await service.activate(assignmentId);
                   if (dialog === "reopen") {
                     const deadline = new Date(reopenDeadline);
+                    const toastOptions = { id: `tma-reopen-${assignmentId}` };
                     if (!Number.isFinite(deadline.getTime()) || deadline <= new Date()) {
-                      showError("Choose a valid future deadline before reopening this TMA.");
+                      showError("Choose a valid future deadline before reopening this TMA.", toastOptions);
                       return;
                     }
-                    await service.reopen(assignmentId, deadline.toISOString());
+                    try {
+                      await service.reopen(assignmentId, deadline.toISOString());
+                    } catch (error) {
+                      showError(getErrorMessage(error), toastOptions);
+                      return;
+                    }
                   }
                   if (dialog === "close") await service.close(assignmentId);
                   if (dialog === "cancel")
