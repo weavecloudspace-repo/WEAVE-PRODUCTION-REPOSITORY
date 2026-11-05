@@ -958,3 +958,106 @@ async def test_concurrent_cancellation_and_grading_finish_without_orphaned_score
             )
         )
     ).scalar_one() == 0
+
+@pytest.mark.asyncio
+async def test_overdue_curriculum_mutation_captures_before_worker(tma_world):
+    """The first post-deadline write must freeze the pre-write roster."""
+    w = tma_world
+    student, _ = await w.student()
+    item, _ = await w.assignment()
+    item.closes_at = datetime.now(timezone.utc) - timedelta(milliseconds=1)
+    await w.db.commit()
+
+    # BEFORE UPDATE trigger must make the closure and snapshot atomically.
+    student.is_active = False
+    await w.db.commit()
+    closure = (
+        await w.db.execute(
+            select(TMAClosureRun).where(
+                TMAClosureRun.tenant_id == w.tenant.id,
+                TMAClosureRun.assignment_id == item.id,
+            )
+        )
+    ).scalar_one()
+    assert item.status == TMAAssignmentStatus.CLOSED
+    assert closure.kind == "automatic"
+    assert closure.eligibility_captured_at is not None
+    assert (
+        await w.db.execute(
+            select(TMAClosureEligibility.student_id).where(
+                TMAClosureEligibility.tenant_id == w.tenant.id,
+                TMAClosureEligibility.closure_run_id == closure.id,
+            )
+        )
+    ).scalar_one() == student.id
+    outcome = await TMADeadlineZeroService.process_pending(
+        w.db, tenant_ids={w.tenant.id}
+    )
+    assert outcome == {"zeroed": 1, "blocked": 0, "pending": 0}
+
+
+@pytest.mark.asyncio
+async def test_reopened_tma_maintains_separate_closure_rosters(tma_world):
+    """New admission belongs to later closure, not an older closure."""
+    from app.modules.tma.lifecycle_service import TMALifecycleService
+
+    w = tma_world
+    first_student, _ = await w.student()
+    item, _ = await w.assignment()
+    await due(w, item)
+    await TMADeadlineZeroService.process_pending(w.db, tenant_ids={w.tenant.id})
+    first_run = (
+        await w.db.execute(
+            select(TMAClosureRun).where(
+                TMAClosureRun.tenant_id == w.tenant.id,
+                TMAClosureRun.assignment_id == item.id,
+            )
+        )
+    ).scalar_one()
+    await TMALifecycleService.reopen_assignment(
+        w.db,
+        actor=w.admin,
+        assignment_id=item.id,
+        closes_at=datetime.now(timezone.utc) + timedelta(days=2),
+    )
+    new_student, _ = await w.student()
+    await TMACancellationService.close(w.db, actor=w.admin, assignment_id=item.id)
+    runs = list(
+        (
+            await w.db.execute(
+                select(TMAClosureRun).where(
+                    TMAClosureRun.tenant_id == w.tenant.id,
+                    TMAClosureRun.assignment_id == item.id,
+                )
+                .order_by(TMAClosureRun.closed_at)
+            )
+        ).scalars()
+    )
+    assert len(runs) == 2
+    assert runs[0].id == first_run.id
+    first_ids = set(
+        (
+            await w.db.execute(
+                select(TMAClosureEligibility.student_id).where(
+                    TMAClosureEligibility.tenant_id == w.tenant.id,
+                    TMAClosureEligibility.closure_run_id == runs[0].id,
+                )
+            )
+        ).scalars()
+    )
+    second_ids = set(
+        (
+            await w.db.execute(
+                select(TMAClosureEligibility.student_id).where(
+                    TMAClosureEligibility.tenant_id == w.tenant.id,
+                    TMAClosureEligibility.closure_run_id == runs[1].id,
+                )
+            )
+        ).scalars()
+    )
+    assert first_ids == {first_student.id}
+    assert second_ids == {first_student.id, new_student.id}
+    outcome = await TMADeadlineZeroService.process_pending(
+        w.db, tenant_ids={w.tenant.id}
+    )
+    assert outcome == {"zeroed": 1, "blocked": 0, "pending": 0}
