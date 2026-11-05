@@ -145,6 +145,8 @@ async def test_activation_publishes_revision_only_after_readiness(monkeypatch) -
     from app.modules.tma import lifecycle_service as mod
 
     admin = _admin()
+    monkeypatch.setattr(mod.TMAAcademicGuard, "lock", AsyncMock())
+    monkeypatch.setattr(mod.TMAAcademicGuard, "require_draft_results", AsyncMock())
     assignment = SimpleNamespace(
         id=_id(),
         tenant_id=admin.tenant_id,
@@ -190,7 +192,9 @@ async def test_student_start_uses_existing_participant_and_attempt(monkeypatch) 
     student = SimpleNamespace(id=_id(), tenant_id=_id())
     assignment, revision = SimpleNamespace(id=_id()), SimpleNamespace(id=_id())
     participant = SimpleNamespace(id=_id())
-    existing = SimpleNamespace(id=_id(), status=TMAAttemptStatus.IN_PROGRESS)
+    existing = SimpleNamespace(
+        id=_id(), status=TMAAttemptStatus.IN_PROGRESS, student_started_at=None
+    )
     monkeypatch.setattr(
         mod.TMAAttemptService,
         "_active_assignment",
@@ -299,6 +303,7 @@ async def test_student_submission_commits_score_and_attempt_once(monkeypatch) ->
         submitted_at=None,
         correct_answers=None,
         total_questions=None,
+        auto_zeroed_at=None,
     )
     revision = SimpleNamespace(id=attempt.revision_id, assignment_id=_id())
     assignment = SimpleNamespace(id=revision.assignment_id)

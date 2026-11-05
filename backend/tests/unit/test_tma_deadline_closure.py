@@ -36,8 +36,15 @@ async def test_worker_closes_due_assignments_without_touching_student_scores(mon
     db.execute.return_value = SimpleNamespace(
         scalars=lambda: SimpleNamespace(all=lambda: [first, second])
     )
+    monkeypatch.setattr(
+        expiration.TMARevisionRepository,
+        "get_by_number",
+        AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
+    )
     invalidation = AsyncMock()
     monkeypatch.setattr(expiration, "flush_cache_invalidation_events", invalidation)
+    capture = AsyncMock()
+    monkeypatch.setattr(expiration.TMADeadlineEligibilityRepository, "capture", capture)
 
     result = await expiration.TMAExpirationService.close_due_assignments(
         db, now=current, batch_size=20
@@ -48,6 +55,11 @@ async def test_worker_closes_due_assignments_without_touching_student_scores(mon
     assert second.status == TMAAssignmentStatus.CLOSED
     assert first.closed_at == current
     assert second.closed_at == current
+    assert db.add.call_count == 2
+    closures = [call.args[0] for call in db.add.call_args_list]
+    assert all(item.kind == "automatic" for item in closures)
+    assert closures[0].cutoff_at == first.closes_at
+    assert capture.await_count == 2
     db.commit.assert_awaited_once()
     invalidation.assert_awaited_once_with(db)
     query = db.execute.call_args.args[0]
@@ -143,9 +155,13 @@ async def test_reopening_expired_assignment_requires_new_deadline(monkeypatch):
     monkeypatch.setattr(
         lifecycle.TMAAuthorizationService, "require_assignment_management", lambda *_: None
     )
-    with pytest.raises(ConflictException, match="Extend the passed deadline"):
+    monkeypatch.setattr(lifecycle.TMAAcademicGuard, "lock", AsyncMock())
+    with pytest.raises(ConflictException, match="Choose a future deadline"):
         await lifecycle.TMALifecycleService.reopen_assignment(
-            db, actor=owner, assignment_id=assignment.id
+            db,
+            actor=owner,
+            assignment_id=assignment.id,
+            closes_at=datetime.now(timezone.utc) - timedelta(minutes=1),
         )
     db.commit.assert_not_awaited()
 

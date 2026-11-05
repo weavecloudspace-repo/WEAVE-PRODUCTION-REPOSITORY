@@ -37,6 +37,7 @@ from app.modules.tma.schemas import (
     TMAAssignmentListResponse,
     TMAAssignmentResponse,
     TMAAssignmentStatusResponse,
+    TMAReopenRequest,
     TMAAssignmentUpdate,
     TMACancellationRequest,
     TMACancellationConflictResponse,
@@ -263,10 +264,13 @@ async def activate_assignment(
 )
 async def reopen_assignment(
     assignment_id: uuid.UUID,
+    payload: TMAReopenRequest,
     db: DbSession,
     actor: Author,
 ) -> TMAAssignmentStatusResponse:
-    item = await TMALifecycleService.reopen_assignment(db, actor=actor, assignment_id=assignment_id)
+    item = await TMALifecycleService.reopen_assignment(
+        db, actor=actor, assignment_id=assignment_id, closes_at=payload.closes_at
+    )
     return TMAAssignmentStatusResponse.model_validate(item)
 
 

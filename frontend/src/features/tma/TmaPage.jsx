@@ -288,6 +288,7 @@ export default function TmaPage({ role }) {
   const [zeroConflicts, setZeroConflicts] = useState([]);
   const [zeroExemptTarget, setZeroExemptTarget] = useState(null);
   const [reason, setReason] = useState("");
+  const [reopenDeadline, setReopenDeadline] = useState("");
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
     return () => window.clearTimeout(timer);
@@ -658,7 +659,14 @@ export default function TmaPage({ role }) {
                   label: "Reopen assignment",
                   icon: RefreshCw,
                   visible: canManage && assignment?.status === "closed",
-                  onClick: () => setDialog("reopen"),
+                  onClick: () => {
+                    setReopenDeadline(
+                      assignment?.closes_at && new Date(assignment.closes_at) > new Date()
+                        ? dateInput(assignment.closes_at)
+                        : "",
+                    );
+                    setDialog("reopen");
+                  },
                 },
                 {
                   label: "Cancel and reverse scores",
@@ -1237,11 +1245,11 @@ export default function TmaPage({ role }) {
                   activate:
                     "Publishing locks question editing and allows eligible students to start. The assignment has passed the publication checks.",
                   reopen:
-                    "Reopening lets eligible students start or resume unfinished attempts. Existing submissions and scores are preserved, and questions remain locked.",
+                    "Choose a new future deadline. Students who received a system-generated zero can resume and replace it by genuinely submitting. Existing genuine submissions cannot be retaken. Reopening is blocked if relevant academic results are finalized.",
                   close:
                     "Closing immediately prevents students from starting, saving or submitting, including attempts already in progress.",
                   cancel:
-                    "Cancellation reverses verified TMA-owned draft scores. Modified or submitted academic results require reconciliation. A worker completes this operation.",
+                    "Cancellation removes verified TMA-owned scores after checking all relevant academic results are DRAFT. If any result is submitted, approved, or locked, ask an administrator to reopen those results before retrying.",
                   delete: "This question will be removed from the draft.",
                   deleteAssignment:
                     "This permanently removes this unpublished assignment, its questions, answer options, and images. It cannot be undone. AI credit usage remains in transaction history.",
@@ -1250,6 +1258,21 @@ export default function TmaPage({ role }) {
                 }[dialog]
               }
             </p>
+            {dialog === "reopen" && (
+              <label className="grid gap-2 text-sm">
+                New submission deadline
+                <TmaDeadlinePicker
+                  value={reopenDeadline}
+                  onChange={setReopenDeadline}
+                  disabled={busy}
+                  invalid={!reopenDeadline}
+                />
+                <span className="text-xs text-text-muted">
+                  This must be in the future. Previously recorded automatic zeros
+                  remain in place until a student submits successfully.
+                </span>
+              </label>
+            )}
             {(dialog === "cancel" || dialog === "zeroExempt") && (
               <label className="grid gap-2 text-sm">
                 Reason
@@ -1264,7 +1287,12 @@ export default function TmaPage({ role }) {
             )}
             <Button
               disabled={
-                busy || (dialog === "cancel" && reason.trim().length < 5) ||
+                busy ||
+                (dialog === "reopen" && (
+                  !reopenDeadline ||
+                  !Number.isFinite(new Date(reopenDeadline).getTime())
+                )) ||
+                (dialog === "cancel" && reason.trim().length < 5) ||
                 (dialog === "zeroExempt" && reason.trim().length < 10)
               }
               onClick={() =>
@@ -1276,7 +1304,14 @@ export default function TmaPage({ role }) {
                   }
                   if (dialog === "activate")
                     await service.activate(assignmentId);
-                  if (dialog === "reopen") await service.reopen(assignmentId);
+                  if (dialog === "reopen") {
+                    const deadline = new Date(reopenDeadline);
+                    if (!Number.isFinite(deadline.getTime()) || deadline <= new Date()) {
+                      showError("Choose a valid future deadline before reopening this TMA.");
+                      return;
+                    }
+                    await service.reopen(assignmentId, deadline.toISOString());
+                  }
                   if (dialog === "close") await service.close(assignmentId);
                   if (dialog === "cancel")
                     await service.cancel(assignmentId, reason);

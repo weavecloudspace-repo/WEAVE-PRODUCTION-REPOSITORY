@@ -29,6 +29,9 @@ test("reopen action is limited to managers of closed assignments and opens confi
   let dialog;
   runInNewContext(`(${source.slice(...property("onClick").range)})()`, {
     setDialog: (value) => { dialog = value; },
+    setReopenDeadline: () => {},
+    assignment: { status: "closed", closes_at: null },
+    dateInput: (value) => value,
   });
   assert.equal(dialog, "reopen");
 });
@@ -39,10 +42,12 @@ test("confirming reopen calls its service and reloads after success", async () =
   const events = [];
   await runInNewContext(`(${source.slice(...handler.value.expression.range)})()`, {
     dialog: "reopen", assignmentId: "assignment-1", run: (fn) => fn(),
-    service: { reopen: async (id) => { events.push(["reopen", id]); } },
+    reopenDeadline: "2099-11-06T17:00", Date,
+    service: { reopen: async (id, deadline) => { events.push(["reopen", id, deadline]); } },
+    showError: (message) => { events.push(["error", message]); },
     setDialog: (value) => { events.push(["dialog", value]); },
     load: async () => { events.push(["load"]); },
     showSuccess: (message) => { events.push(["success", message]); },
   });
-  assert.deepEqual(events, [["reopen", "assignment-1"], ["success", "Assignment reopened."], ["dialog", null], ["load"]]);
+  assert.deepEqual(events, [["reopen", "assignment-1", new Date("2099-11-06T17:00").toISOString()], ["success", "Assignment reopened."], ["dialog", null], ["load"]]);
 });

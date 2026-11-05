@@ -27,6 +27,7 @@ def fixture():
         id=uid(),
         current_revision_number=1,
         status=TMAAssignmentStatus.CLOSED,
+        closed_at=datetime.now(timezone.utc),
         zero_grading_requested_at=datetime.now(timezone.utc),
         zero_grading_completed_at=None,
     )
