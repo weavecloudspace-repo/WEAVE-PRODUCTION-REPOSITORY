@@ -16,23 +16,23 @@ CREATE OR REPLACE FUNCTION public.tma_capture_closure_eligibility(
 ) RETURNS boolean
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
 DECLARE
-    c public.tma_closure_runs%ROWTYPE;
+    v_run public.tma_closure_runs%ROWTYPE;
     a public.tma_assignments%ROWTYPE;
     r public.tma_assignment_revisions%ROWTYPE;
 BEGIN
-    SELECT * INTO c FROM public.tma_closure_runs
+    SELECT * INTO v_run FROM public.tma_closure_runs
     WHERE tenant_id = p_tenant AND id = p_closure FOR UPDATE;
     IF NOT FOUND THEN RETURN false; END IF;
-    IF c.eligibility_captured_at IS NOT NULL THEN RETURN true; END IF;
+    IF v_run.eligibility_captured_at IS NOT NULL THEN RETURN true; END IF;
     SELECT * INTO a FROM public.tma_assignments
-    WHERE tenant_id = p_tenant AND id = c.assignment_id;
+    WHERE tenant_id = p_tenant AND id = v_run.assignment_id;
     IF NOT FOUND THEN RETURN false; END IF;
     SELECT * INTO r FROM public.tma_assignment_revisions
-    WHERE tenant_id = p_tenant AND id = c.revision_id AND assignment_id = a.id;
+    WHERE tenant_id = p_tenant AND id = v_run.revision_id AND assignment_id = a.id;
     IF NOT FOUND OR r.published_at IS NULL OR r.invalidated_at IS NOT NULL
         OR r.eligibility_tracking_started_at IS NULL
-        OR r.eligibility_tracking_started_at > c.cutoff_at
-        OR c.cutoff_at > c.closed_at THEN RETURN false; END IF;
+        OR r.eligibility_tracking_started_at > v_run.cutoff_at
+        OR v_run.cutoff_at > v_run.closed_at THEN RETURN false; END IF;
     INSERT INTO public.tma_closure_eligibility
         (tenant_id, closure_run_id, student_id, student_enrollment_id, class_id, subject_id)
     SELECT p_tenant, p_closure, e.student_id, e.id, e.class_id, cs.subject_id
@@ -55,10 +55,10 @@ BEGIN
     WHERE e.tenant_id = p_tenant
         AND e.academic_session_id = a.academic_session_id
         AND e.academic_level_id = a.academic_level_id
-        AND e.started_on <= (c.cutoff_at AT TIME ZONE 'UTC')::date
+        AND e.started_on <= (v_run.cutoff_at AT TIME ZONE 'UTC')::date
         AND (e.ended_on IS NULL OR e.ended_on >=
-            (c.cutoff_at AT TIME ZONE 'UTC')::date)
-        AND e.created_at <= c.cutoff_at
+            (v_run.cutoff_at AT TIME ZONE 'UTC')::date)
+        AND e.created_at <= v_run.cutoff_at
         AND s.status::text = 'active' AND s.is_active AND NOT s.is_archived
         AND c.is_active AND c.archived_at IS NULL
         AND l.status::text = 'active'
