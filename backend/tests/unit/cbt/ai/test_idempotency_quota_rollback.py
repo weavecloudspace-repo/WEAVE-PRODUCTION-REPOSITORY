@@ -60,6 +60,8 @@ async def test_quota_rollback_does_not_load_expired_idempotency_record(
             options=[
                 {"text": "4", "is_correct": True},
                 {"text": "5", "is_correct": False},
+                {"text": "6", "is_correct": False},
+                {"text": "7", "is_correct": False},
             ],
         )
         request = AIRegenerateQuestionRequest(
