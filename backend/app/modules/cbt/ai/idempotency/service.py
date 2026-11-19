@@ -31,7 +31,11 @@ from app.modules.cbt.ai.idempotency.models import (
 from app.modules.cbt.ai.idempotency.repository import AIIdempotencyRepository
 from app.modules.cbt.ai.quota.models import AICreditReservationStatus
 from app.modules.cbt.ai.quota.repository import AICreditReservationRepository
-from app.modules.cbt.ai.quota.service import AIQuotaService
+from app.modules.cbt.ai.quota.service import (
+    AIInsufficientCreditsError,
+    AIQuotaError,
+    AIQuotaService,
+)
 from app.modules.cbt.ai.schemas import (
     AICreditChargeResponse,
     AIGenerateQuestionsRequest,
@@ -148,6 +152,10 @@ class CBTAIIdempotentAuthoringService:
                 response_model=response_model,
             )
 
+        # Quota reservation may roll back the session and expire ORM attributes.
+        # Retain the identity before that happens to avoid implicit async I/O.
+        record_id = record.id
+
         requested_credits = (
             request.question_count * CBTAIService.CREDITS_PER_GENERATED_QUESTION
             if isinstance(request, AIGenerateQuestionsRequest)
@@ -166,7 +174,7 @@ class CBTAIIdempotentAuthoringService:
             await cls._attach_reservation(
                 db,
                 tenant_id=actor.tenant_id,
-                record_id=record.id,
+                record_id=record_id,
                 reservation_id=reservation.id,
             )
             trace_event("quota.reserved", credits=requested_credits)
@@ -226,7 +234,7 @@ class CBTAIIdempotentAuthoringService:
             )
             # The output must be replayable before credits are settled. A failed
             # replay write therefore releases the reservation instead of billing.
-            await AIReplayCache.store(record.id, provisional.model_dump(mode="json"))
+            await AIReplayCache.store(record_id, provisional.model_dump(mode="json"))
             trace_event("replay.provisional_stored")
 
             settlement = await AIQuotaService.settle_reservation(
@@ -253,12 +261,12 @@ class CBTAIIdempotentAuthoringService:
             await cls._mark_succeeded(
                 db,
                 tenant_id=actor.tenant_id,
-                record_id=record.id,
+                record_id=record_id,
                 credits_charged=settlement.total_settled_credits,
                 credits_released=settlement.released_credits,
             )
             try:
-                await AIReplayCache.store(record.id, final_response.model_dump(mode="json"))
+                await AIReplayCache.store(record_id, final_response.model_dump(mode="json"))
             except AIReplayStoreUnavailableError:
                 # The pre-settlement replay body already contains the same charge
                 # projection, so a transient refresh failure does not invalidate it.
@@ -276,7 +284,7 @@ class CBTAIIdempotentAuthoringService:
             await cls._mark_failed(
                 db,
                 tenant_id=actor.tenant_id,
-                record_id=record.id,
+                record_id=record_id,
                 code="AI_REPLAY_UNAVAILABLE",
                 detail=str(exc),
             )
@@ -305,14 +313,20 @@ class CBTAIIdempotentAuthoringService:
                     tenant_id=actor.tenant_id,
                     reservation_id=reservation.id,
                 )
-            await AIReplayCache.delete(record.id)
+            await AIReplayCache.delete(record_id)
             await cls._mark_failed(
                 db,
                 tenant_id=actor.tenant_id,
-                record_id=record.id,
-                code="AI_AUTHORING_FAILED",
+                record_id=record_id,
+                code=(
+                    "AI_INSUFFICIENT_CREDITS"
+                    if isinstance(exc, AIInsufficientCreditsError)
+                    else "AI_AUTHORING_FAILED"
+                ),
                 detail=str(exc),
             )
+            if isinstance(exc, AIQuotaError):
+                CBTAIService._raise_quota_error(exc)
             if isinstance(exc, (ProviderStructuredOutputError, AIResponseValidationError)):
                 raise AppException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
