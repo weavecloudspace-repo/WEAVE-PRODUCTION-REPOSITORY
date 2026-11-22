@@ -94,6 +94,8 @@ class Settings(BaseSettings):
     LLM_MAX_TOKENS: int = 1024
 
     ALLOWED_ORIGINS: list[str] = Field(default_factory=list)
+    ALLOW_CROSS_SITE_REFRESH_COOKIE: bool = False
+    TEMPORARY_FRONTEND_ORIGIN: str = "https://weave-production-frontend-production.up.railway.app"
     TRUST_PROXY_HEADERS: bool = False
     TRUSTED_PROXY_HOPS: int = Field(default=1, ge=1, le=5)
 

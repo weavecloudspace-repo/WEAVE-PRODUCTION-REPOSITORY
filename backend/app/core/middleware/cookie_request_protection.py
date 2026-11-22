@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 from fastapi.responses import JSONResponse
@@ -30,11 +31,18 @@ def _normalized_origin(value: str | None) -> str | None:
 
 
 def _allowed_origins() -> set[str]:
-    return {
+    origins = {
         normalized
         for origin in settings.ALLOWED_ORIGINS
         if (normalized := _normalized_origin(origin)) is not None
     }
+    if (
+        settings.ALLOW_CROSS_SITE_REFRESH_COOKIE
+        and settings.ENV.value == "prod"
+        and datetime.now(timezone.utc) < datetime(2026, 11, 4, 23, 0, tzinfo=timezone.utc)
+    ):
+        origins.add(settings.TEMPORARY_FRONTEND_ORIGIN)
+    return origins
 
 
 def _development_local_origin(origin: str) -> bool:
