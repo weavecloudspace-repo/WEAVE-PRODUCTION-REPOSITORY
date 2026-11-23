@@ -7,7 +7,7 @@ destination's effective teacher assignment.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from uuid import UUID
 
@@ -35,6 +35,7 @@ class ResultContinuityDecision:
     action: str
     reason: str
     destination_teacher_assignment: object | None = None
+    applied: bool = False
 
 
 class AcademicResultContinuityService:
@@ -241,6 +242,7 @@ class AcademicResultContinuityService:
             lock=True,
             destination_enrollment_id=destination_enrollment.id,
         )
+        applied_ids: set[UUID] = set()
         for decision in decisions:
             if decision.action not in {"automatic", "requires_confirmation"}:
                 continue
@@ -256,6 +258,7 @@ class AcademicResultContinuityService:
             result.teacher_assignment_id = teacher.id
             result.teacher_membership_id = teacher.teacher_membership_id
             db.add(result)
+            applied_ids.add(result.id)
             await StudentAcademicRepository.add_academic_lifecycle_audit(
                 db,
                 AcademicLifecycleAudit(
@@ -283,4 +286,4 @@ class AcademicResultContinuityService:
                     },
                 ),
             )
-        return decisions
+        return [replace(decision, applied=decision.result.id in applied_ids) for decision in decisions]
