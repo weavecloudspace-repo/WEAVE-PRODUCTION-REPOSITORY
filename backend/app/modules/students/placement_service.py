@@ -244,6 +244,7 @@ class StudentPlacementService:
             tenant_id=tenant_id,
             student_id=student_id,
             academic_session_id=academic_session_id,
+            invalidate_readiness_cache=False,
         )
         cards = list(
             (
