@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
@@ -13,6 +13,8 @@ from app.modules.student_academics.models import (
     AcademicLifecycleAudit,
     AcademicSession,
     AcademicSessionStatus,
+    AcademicTerm,
+    AcademicTermStatus,
 )
 from app.modules.student_academics.repository import StudentAcademicRepository
 from app.modules.student_academics.write_guard import ensure_academic_write_window
@@ -24,6 +26,8 @@ from app.modules.students.result_continuity import AcademicResultContinuityServi
 
 PENDING_ACTION = "result_continuity_scheduled"
 ACTIVATED_ACTION = "result_continuity_activated"
+RETRY_ACTION = "result_continuity_retry_delayed"
+RETRY_DELAY = timedelta(minutes=10)
 
 
 class ScheduledResultContinuityService:
@@ -31,7 +35,7 @@ class ScheduledResultContinuityService:
 
     @staticmethod
     async def due_ids(db: AsyncSession, *, limit: int = 25) -> list[UUID]:
-        """Discover due markers; cancelled enrollments cannot be selected."""
+        """Fairly select eligible tenants; back off after an activation failure."""
         activated = aliased(AcademicLifecycleAudit)
         already_done = (
             select(activated.id)
@@ -44,8 +48,32 @@ class ScheduledResultContinuityService:
             .correlate(AcademicLifecycleAudit)
             .exists()
         )
-        rows = await db.execute(
-            select(AcademicLifecycleAudit.id)
+        retry = aliased(AcademicLifecycleAudit)
+        recent_failure = (
+            select(retry.id)
+            .where(
+                retry.tenant_id == AcademicLifecycleAudit.tenant_id,
+                retry.entity_id == AcademicLifecycleAudit.entity_id,
+                retry.entity_type == "student_enrollment",
+                retry.action == RETRY_ACTION,
+                retry.created_at >= datetime.now(timezone.utc) - RETRY_DELAY,
+            )
+            .correlate(AcademicLifecycleAudit)
+            .exists()
+        )
+        # Rank eligible work per tenant before applying the global batch cap.
+        # A school with many scheduled moves cannot monopolize every poll.
+        ready = (
+            select(
+                AcademicLifecycleAudit.id.label("audit_id"),
+                StudentEnrollment.started_on.label("effective_date"),
+                func.row_number()
+                .over(
+                    partition_by=AcademicLifecycleAudit.tenant_id,
+                    order_by=(StudentEnrollment.started_on, AcademicLifecycleAudit.id),
+                )
+                .label("tenant_position"),
+            )
             .join(
                 StudentEnrollment,
                 and_(
@@ -53,16 +81,66 @@ class ScheduledResultContinuityService:
                     StudentEnrollment.id == AcademicLifecycleAudit.entity_id,
                 ),
             )
+            .join(
+                AcademicSession,
+                and_(
+                    AcademicSession.tenant_id == StudentEnrollment.tenant_id,
+                    AcademicSession.id == StudentEnrollment.academic_session_id,
+                ),
+            )
+            .join(
+                AcademicTerm,
+                and_(
+                    AcademicTerm.tenant_id == AcademicSession.tenant_id,
+                    AcademicTerm.academic_session_id == AcademicSession.id,
+                ),
+            )
             .where(
                 AcademicLifecycleAudit.entity_type == "student_enrollment",
                 AcademicLifecycleAudit.action == PENDING_ACTION,
                 StudentEnrollment.started_on <= func.current_date(),
+                AcademicSession.is_current.is_(True),
+                AcademicSession.status == AcademicSessionStatus.OPEN,
+                AcademicTerm.is_current.is_(True),
+                AcademicTerm.status == AcademicTermStatus.OPEN,
                 ~already_done,
+                ~recent_failure,
             )
-            .order_by(StudentEnrollment.started_on, AcademicLifecycleAudit.id)
+            .subquery()
+        )
+        rows = await db.execute(
+            select(ready.c.audit_id)
+            .order_by(ready.c.tenant_position, ready.c.effective_date, ready.c.audit_id)
             .limit(limit)
         )
         return list(rows.scalars())
+
+    @staticmethod
+    async def defer_failed(db: AsyncSession, audit_id: UUID) -> None:
+        """Persist a bounded retry delay so failures do not starve other tenants."""
+        pending = (
+            await db.execute(
+                select(AcademicLifecycleAudit).where(
+                    AcademicLifecycleAudit.id == audit_id,
+                    AcademicLifecycleAudit.entity_type == "student_enrollment",
+                    AcademicLifecycleAudit.action == PENDING_ACTION,
+                )
+            )
+        ).scalar_one_or_none()
+        if pending is None:
+            return
+        db.add(
+            AcademicLifecycleAudit(
+                tenant_id=pending.tenant_id,
+                entity_type="student_enrollment",
+                entity_id=pending.entity_id,
+                action=RETRY_ACTION,
+                acting_admin_id=pending.acting_admin_id,
+                reason="Scheduled result continuity activation deferred for retry",
+                metadata_json={"scheduled_audit_id": str(audit_id)},
+            )
+        )
+        await db.commit()
 
     @staticmethod
     async def activate_one(db: AsyncSession, audit_id: UUID) -> int | None:
