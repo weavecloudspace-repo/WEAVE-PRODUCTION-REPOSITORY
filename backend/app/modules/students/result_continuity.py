@@ -286,4 +286,6 @@ class AcademicResultContinuityService:
                     },
                 ),
             )
-        return [replace(decision, applied=decision.result.id in applied_ids) for decision in decisions]
+        return [
+            replace(decision, applied=decision.result.id in applied_ids) for decision in decisions
+        ]
