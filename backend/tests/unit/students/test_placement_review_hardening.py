@@ -50,23 +50,29 @@ async def test_scheduled_move_keeps_results_with_current_class_until_activation(
     monkeypatch.setattr(mod, "ensure_academic_write_window", AsyncMock())
     monkeypatch.setattr(StudentRepository, "get_by_id", AsyncMock(return_value=ctx.student))
     monkeypatch.setattr(
-        StudentPlacementService, "_require_open_session",
+        StudentPlacementService,
+        "_require_open_session",
         AsyncMock(return_value=SimpleNamespace(id=ctx.session_id)),
     )
     monkeypatch.setattr(
         StudentPlacementService, "_require_target_class", AsyncMock(return_value=ctx.target)
     )
-    monkeypatch.setattr(StudentEnrollmentRepository, "get_current", AsyncMock(return_value=ctx.current))
+    monkeypatch.setattr(
+        StudentEnrollmentRepository, "get_current", AsyncMock(return_value=ctx.current)
+    )
     monkeypatch.setattr(StudentEnrollmentRepository, "get_upcoming", AsyncMock(return_value=None))
     monkeypatch.setattr(StudentPlacementService, "_close_segment", AsyncMock())
     monkeypatch.setattr(
-        StudentPlacementService, "_create_segment", AsyncMock(return_value=SimpleNamespace(id=uuid4()))
+        StudentPlacementService,
+        "_create_segment",
+        AsyncMock(return_value=SimpleNamespace(id=uuid4())),
     )
     monkeypatch.setattr(mod.StudentAcademicRepository, "add_academic_lifecycle_audit", audit)
     monkeypatch.setattr(mod.AcademicResultContinuityService, "apply", apply)
     monkeypatch.setattr(StudentPlacementService, "_invalidate_derived_context", invalidate)
     monkeypatch.setattr(
-        StudentService, "get_student_profile",
+        StudentService,
+        "get_student_profile",
         AsyncMock(return_value=SimpleNamespace(id=ctx.student.id)),
     )
 
@@ -100,14 +106,18 @@ async def test_reconciliation_no_op_preserves_existing_report_cards(monkeypatch)
     monkeypatch.setattr(mod, "ensure_academic_write_window", AsyncMock())
     monkeypatch.setattr(StudentRepository, "get_by_id", AsyncMock(return_value=ctx.student))
     monkeypatch.setattr(
-        StudentPlacementService, "_require_open_session",
+        StudentPlacementService,
+        "_require_open_session",
         AsyncMock(return_value=SimpleNamespace(id=ctx.session_id)),
     )
-    monkeypatch.setattr(StudentEnrollmentRepository, "get_current", AsyncMock(return_value=ctx.current))
+    monkeypatch.setattr(
+        StudentEnrollmentRepository, "get_current", AsyncMock(return_value=ctx.current)
+    )
     monkeypatch.setattr(mod.AcademicResultContinuityService, "apply", AsyncMock(return_value=[]))
     monkeypatch.setattr(StudentPlacementService, "_invalidate_derived_context", invalidate)
     monkeypatch.setattr(
-        StudentService, "get_student_profile",
+        StudentService,
+        "get_student_profile",
         AsyncMock(return_value=SimpleNamespace(id=ctx.student.id)),
     )
     await StudentPlacementService.reconcile_existing_results(
@@ -133,9 +143,7 @@ async def test_readiness_cache_invalidates_only_after_commit(monkeypatch):
     async def invalidate(**_kwargs):
         order.append("invalidated")
 
-    monkeypatch.setattr(
-        mod.ReportReadinessCache, "invalidate_student_session", invalidate
-    )
+    monkeypatch.setattr(mod.ReportReadinessCache, "invalidate_student_session", invalidate)
     await StudentPlacementService._commit_with_readiness_invalidation(
         SimpleNamespace(commit=commit),
         tenant_id=uuid4(),
@@ -158,7 +166,9 @@ async def test_preview_rejects_non_current_term_instead_of_mix_terms(monkeypatch
         )
     )
     monkeypatch.setattr(StudentRepository, "get_by_id", AsyncMock(return_value=ctx.student))
-    monkeypatch.setattr(StudentEnrollmentRepository, "get_current", AsyncMock(return_value=ctx.current))
+    monkeypatch.setattr(
+        StudentEnrollmentRepository, "get_current", AsyncMock(return_value=ctx.current)
+    )
     with pytest.raises(BadRequestException, match="current open academic term"):
         await StudentPlacementService.impact_preview(
             db,
@@ -207,17 +217,21 @@ async def test_preview_does_not_call_unselected_elective_applicable(monkeypatch)
         )
     )
     monkeypatch.setattr(StudentRepository, "get_by_id", AsyncMock(return_value=ctx.student))
-    monkeypatch.setattr(StudentEnrollmentRepository, "get_current", AsyncMock(return_value=ctx.current))
+    monkeypatch.setattr(
+        StudentEnrollmentRepository, "get_current", AsyncMock(return_value=ctx.current)
+    )
     monkeypatch.setattr(
         StudentPlacementService, "_require_target_class", AsyncMock(return_value=ctx.target)
     )
     monkeypatch.setattr(
-        CurriculumResolutionService, "resolve_class_subjects",
+        CurriculumResolutionService,
+        "resolve_class_subjects",
         AsyncMock(return_value=[elective, compulsory]),
     )
     monkeypatch.setattr(StudentPlacementService, "_department_name", AsyncMock(return_value=None))
     monkeypatch.setattr(
-        SubjectRepository, "get_subject_by_id",
+        SubjectRepository,
+        "get_subject_by_id",
         AsyncMock(return_value=SimpleNamespace(name="Subject")),
     )
     monkeypatch.setattr(mod.AcademicResultContinuityService, "inspect", AsyncMock(return_value=[]))
