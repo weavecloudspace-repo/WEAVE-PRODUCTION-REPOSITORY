@@ -153,13 +153,15 @@ class TMAAssignmentRepository:
         if needs_attention:
             # Match TMAAssignmentResponse.grading_state == 'needs_attention' in SQL,
             # before count/pagination, so assignments on later pages are included.
-            filters.extend((
-                TMAAssignment.status == TMAAssignmentStatus.CLOSED,
-                TMAAssignment.zero_grading_requested_at.is_not(None),
-                TMAAssignment.zero_grading_completed_at.is_(None),
-                TMAAssignment.zero_grading_error.is_not(None),
-                TMAAssignment.zero_grading_error != "",
-            ))
+            filters.extend(
+                (
+                    TMAAssignment.status == TMAAssignmentStatus.CLOSED,
+                    TMAAssignment.zero_grading_requested_at.is_not(None),
+                    TMAAssignment.zero_grading_completed_at.is_(None),
+                    TMAAssignment.zero_grading_error.is_not(None),
+                    TMAAssignment.zero_grading_error != "",
+                )
+            )
         search_term = (search or "").strip()
         if search_term:
             # Correlated EXISTS avoids duplicating assignments before pagination.
