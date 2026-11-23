@@ -77,9 +77,7 @@ async def test_future_destination_does_not_transfer_results(monkeypatch):
         ),
         commit=AsyncMock(),
     )
-    monkeypatch.setattr(
-        mod.StudentEnrollmentRepository, "get_by_id", AsyncMock(return_value=dest)
-    )
+    monkeypatch.setattr(mod.StudentEnrollmentRepository, "get_by_id", AsyncMock(return_value=dest))
     apply = AsyncMock()
     monkeypatch.setattr(mod.AcademicResultContinuityService, "apply", apply)
 
@@ -128,9 +126,7 @@ async def test_activation_revalidates_and_commits_audited_changes(monkeypatch):
         ),
         commit=AsyncMock(),
     )
-    monkeypatch.setattr(
-        mod.StudentEnrollmentRepository, "get_by_id", AsyncMock(return_value=dest)
-    )
+    monkeypatch.setattr(mod.StudentEnrollmentRepository, "get_by_id", AsyncMock(return_value=dest))
     monkeypatch.setattr(
         mod.StudentEnrollmentRepository, "get_current", AsyncMock(return_value=dest)
     )
@@ -148,9 +144,7 @@ async def test_activation_revalidates_and_commits_audited_changes(monkeypatch):
     monkeypatch.setattr(mod.AcademicResultContinuityService, "apply", apply)
     monkeypatch.setattr(mod.StudentAcademicRepository, "add_academic_lifecycle_audit", audit)
     monkeypatch.setattr(mod.StudentPlacementService, "_invalidate_derived_context", invalidate)
-    monkeypatch.setattr(
-        mod.StudentPlacementService, "_commit_with_readiness_invalidation", commit
-    )
+    monkeypatch.setattr(mod.StudentPlacementService, "_commit_with_readiness_invalidation", commit)
     changed = await ScheduledResultContinuityService.activate_one(db, pending.id)
 
     assert changed == 2
@@ -184,9 +178,7 @@ async def test_edited_cross_level_move_never_forwards_old_results(monkeypatch):
         ),
         commit=AsyncMock(),
     )
-    monkeypatch.setattr(
-        mod.StudentEnrollmentRepository, "get_by_id", AsyncMock(return_value=dest)
-    )
+    monkeypatch.setattr(mod.StudentEnrollmentRepository, "get_by_id", AsyncMock(return_value=dest))
     monkeypatch.setattr(
         mod.StudentEnrollmentRepository, "get_current", AsyncMock(return_value=dest)
     )
