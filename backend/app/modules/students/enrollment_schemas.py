@@ -72,6 +72,14 @@ class StudentAcademicLevelReassignmentRequest(EnrollmentInput):
         return cleaned
 
 
+class ExistingResultReconciliationRequest(EnrollmentInput):
+    """Correct existing academic results after a previous class reassignment."""
+
+    academic_session_id: uuid.UUID
+    reason: str = Field(min_length=3, max_length=500)
+    carry_finalized_results: bool = False
+
+
 class PlacementImpactPreviewRequest(EnrollmentInput):
     target_academic_level_id: uuid.UUID
     target_class_id: uuid.UUID
