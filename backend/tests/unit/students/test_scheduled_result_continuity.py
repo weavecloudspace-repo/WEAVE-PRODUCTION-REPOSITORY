@@ -68,6 +68,7 @@ async def test_future_destination_does_not_transfer_results(monkeypatch):
 
     dest, pending = _fixtures()
     dest.started_on = date.today() + timedelta(days=5)
+    monkeypatch.setattr(mod, "ensure_academic_write_window", AsyncMock())
     db = SimpleNamespace(
         execute=AsyncMock(
             side_effect=[
@@ -164,6 +165,7 @@ async def test_edited_cross_level_move_never_forwards_old_results(monkeypatch):
 
     dest, pending = _fixtures()
     dest.academic_level_id = uuid4()
+    monkeypatch.setattr(mod, "ensure_academic_write_window", AsyncMock())
     db = SimpleNamespace(
         execute=AsyncMock(
             side_effect=[
@@ -191,3 +193,33 @@ async def test_edited_cross_level_move_never_forwards_old_results(monkeypatch):
     apply.assert_not_awaited()
     assert audit.await_args.args[1].metadata_json["outcome"] == "skipped"
     db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_scheduled_activation_takes_lifecycle_lock_before_enrollment_lock(monkeypatch):
+    from app.modules.students import scheduled_result_continuity as mod
+
+    dest, pending = _fixtures()
+    dest.started_on = date.today() + timedelta(days=1)
+    events = []
+
+    async def guard(*_args, **_kwargs):
+        events.append("lifecycle")
+
+    async def load(*_args, **_kwargs):
+        events.append("enrollment")
+        return dest
+
+    monkeypatch.setattr(mod, "ensure_academic_write_window", guard)
+    monkeypatch.setattr(mod.StudentEnrollmentRepository, "get_by_id", load)
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                SimpleNamespace(scalar_one_or_none=lambda: pending),
+                SimpleNamespace(scalar_one_or_none=lambda: None),
+            ]
+        ),
+        commit=AsyncMock(),
+    )
+    assert await ScheduledResultContinuityService.activate_one(db, pending.id) is None
+    assert events == ["lifecycle", "enrollment"]
