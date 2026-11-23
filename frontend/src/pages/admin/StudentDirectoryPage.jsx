@@ -582,8 +582,32 @@ function ImpactPreview({ preview }) {
           {preview.warnings.map((warning) => <li key={warning}>{warning}</li>)}
         </ul>
       ) : null}
+      {preview.result_impacts?.length > 0 && (
+        <div className="space-y-2 border-t border-border/70 pt-3">
+          <p className="font-semibold text-text">Academic result continuity</p>
+          {preview.result_impacts.map((item) => (
+            <div key={item.result_id} className="flex items-start justify-between gap-3 text-sm">
+              <span>{preview.subjects_remaining_applicable?.find(
+                (subject) => subject.curriculum_subject_id === item.curriculum_subject_id
+              )?.subject_name || item.curriculum_subject_id}</span>
+              <span className="text-right text-text-muted">
+                {item.status.toUpperCase()} · {item.action === "automatic"
+                  ? "Carry forward automatically"
+                  : item.action === "requires_confirmation"
+                    ? "Admin confirmation required"
+                    : item.action === "historical_only"
+                      ? "Preserve as historical"
+                      : "Review required"}
+                {item.reason ? ` — ${item.reason}` : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       <p className="text-xs text-text-muted">
-        These warnings are informational. Existing results, attendance, CBT attempts and published report evidence are preserved and do not block reassignment.
+        Original CBT/TMA attempts and assessment scores remain intact. Compatible draft results
+        follow same-level class reassignment; finalized results require explicit authorization.
+        Subjects not offered by the destination remain historical.
       </p>
     </div>
   );
@@ -971,6 +995,7 @@ function StudentDirectoryPage() {
       student,
       preview: null,
       previewLoading: false,
+      carryFinalizedResults: false,
       form: {
         target_academic_level_id:
           type === "class" ? student.academic_level_id || "" : "",
@@ -1000,6 +1025,7 @@ function StudentDirectoryPage() {
     setPlacementState((current) => ({
       ...current,
       preview: null,
+      carryFinalizedResults: false,
       form: {
         ...current.form,
         [field]: value,
@@ -1056,6 +1082,7 @@ function StudentDirectoryPage() {
           academic_session_id: form.academic_session_id,
           effective_date: form.effective_date,
           reason: form.reason.trim(),
+          carry_finalized_results: Boolean(placementState.carryFinalizedResults),
         });
         showSuccess("Class reassignment recorded as a new placement segment.");
       } else {
@@ -1748,6 +1775,23 @@ function StudentDirectoryPage() {
               {placementState.previewLoading ? "Previewing..." : "Preview placement impact"}
             </Button>
             <ImpactPreview preview={placementState.preview} />
+            {placementState.type === "class" &&
+              placementState.preview?.result_impacts?.some(
+                (result) => result.action === "requires_confirmation"
+              ) && (
+                <label className="flex items-start gap-2 rounded-lg border border-warning/40 p-3 text-sm">
+                  <input type="checkbox"
+                    checked={Boolean(placementState.carryFinalizedResults)}
+                    onChange={(event) => setPlacementState((state) => ({
+                      ...state, carryFinalizedResults: event.target.checked,
+                    }))}
+                  />
+                  <span>Authorize an audited classroom-ownership correction for compatible
+                    submitted, approved, or locked results. Existing scores, original
+                    assessment history and result statuses will not be changed.
+                    Leave unchecked to retain finalized results under the previous classroom.</span>
+                </label>
+              )}
             <label className="block">
               <span className="mb-1.5 block text-sm font-semibold text-text-soft">Mandatory reason</span>
               <textarea
