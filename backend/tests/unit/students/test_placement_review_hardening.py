@@ -254,3 +254,33 @@ async def test_preview_does_not_call_unselected_elective_applicable(monkeypatch)
         elective.curriculum_subject_id
     ]
     assert any("historical-only" in warning for warning in response.warnings)
+
+
+@pytest.mark.asyncio
+async def test_derived_context_does_not_evict_readiness_before_commit(monkeypatch):
+    from app.modules.students import placement_service as mod
+
+    cache = AsyncMock()
+    comments = AsyncMock()
+    monkeypatch.setattr(mod.ReportReadinessCache, "invalidate_student_session", cache)
+    monkeypatch.setattr(mod.ReportCommentService, "invalidate_for_placement_change", comments)
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(scalars=lambda: [])
+        )
+    )
+    tenant_id, student_id, session_id = (uuid4() for _ in range(3))
+    await StudentPlacementService._invalidate_derived_context(
+        db,
+        tenant_id=tenant_id,
+        student_id=student_id,
+        academic_session_id=session_id,
+    )
+    cache.assert_not_awaited()
+    comments.assert_awaited_once_with(
+        db,
+        tenant_id=tenant_id,
+        student_id=student_id,
+        academic_session_id=session_id,
+        invalidate_readiness_cache=False,
+    )
