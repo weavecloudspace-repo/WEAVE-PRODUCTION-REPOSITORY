@@ -275,6 +275,7 @@ export default function TmaPage({ role }) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [needsAttentionOnly, setNeedsAttentionOnly] = useState(false);
   const [levelFilter, setLevelFilter] = useState("");
   const [assets, setAssets] = useState([]);
   const [report, setReport] = useState(null);
@@ -296,7 +297,7 @@ export default function TmaPage({ role }) {
   }, [query]);
   useEffect(() => {
     setOffset(0);
-  }, [debouncedQuery, statusFilter, levelFilter]);
+  }, [debouncedQuery, statusFilter, levelFilter, needsAttentionOnly]);
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSubmissionQuery(search.trim()), 300);
     return () => window.clearTimeout(timer);
@@ -369,7 +370,7 @@ export default function TmaPage({ role }) {
       setListLoading(false);
       return;
     }
-    const key = JSON.stringify([termId, offset, debouncedQuery, statusFilter, levelFilter]);
+    const key = JSON.stringify([termId, offset, debouncedQuery, statusFilter, levelFilter, needsAttentionOnly]);
     // Teacher results must always revalidate current authorization on the server.
     const cached = role === "admin" ? listCache.current.get(key) : null;
     if (cached && Date.now() - cached.at < 15_000) {
@@ -384,6 +385,7 @@ export default function TmaPage({ role }) {
     service.list(offset, termId, {
       search: debouncedQuery,
       status: statusFilter,
+      needs_attention: role === "admin" && needsAttentionOnly,
       academic_level_id: levelFilter,
     }, { signal: controller.signal })
       .then((response) => {
@@ -849,6 +851,13 @@ export default function TmaPage({ role }) {
                 </Select>
               </div>
             </div>
+            {role === "admin" && (
+              <label className="inline-flex items-center gap-2 text-sm font-medium text-text-soft">
+                <input type="checkbox" checked={needsAttentionOnly}
+                  onChange={(event) => setNeedsAttentionOnly(event.target.checked)} />
+                Needs attention only
+              </label>
+            )}
             {listLoading && <p role="status" className="text-xs text-text-muted">Updating assignments…</p>}
             <p className="text-xs text-text-muted">
               Showing {visibleList.length} of {listTotal} matching assignments for the selected term
