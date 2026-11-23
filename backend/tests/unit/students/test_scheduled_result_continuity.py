@@ -58,6 +58,12 @@ async def test_due_scan_ignores_cancelled_enrollments_and_finished_markers():
     assert "student_enrollments" in sql
     assert "NOT (EXISTS" in sql
     assert "started_on <= CURRENT_DATE" in sql
+    assert "academic_sessions" in sql
+    assert "academic_terms" in sql
+    assert "row_number() OVER" in sql
+    assert "tenant_position" in sql
+    assert "academic_sessions.is_current IS true" in sql
+    assert "academic_terms.is_current IS true" in sql
     assert PENDING_ACTION in statement.compile().params.values()
     assert ACTIVATED_ACTION in statement.compile().params.values()
 
@@ -223,3 +229,44 @@ async def test_scheduled_activation_takes_lifecycle_lock_before_enrollment_lock(
     )
     assert await ScheduledResultContinuityService.activate_one(db, pending.id) is None
     assert events == ["lifecycle", "enrollment"]
+
+
+@pytest.mark.asyncio
+async def test_due_scan_skips_failed_markers_during_bounded_backoff():
+    from app.modules.students.scheduled_result_continuity import RETRY_ACTION
+
+    db = SimpleNamespace(
+        execute=AsyncMock(return_value=SimpleNamespace(scalars=lambda: []))
+    )
+    await ScheduledResultContinuityService.due_ids(db)
+    statement = db.execute.await_args.args[0]
+    params = statement.compile().params
+    assert RETRY_ACTION in params.values()
+    sql = str(statement.compile(dialect=postgresql.dialect()))
+    assert "created_at >=" in sql
+    assert "NOT (EXISTS" in sql
+
+
+@pytest.mark.asyncio
+async def test_failed_activation_creates_retry_marker_for_same_tenant_only():
+    from app.modules.student_academics.models import AcademicLifecycleAudit
+    from app.modules.students.scheduled_result_continuity import RETRY_ACTION
+
+    _, pending = _fixtures()
+    marker = None
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(scalar_one_or_none=lambda: pending)
+        ),
+        add=lambda value: nonlocal_marker.append(value),
+        commit=AsyncMock(),
+    )
+    nonlocal_marker: list[AcademicLifecycleAudit] = []
+    await ScheduledResultContinuityService.defer_failed(db, pending.id)
+    assert len(nonlocal_marker) == 1
+    marker = nonlocal_marker[0]
+    assert marker.action == RETRY_ACTION
+    assert marker.tenant_id == pending.tenant_id
+    assert marker.entity_id == pending.entity_id
+    assert marker.metadata_json["scheduled_audit_id"] == str(pending.id)
+    db.commit.assert_awaited_once()
