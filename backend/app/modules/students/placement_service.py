@@ -26,6 +26,7 @@ from app.modules.classes.repository import ClassRoomRepository
 from app.modules.report_cards.comment_models import StudentTermTeacherComment, TeacherCommentStatus
 from app.modules.report_cards.comment_service import ReportCommentService
 from app.modules.report_cards.models import ReportCard
+from app.modules.report_cards.cache import ReportReadinessCache
 from app.modules.student_academics.curriculum_models import ClassTermDepartmentAssignment
 from app.modules.student_academics.curriculum_service import CurriculumResolutionService
 from app.modules.student_academics.lifecycle_repository import AcademicSessionLifecycleRepository
@@ -232,6 +233,11 @@ class StudentPlacementService:
         student_id: UUID,
         academic_session_id: UUID,
     ) -> None:
+        await ReportReadinessCache.invalidate_student_session(
+            tenant_id=tenant_id,
+            student_id=student_id,
+            academic_session_id=academic_session_id,
+        )
         await ReportCommentService.invalidate_for_placement_change(
             db,
             tenant_id=tenant_id,
