@@ -77,12 +77,16 @@ class AcademicResultContinuityService:
         if term is None:
             return []
 
-        query = select(StudentSubjectResult).where(
-            StudentSubjectResult.tenant_id == tenant_id,
-            StudentSubjectResult.student_id == student_id,
-            StudentSubjectResult.academic_session_id == academic_session_id,
-            StudentSubjectResult.academic_term_id == term.id,
-        ).order_by(StudentSubjectResult.id)
+        query = (
+            select(StudentSubjectResult)
+            .where(
+                StudentSubjectResult.tenant_id == tenant_id,
+                StudentSubjectResult.student_id == student_id,
+                StudentSubjectResult.academic_session_id == academic_session_id,
+                StudentSubjectResult.academic_term_id == term.id,
+            )
+            .order_by(StudentSubjectResult.id)
+        )
         if lock:
             query = query.with_for_update()
         results = list((await db.execute(query)).scalars())
@@ -116,40 +120,61 @@ class AcademicResultContinuityService:
                 )
             ).scalar_one_or_none()
             original_enrollment = (
-                await db.execute(
-                    select(StudentEnrollment).where(
-                        StudentEnrollment.id == result.student_enrollment_id,
-                        StudentEnrollment.tenant_id == tenant_id,
-                        StudentEnrollment.student_id == student_id,
-                        StudentEnrollment.academic_session_id == academic_session_id,
+                (
+                    await db.execute(
+                        select(StudentEnrollment).where(
+                            StudentEnrollment.id == result.student_enrollment_id,
+                            StudentEnrollment.tenant_id == tenant_id,
+                            StudentEnrollment.student_id == student_id,
+                            StudentEnrollment.academic_session_id == academic_session_id,
+                        )
                     )
-                )
-            ).scalar_one_or_none() if result.student_enrollment_id is not None else None
+                ).scalar_one_or_none()
+                if result.student_enrollment_id is not None
+                else None
+            )
 
             if source_class is None or source_class.academic_level_id != source_level_id:
-                decisions.append(ResultContinuityDecision(result, "historical_only", "Different academic level"))
+                decisions.append(
+                    ResultContinuityDecision(result, "historical_only", "Different academic level")
+                )
                 continue
             if (
                 original_enrollment is None
                 or original_enrollment.class_id != result.class_id
                 or original_enrollment.academic_level_id != source_level_id
             ):
-                decisions.append(ResultContinuityDecision(result, "blocked", "Original result enrollment needs review"))
+                decisions.append(
+                    ResultContinuityDecision(
+                        result, "blocked", "Original result enrollment needs review"
+                    )
+                )
                 continue
             if result.curriculum_subject_id not in eligible_subject_ids:
-                decisions.append(ResultContinuityDecision(result, "historical_only", "Subject is not offered by destination"))
+                decisions.append(
+                    ResultContinuityDecision(
+                        result, "historical_only", "Subject is not offered by destination"
+                    )
+                )
                 continue
             if active_scheme is None or active_scheme.id != result.assessment_scheme_id:
-                decisions.append(ResultContinuityDecision(result, "blocked", "Assessment scheme is incompatible"))
+                decisions.append(
+                    ResultContinuityDecision(result, "blocked", "Assessment scheme is incompatible")
+                )
                 continue
 
             owners = await StudentAcademicRepository.get_teacher_assignments_for_classes_on_date(
-                db, tenant_id, {target_class_id},
-                result.curriculum_subject_id, effective_date,
+                db,
+                tenant_id,
+                {target_class_id},
+                result.curriculum_subject_id,
+                effective_date,
             )
             teacher = owners.get(target_class_id)
             if teacher is None:
-                decisions.append(ResultContinuityDecision(result, "blocked", "No destination teacher assignment"))
+                decisions.append(
+                    ResultContinuityDecision(result, "blocked", "No destination teacher assignment")
+                )
                 continue
             action = (
                 "automatic"
@@ -214,7 +239,9 @@ class AcademicResultContinuityService:
                     metadata_json={
                         "from_class_id": str(previous_class_id),
                         "to_class_id": str(destination_enrollment.class_id),
-                        "from_enrollment_id": str(previous_enrollment_id) if previous_enrollment_id else None,
+                        "from_enrollment_id": str(previous_enrollment_id)
+                        if previous_enrollment_id
+                        else None,
                         "to_enrollment_id": str(destination_enrollment.id),
                         "from_teacher_assignment_id": str(previous_teacher_assignment_id),
                         "to_teacher_assignment_id": str(teacher.id),
