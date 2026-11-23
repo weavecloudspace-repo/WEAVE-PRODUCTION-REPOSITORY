@@ -331,6 +331,15 @@ async def poll_due_result_continuity(ctx: dict[str, Any]) -> dict[str, int]:
                 "Scheduled result continuity activation failed for audit %s.", audit_id
             )
             summary["failed"] += 1
+            # The failing activation transaction rolls back independently.
+            # Persist a short retry delay so other schools receive a turn.
+            try:
+                async with AsyncSessionLocal() as db:
+                    await ScheduledResultContinuityService.defer_failed(db, audit_id)
+            except Exception:
+                logger.exception(
+                    "Unable to record scheduled continuity retry for audit %s.", audit_id
+                )
     return summary
 
 
