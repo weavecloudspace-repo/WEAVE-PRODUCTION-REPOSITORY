@@ -834,12 +834,14 @@ class ReportCommentService:
         tenant_id: uuid.UUID,
         student_id: uuid.UUID,
         academic_session_id: uuid.UUID,
+        invalidate_readiness_cache: bool = True,
     ) -> None:
-        await ReportReadinessCache.invalidate_student_session(
-            tenant_id=tenant_id,
-            student_id=student_id,
-            academic_session_id=academic_session_id,
-        )
+        if invalidate_readiness_cache:
+            await ReportReadinessCache.invalidate_student_session(
+                tenant_id=tenant_id,
+                student_id=student_id,
+                academic_session_id=academic_session_id,
+            )
         comments = list(
             (
                 await db.execute(
