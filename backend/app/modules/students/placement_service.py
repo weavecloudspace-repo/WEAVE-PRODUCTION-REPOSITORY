@@ -510,9 +510,7 @@ class StudentPlacementService:
     ) -> StudentDetailResponse:
         """Repair prior same-level class moves without creating another enrollment."""
         await ensure_academic_write_window(db, tenant_id=actor.tenant_id)
-        student = await StudentRepository.get_by_id(
-            db, actor.tenant_id, student_id, lock=True
-        )
+        student = await StudentRepository.get_by_id(db, actor.tenant_id, student_id, lock=True)
         if student is None:
             raise NotFoundException("Student not found.")
         await StudentPlacementService._require_open_session(
