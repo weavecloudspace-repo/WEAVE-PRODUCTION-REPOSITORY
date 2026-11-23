@@ -369,7 +369,7 @@ export default function TmaPage({ role }) {
       setListLoading(false);
       return;
     }
-    const key = JSON.stringify([termId, offset, debouncedQuery, statusFilter, levelFilter]);
+    const key = JSON.stringify([termId, offset, debouncedQuery, statusFilter, levelFilter, statusFilter === "needs_attention"]);
     // Teacher results must always revalidate current authorization on the server.
     const cached = role === "admin" ? listCache.current.get(key) : null;
     if (cached && Date.now() - cached.at < 15_000) {
@@ -383,7 +383,8 @@ export default function TmaPage({ role }) {
     setListLoading(true);
     service.list(offset, termId, {
       search: debouncedQuery,
-      status: statusFilter,
+      status: statusFilter === "needs_attention" ? "" : statusFilter,
+      needs_attention: role === "admin" && statusFilter === "needs_attention",
       academic_level_id: levelFilter,
     }, { signal: controller.signal })
       .then((response) => {
@@ -423,7 +424,10 @@ export default function TmaPage({ role }) {
       if (document.visibilityState === "visible") {
         try {
           const response = await service.list(offset, termId, {
-            search: debouncedQuery, status: statusFilter, academic_level_id: levelFilter,
+            search: debouncedQuery,
+            status: statusFilter === "needs_attention" ? "" : statusFilter,
+            needs_attention: role === "admin" && statusFilter === "needs_attention",
+            academic_level_id: levelFilter,
           });
           if (active) {
             setList(rows(response));
@@ -839,6 +843,7 @@ export default function TmaPage({ role }) {
                   placeholder="All statuses"
                   clearable
                 >
+                  {role === "admin" && <option value="needs_attention">Needs Attention</option>}
                   {["draft", "active", "closed", "cancelling", "cancelled"].map(
                     (v) => (
                       <option key={v} value={v}>

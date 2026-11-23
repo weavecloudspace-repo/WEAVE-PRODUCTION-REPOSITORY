@@ -38,6 +38,8 @@ class StudentClassPlacementResponse(BaseModel):
 class StudentClassReassignmentRequest(EnrollmentInput):
     """Move one already-classed student within the same academic level."""
 
+    carry_finalized_results: bool = False
+
     target_class_id: uuid.UUID
     academic_session_id: uuid.UUID
     effective_date: date
@@ -68,6 +70,14 @@ class StudentAcademicLevelReassignmentRequest(EnrollmentInput):
         if not cleaned:
             raise ValueError("reason cannot be empty")
         return cleaned
+
+
+class ExistingResultReconciliationRequest(EnrollmentInput):
+    """Correct existing academic results after a previous class reassignment."""
+
+    academic_session_id: uuid.UUID
+    reason: str = Field(min_length=3, max_length=500)
+    carry_finalized_results: bool = False
 
 
 class PlacementImpactPreviewRequest(EnrollmentInput):
@@ -102,6 +112,14 @@ class PlacementImpactSubject(BaseModel):
     subject_name: str
 
 
+class PlacementResultImpact(BaseModel):
+    result_id: uuid.UUID
+    curriculum_subject_id: uuid.UUID
+    status: str
+    action: str
+    reason: str = ""
+
+
 class PlacementImpactPreviewResponse(BaseModel):
     current_academic_level_id: uuid.UUID
     current_class_id: uuid.UUID | None
@@ -117,3 +135,4 @@ class PlacementImpactPreviewResponse(BaseModel):
     report_card_affected: bool
     ranking_context_affected: bool = True
     warnings: list[str] = Field(default_factory=list)
+    result_impacts: list[PlacementResultImpact] = Field(default_factory=list)

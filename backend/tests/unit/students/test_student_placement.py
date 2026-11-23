@@ -294,6 +294,10 @@ async def test_same_level_reassignment_creates_new_segment_and_invalidates_deriv
     invalidate = AsyncMock()
     monkeypatch.setattr(StudentPlacementService, "_close_segment", close_segment)
     monkeypatch.setattr(StudentPlacementService, "_create_segment", create_segment)
+    monkeypatch.setattr(
+        "app.modules.students.placement_service.AcademicResultContinuityService.apply",
+        AsyncMock(return_value=[]),
+    )
     monkeypatch.setattr(StudentPlacementService, "_invalidate_derived_context", invalidate)
     monkeypatch.setattr(
         StudentService,
