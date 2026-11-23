@@ -192,13 +192,34 @@ async def test_edited_cross_level_move_never_forwards_old_results(monkeypatch):
     )
     apply = AsyncMock()
     audit = AsyncMock()
+    invalidate = AsyncMock()
+    committed = AsyncMock()
     monkeypatch.setattr(mod.AcademicResultContinuityService, "apply", apply)
     monkeypatch.setattr(mod.StudentAcademicRepository, "add_academic_lifecycle_audit", audit)
+    monkeypatch.setattr(mod.StudentPlacementService, "_invalidate_derived_context", invalidate)
+    monkeypatch.setattr(
+        mod.StudentPlacementService, "_commit_with_readiness_invalidation", committed
+    )
 
     assert await ScheduledResultContinuityService.activate_one(db, pending.id) == 0
     apply.assert_not_awaited()
-    assert audit.await_args.args[1].metadata_json["outcome"] == "skipped"
-    db.commit.assert_awaited_once()
+    invalidate.assert_awaited_once_with(
+        db,
+        tenant_id=pending.tenant_id,
+        student_id=dest.student_id,
+        academic_session_id=dest.academic_session_id,
+    )
+    assert (
+        audit.await_args.args[1].metadata_json["outcome"]
+        == "placement_activated_without_result_transfer"
+    )
+    committed.assert_awaited_once_with(
+        db,
+        tenant_id=pending.tenant_id,
+        student_id=dest.student_id,
+        academic_session_id=dest.academic_session_id,
+    )
+    db.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
