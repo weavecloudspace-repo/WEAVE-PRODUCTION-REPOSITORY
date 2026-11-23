@@ -235,9 +235,7 @@ async def test_scheduled_activation_takes_lifecycle_lock_before_enrollment_lock(
 async def test_due_scan_skips_failed_markers_during_bounded_backoff():
     from app.modules.students.scheduled_result_continuity import RETRY_ACTION
 
-    db = SimpleNamespace(
-        execute=AsyncMock(return_value=SimpleNamespace(scalars=lambda: []))
-    )
+    db = SimpleNamespace(execute=AsyncMock(return_value=SimpleNamespace(scalars=lambda: [])))
     await ScheduledResultContinuityService.due_ids(db)
     statement = db.execute.await_args.args[0]
     params = statement.compile().params
@@ -253,15 +251,12 @@ async def test_failed_activation_creates_retry_marker_for_same_tenant_only():
     from app.modules.students.scheduled_result_continuity import RETRY_ACTION
 
     _, pending = _fixtures()
-    marker = None
+    nonlocal_marker: list[AcademicLifecycleAudit] = []
     db = SimpleNamespace(
-        execute=AsyncMock(
-            return_value=SimpleNamespace(scalar_one_or_none=lambda: pending)
-        ),
+        execute=AsyncMock(return_value=SimpleNamespace(scalar_one_or_none=lambda: pending)),
         add=lambda value: nonlocal_marker.append(value),
         commit=AsyncMock(),
     )
-    nonlocal_marker: list[AcademicLifecycleAudit] = []
     await ScheduledResultContinuityService.defer_failed(db, pending.id)
     assert len(nonlocal_marker) == 1
     marker = nonlocal_marker[0]
