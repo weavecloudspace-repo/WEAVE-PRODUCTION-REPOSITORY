@@ -170,7 +170,15 @@ async def test_repeated_transfer_reconciles_stale_enrollment_even_when_class_mat
     monkeypatch.setattr(
         CurriculumResolutionService,
         "resolve_class_subjects",
-        AsyncMock(return_value=[SimpleNamespace(curriculum_subject_id=subject_id)]),
+        AsyncMock(
+            return_value=[
+                SimpleNamespace(
+                    curriculum_subject_id=subject_id,
+                    is_elective=False,
+                    elective_group_id=None,
+                )
+            ]
+        ),
     )
     monkeypatch.setattr(
         AssessmentRepository,

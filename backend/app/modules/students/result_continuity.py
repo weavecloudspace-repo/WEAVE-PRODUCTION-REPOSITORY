@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.classes.models import ClassRoom
+from app.modules.student_academics.curriculum_models import StudentElectiveSelection
 from app.modules.student_academics.curriculum_service import CurriculumResolutionService
 from app.modules.student_academics.models import (
     AcademicLifecycleAudit,
@@ -101,6 +102,26 @@ class AcademicResultContinuityService:
             academic_term_id=term.id,
         )
         eligible_subject_ids = {row.curriculum_subject_id for row in target_subjects}
+        elective_subject_ids = {
+            row.curriculum_subject_id
+            for row in target_subjects
+            if row.is_elective and row.elective_group_id is not None
+        }
+        selected_elective_ids: set[UUID] = set()
+        if elective_subject_ids:
+            selected_elective_ids = set(
+                (
+                    await db.execute(
+                        select(StudentElectiveSelection.curriculum_subject_id).where(
+                            StudentElectiveSelection.tenant_id == tenant_id,
+                            StudentElectiveSelection.student_id == student_id,
+                            StudentElectiveSelection.curriculum_subject_id.in_(
+                                elective_subject_ids
+                            ),
+                        )
+                    )
+                ).scalars()
+            )
         active_scheme = await AssessmentRepository.get_active_scheme(db, tenant_id)
 
         decisions: list[ResultContinuityDecision] = []
@@ -154,6 +175,16 @@ class AcademicResultContinuityService:
                 decisions.append(
                     ResultContinuityDecision(
                         result, "historical_only", "Subject is not offered by destination"
+                    )
+                )
+                continue
+            if (
+                result.curriculum_subject_id in elective_subject_ids
+                and result.curriculum_subject_id not in selected_elective_ids
+            ):
+                decisions.append(
+                    ResultContinuityDecision(
+                        result, "historical_only", "Elective subject is not selected by student"
                     )
                 )
                 continue
