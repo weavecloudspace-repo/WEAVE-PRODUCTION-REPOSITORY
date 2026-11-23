@@ -96,6 +96,9 @@ class ScheduledResultContinuityService:
         if completed is not None:
             return None
 
+        # Match the normal placement mutation order: lifecycle advisory lock
+        # must precede enrollment row locks to avoid cross-request deadlocks.
+        await ensure_academic_write_window(db, tenant_id=pending.tenant_id)
         destination = await StudentEnrollmentRepository.get_by_id(
             db, pending.tenant_id, pending.entity_id, lock=True
         )
@@ -131,7 +134,6 @@ class ScheduledResultContinuityService:
             and session.status == AcademicSessionStatus.OPEN
             and session.is_current
         ):
-            await ensure_academic_write_window(db, tenant_id=pending.tenant_id)
             decisions = await AcademicResultContinuityService.apply(
                 db,
                 actor_id=pending.acting_admin_id,
