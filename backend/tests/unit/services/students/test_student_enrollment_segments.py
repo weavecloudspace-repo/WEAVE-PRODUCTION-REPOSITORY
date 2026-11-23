@@ -152,6 +152,10 @@ async def test_reassign_class_splits_placement_on_effective_date(monkeypatch) ->
     invalidate = AsyncMock()
     monkeypatch.setattr(StudentPlacementService, "_close_segment", close_segment)
     monkeypatch.setattr(StudentPlacementService, "_create_segment", create_segment)
+    monkeypatch.setattr(
+        "app.modules.students.placement_service.AcademicResultContinuityService.apply",
+        AsyncMock(return_value=[]),
+    )
     monkeypatch.setattr(StudentPlacementService, "_invalidate_derived_context", invalidate)
     monkeypatch.setattr(
         StudentService,
