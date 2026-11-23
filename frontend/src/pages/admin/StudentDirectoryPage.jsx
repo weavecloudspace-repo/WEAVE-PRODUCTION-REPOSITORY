@@ -1407,6 +1407,7 @@ function StudentDirectoryPage() {
                 onReset={setAccessCodeConfirmation}
                 onPlacementHistory={openPlacementHistory}
                 onReassignClass={(item) => openReassign(item, "class")}
+                onReconcileResults={(item) => openReassign(item, "reconcile")}
                 onReassignLevel={(item) => openReassign(item, "level")}
                 onManageUpcoming={openUpcomingManager}
                 onLifecycle={openLifecycle}

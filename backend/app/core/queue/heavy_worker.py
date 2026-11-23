@@ -34,6 +34,9 @@ from app.modules.student_academics.lifecycle_repository import (  # noqa: E402
 from app.modules.student_academics.models import (  # noqa: E402
     StudentProgressionRunStatus,
 )
+from app.modules.students.scheduled_result_continuity import (  # noqa: E402
+    ScheduledResultContinuityService,
+)
 from app.modules.tma.cancellation_service import TMACancellationService  # noqa: E402
 from app.modules.tma.models import TMACancellationRun  # noqa: E402
 from app.modules.tma.expiration_service import TMAExpirationService  # noqa: E402
@@ -310,6 +313,36 @@ async def poll_tma_deadlines(ctx: dict[str, Any]) -> dict[str, int]:
     return {**closed, **totals}
 
 
+async def poll_due_result_continuity(ctx: dict[str, Any]) -> dict[str, int]:
+    """Activate due same-level result ownership changes in bounded transactions."""
+    _ = ctx
+    async with AsyncSessionLocal() as db:
+        candidates = await ScheduledResultContinuityService.due_ids(db, limit=25)
+    summary = {"activated": 0, "changed": 0, "failed": 0}
+    for audit_id in candidates:
+        try:
+            async with AsyncSessionLocal() as db:
+                changed = await ScheduledResultContinuityService.activate_one(db, audit_id)
+            if changed is not None:
+                summary["activated"] += 1
+                summary["changed"] += changed
+        except Exception:
+            logger.exception(
+                "Scheduled result continuity activation failed for audit %s.", audit_id
+            )
+            summary["failed"] += 1
+            # The failing activation transaction rolls back independently.
+            # Persist a short retry delay so other schools receive a turn.
+            try:
+                async with AsyncSessionLocal() as db:
+                    await ScheduledResultContinuityService.defer_failed(db, audit_id)
+            except Exception:
+                logger.exception(
+                    "Unable to record scheduled continuity retry for audit %s.", audit_id
+                )
+    return summary
+
+
 async def poll_tma_draft_media_cleanup(ctx: dict[str, Any]) -> dict[str, int]:
     """Retry media cleanup after successful database deletion."""
     _ = ctx
@@ -351,6 +384,14 @@ class WorkerSettings:
         process_tma_zero_grading_job,
     ]
     cron_jobs = [
+        cron(
+            poll_due_result_continuity,
+            minute={0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55},
+            run_at_startup=True,
+            unique=True,
+            timeout=120,
+            max_tries=1,
+        ),
         cron(
             poll_tma_draft_media_cleanup,
             minute={1, 6, 11, 16, 21, 26, 31, 36, 41, 46, 51, 56},
