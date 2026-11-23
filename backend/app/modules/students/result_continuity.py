@@ -50,6 +50,7 @@ class AcademicResultContinuityService:
         target_class_id: UUID,
         effective_date: date,
         lock: bool = False,
+        destination_enrollment_id: UUID | None = None,
     ) -> list[ResultContinuityDecision]:
         target = (
             await db.execute(
@@ -81,7 +82,6 @@ class AcademicResultContinuityService:
             StudentSubjectResult.student_id == student_id,
             StudentSubjectResult.academic_session_id == academic_session_id,
             StudentSubjectResult.academic_term_id == term.id,
-            StudentSubjectResult.class_id != target_class_id,
         ).order_by(StudentSubjectResult.id)
         if lock:
             query = query.with_for_update()
@@ -101,6 +101,12 @@ class AcademicResultContinuityService:
 
         decisions: list[ResultContinuityDecision] = []
         for result in results:
+            if (
+                destination_enrollment_id is not None
+                and result.class_id == target_class_id
+                and result.student_enrollment_id == destination_enrollment_id
+            ):
+                continue
             source_class = (
                 await db.execute(
                     select(ClassRoom).where(
@@ -177,6 +183,7 @@ class AcademicResultContinuityService:
             target_class_id=destination_enrollment.class_id,
             effective_date=effective_date,
             lock=True,
+            destination_enrollment_id=destination_enrollment.id,
         )
         for decision in decisions:
             if decision.action not in {"automatic", "requires_confirmation"}:
