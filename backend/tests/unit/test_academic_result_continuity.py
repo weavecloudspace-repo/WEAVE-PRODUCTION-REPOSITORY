@@ -131,7 +131,6 @@ async def test_needs_attention_filter_is_applied_before_database_pagination():
     assert "zero_grading_error IS NOT NULL" in sql
 
 
-
 @pytest.mark.asyncio
 async def test_repeated_transfer_reconciles_stale_enrollment_even_when_class_matches(monkeypatch):
     """Returning to SS3 C must update result enrollment, not duplicate the score."""
