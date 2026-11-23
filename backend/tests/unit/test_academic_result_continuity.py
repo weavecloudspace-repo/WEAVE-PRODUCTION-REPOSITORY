@@ -129,3 +129,71 @@ async def test_needs_attention_filter_is_applied_before_database_pagination():
     assert "zero_grading_requested_at IS NOT NULL" in sql
     assert "zero_grading_completed_at IS NULL" in sql
     assert "zero_grading_error IS NOT NULL" in sql
+
+
+
+@pytest.mark.asyncio
+async def test_repeated_transfer_reconciles_stale_enrollment_even_when_class_matches(monkeypatch):
+    """Returning to SS3 C must update result enrollment, not duplicate the score."""
+    from datetime import date
+
+    from app.modules.student_academics.assessment_repository import AssessmentRepository
+    from app.modules.student_academics.curriculum_service import CurriculumResolutionService
+    from app.modules.student_academics.repository import StudentAcademicRepository
+
+    tenant_id, student_id, session_id, level_id, class_id = [uuid4() for _ in range(5)]
+    prior_enrollment_id = uuid4()
+    destination_enrollment_id = uuid4()
+    subject_id, scheme_id = uuid4(), uuid4()
+    result = SimpleNamespace(
+        id=uuid4(),
+        class_id=class_id,
+        student_enrollment_id=prior_enrollment_id,
+        curriculum_subject_id=subject_id,
+        assessment_scheme_id=scheme_id,
+        status=AcademicResultStatus.DRAFT,
+        total_score=9,
+    )
+    classroom = SimpleNamespace(id=class_id, academic_level_id=level_id)
+    prior_enrollment = SimpleNamespace(class_id=class_id, academic_level_id=level_id)
+    term = SimpleNamespace(id=uuid4())
+    teacher = SimpleNamespace(id=uuid4(), teacher_membership_id=uuid4())
+    db = MagicMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            SimpleNamespace(scalar_one_or_none=lambda: classroom),
+            SimpleNamespace(scalar_one_or_none=lambda: term),
+            SimpleNamespace(scalars=lambda: [result]),
+            SimpleNamespace(scalar_one_or_none=lambda: classroom),
+            SimpleNamespace(scalar_one_or_none=lambda: prior_enrollment),
+        ]
+    )
+    monkeypatch.setattr(
+        CurriculumResolutionService,
+        "resolve_class_subjects",
+        AsyncMock(return_value=[SimpleNamespace(curriculum_subject_id=subject_id)]),
+    )
+    monkeypatch.setattr(
+        AssessmentRepository,
+        "get_active_scheme",
+        AsyncMock(return_value=SimpleNamespace(id=scheme_id)),
+    )
+    monkeypatch.setattr(
+        StudentAcademicRepository,
+        "get_teacher_assignments_for_classes_on_date",
+        AsyncMock(return_value={class_id: teacher}),
+    )
+
+    decisions = await AcademicResultContinuityService.inspect(
+        db,
+        tenant_id=tenant_id,
+        student_id=student_id,
+        academic_session_id=session_id,
+        source_level_id=level_id,
+        target_class_id=class_id,
+        effective_date=date.today(),
+        destination_enrollment_id=destination_enrollment_id,
+    )
+    assert len(decisions) == 1
+    assert decisions[0].action == "automatic"
+    assert decisions[0].result is result
