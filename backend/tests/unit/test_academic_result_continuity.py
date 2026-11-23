@@ -30,9 +30,7 @@ def _fixture(status=AcademicResultStatus.DRAFT):
 
 async def _apply(monkeypatch, result, destination, teacher, *, consent=False):
     action = "automatic" if result.status == AcademicResultStatus.DRAFT else "requires_confirmation"
-    inspect_mock = AsyncMock(return_value=[
-        ResultContinuityDecision(result, action, "", teacher)
-    ])
+    inspect_mock = AsyncMock(return_value=[ResultContinuityDecision(result, action, "", teacher)])
     audit_mock = AsyncMock()
     monkeypatch.setattr(AcademicResultContinuityService, "inspect", inspect_mock)
     from app.modules.student_academics.repository import StudentAcademicRepository
@@ -79,7 +77,9 @@ async def test_locked_result_remains_unchanged_without_explicit_admin_consent(mo
 
 
 @pytest.mark.asyncio
-async def test_locked_result_ownership_correction_requires_consent_and_preserves_status(monkeypatch):
+async def test_locked_result_ownership_correction_requires_consent_and_preserves_status(
+    monkeypatch,
+):
     result, destination, teacher = _fixture(AcademicResultStatus.LOCKED)
     db, audit = await _apply(monkeypatch, result, destination, teacher, consent=True)
     assert result.class_id == destination.class_id
@@ -115,17 +115,17 @@ async def test_needs_attention_filter_is_applied_before_database_pagination():
     from app.modules.tma.repository import TMAAssignmentRepository
 
     db = MagicMock()
-    db.execute = AsyncMock(side_effect=[
-        SimpleNamespace(scalar_one=lambda: 0),
-        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
-    ])
+    db.execute = AsyncMock(
+        side_effect=[
+            SimpleNamespace(scalar_one=lambda: 0),
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
+        ]
+    )
     rows, count = await TMAAssignmentRepository.list_for_scope(
         db, uuid4(), needs_attention=True, offset=30, limit=24
     )
     assert rows == [] and count == 0
-    sql = str(db.execute.await_args_list[0].args[0].compile(
-        dialect=postgresql.dialect()
-    ))
+    sql = str(db.execute.await_args_list[0].args[0].compile(dialect=postgresql.dialect()))
     assert "zero_grading_requested_at IS NOT NULL" in sql
     assert "zero_grading_completed_at IS NULL" in sql
     assert "zero_grading_error IS NOT NULL" in sql
