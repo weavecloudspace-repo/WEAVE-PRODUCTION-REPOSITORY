@@ -158,6 +158,9 @@ export const studentService = {
       payload,
     ),
 
+  reconcileExistingResults: (studentId, payload) =>
+    api.post(`/tenant-admin/students/${studentId}/reconcile-existing-results`, payload),
+
   reassignStudentClass: (studentId, payload) =>
     api.post(`/tenant-admin/students/${studentId}/reassign-class`, payload),
 
