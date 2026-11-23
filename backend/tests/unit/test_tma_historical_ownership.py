@@ -82,30 +82,34 @@ def _mocks(monkeypatch, ctx):
 
     monkeypatch.setattr(mod, "ensure_academic_write_window", AsyncMock())
     monkeypatch.setattr(
-        mod.AssessmentRepository, "get_active_scheme",
+        mod.AssessmentRepository,
+        "get_active_scheme",
         AsyncMock(return_value=ctx.scheme),
     )
     monkeypatch.setattr(
-        mod.AssessmentRepository, "get_component",
+        mod.AssessmentRepository,
+        "get_component",
         AsyncMock(return_value=ctx.component),
     )
     monkeypatch.setattr(
-        mod.StudentAcademicRepository, "get_results_by_scope_batch",
+        mod.StudentAcademicRepository,
+        "get_results_by_scope_batch",
         AsyncMock(return_value={ctx.student: ctx.result}),
     )
     monkeypatch.setattr(
-        mod.StudentAcademicRepository, "get_component_scores_batch",
+        mod.StudentAcademicRepository,
+        "get_component_scores_batch",
         AsyncMock(return_value={}),
     )
+    monkeypatch.setattr(mod.StudentAcademicRepository, "add_component_scores_batch", AsyncMock())
     monkeypatch.setattr(
-        mod.StudentAcademicRepository, "add_component_scores_batch", AsyncMock()
-    )
-    monkeypatch.setattr(
-        mod.StudentAcademicRepository, "list_result_component_scores",
+        mod.StudentAcademicRepository,
+        "list_result_component_scores",
         AsyncMock(return_value=[(ctx.component, SimpleNamespace(score=Decimal("0")))]),
     )
     monkeypatch.setattr(
-        mod.StudentAcademicRepository, "find_grade_for_score",
+        mod.StudentAcademicRepository,
+        "find_grade_for_score",
         AsyncMock(return_value=None),
     )
     monkeypatch.setattr(mod.StudentAcademicRepository, "upsert_result", AsyncMock())
@@ -131,9 +135,7 @@ async def test_immutable_closure_zero_can_follow_valid_same_level_transfer(monke
         deadline_subject_id=uuid4(),
     )
     assert score == Decimal("0.00")
-    lookup.assert_awaited_once_with(
-        db, ctx.tenant, ctx.destination.id
-    )
+    lookup.assert_awaited_once_with(db, ctx.tenant, ctx.destination.id)
 
 
 @pytest.mark.asyncio
