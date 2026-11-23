@@ -201,31 +201,37 @@ class ScheduledResultContinuityService:
 
         changes = 0
         outcome = "skipped"
-        if (
+        # An activated placement changes report/comment context even if an
+        # administrator edited it to a different level after scheduling.
+        # Only same-level moves may forward canonical result ownership.
+        placement_effective = (
             current is not None
             and current.id == destination.id
             and destination.class_id is not None
             and destination.entry_outcome == StudentEnrollmentOutcome.RECLASSIFIED
-            and str(destination.academic_level_id) == metadata.get("source_level_id")
             and str(destination.academic_session_id) == metadata.get("academic_session_id")
             and session is not None
             and session.status == AcademicSessionStatus.OPEN
             and session.is_current
-        ):
-            decisions = await AcademicResultContinuityService.apply(
-                db,
-                actor_id=pending.acting_admin_id,
-                tenant_id=pending.tenant_id,
-                student_id=destination.student_id,
-                academic_session_id=destination.academic_session_id,
-                source_level_id=destination.academic_level_id,
-                destination_enrollment=destination,
-                effective_date=destination.started_on,
-                reason=pending.reason or "Scheduled same-level placement activated",
-                carry_finalized_results=bool(metadata.get("carry_finalized_results", False)),
-            )
-            changes = sum(decision.applied for decision in decisions)
-            outcome = "activated"
+        )
+        if placement_effective:
+            if str(destination.academic_level_id) == metadata.get("source_level_id"):
+                decisions = await AcademicResultContinuityService.apply(
+                    db,
+                    actor_id=pending.acting_admin_id,
+                    tenant_id=pending.tenant_id,
+                    student_id=destination.student_id,
+                    academic_session_id=destination.academic_session_id,
+                    source_level_id=destination.academic_level_id,
+                    destination_enrollment=destination,
+                    effective_date=destination.started_on,
+                    reason=pending.reason or "Scheduled same-level placement activated",
+                    carry_finalized_results=bool(metadata.get("carry_finalized_results", False)),
+                )
+                changes = sum(decision.applied for decision in decisions)
+                outcome = "activated"
+            else:
+                outcome = "placement_activated_without_result_transfer"
             await StudentPlacementService._invalidate_derived_context(
                 db,
                 tenant_id=pending.tenant_id,
@@ -250,7 +256,7 @@ class ScheduledResultContinuityService:
                 },
             ),
         )
-        if outcome == "activated":
+        if placement_effective:
             await StudentPlacementService._commit_with_readiness_invalidation(
                 db,
                 tenant_id=pending.tenant_id,
