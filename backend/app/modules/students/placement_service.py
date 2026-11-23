@@ -493,6 +493,56 @@ class StudentPlacementService:
         return await StudentService.get_student_profile(db, actor, student.id)
 
     @staticmethod
+    async def reconcile_existing_results(
+        db: AsyncSession,
+        *,
+        actor: TenantAdmin,
+        student_id: UUID,
+        academic_session_id: UUID,
+        reason: str,
+        carry_finalized_results: bool = False,
+    ) -> StudentDetailResponse:
+        """Repair prior same-level class moves without creating another enrollment."""
+        await ensure_academic_write_window(db, tenant_id=actor.tenant_id)
+        student = await StudentRepository.get_by_id(
+            db, actor.tenant_id, student_id, lock=True
+        )
+        if student is None:
+            raise NotFoundException("Student not found.")
+        await StudentPlacementService._require_open_session(
+            db, tenant_id=actor.tenant_id, academic_session_id=academic_session_id
+        )
+        current = await StudentEnrollmentRepository.get_current(
+            db, actor.tenant_id, student.id, lock=True
+        )
+        if (
+            current is None
+            or current.academic_session_id != academic_session_id
+            or current.class_id is None
+        ):
+            raise ConflictException("No current placement exists for this academic session.")
+        await AcademicResultContinuityService.apply(
+            db,
+            actor_id=actor.id,
+            tenant_id=actor.tenant_id,
+            student_id=student.id,
+            academic_session_id=academic_session_id,
+            source_level_id=current.academic_level_id,
+            destination_enrollment=current,
+            effective_date=date.today(),
+            reason=reason,
+            carry_finalized_results=carry_finalized_results,
+        )
+        await StudentPlacementService._invalidate_derived_context(
+            db,
+            tenant_id=actor.tenant_id,
+            student_id=student.id,
+            academic_session_id=academic_session_id,
+        )
+        await db.commit()
+        return await StudentService.get_student_profile(db, actor, student.id)
+
+    @staticmethod
     async def reassign_academic_level(
         db: AsyncSession,
         *,
