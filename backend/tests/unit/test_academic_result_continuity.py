@@ -107,3 +107,25 @@ async def test_cross_level_inspection_never_proposes_score_transfer():
     )
     assert decisions == []
     db.execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_needs_attention_filter_is_applied_before_database_pagination():
+    from sqlalchemy.dialects import postgresql
+    from app.modules.tma.repository import TMAAssignmentRepository
+
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=[
+        SimpleNamespace(scalar_one=lambda: 0),
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
+    ])
+    rows, count = await TMAAssignmentRepository.list_for_scope(
+        db, uuid4(), needs_attention=True, offset=30, limit=24
+    )
+    assert rows == [] and count == 0
+    sql = str(db.execute.await_args_list[0].args[0].compile(
+        dialect=postgresql.dialect()
+    ))
+    assert "zero_grading_requested_at IS NOT NULL" in sql
+    assert "zero_grading_completed_at IS NULL" in sql
+    assert "zero_grading_error IS NOT NULL" in sql
