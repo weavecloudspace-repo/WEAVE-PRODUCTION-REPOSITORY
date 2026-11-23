@@ -24,6 +24,7 @@ from app.modules.student_academics.models import (
     StudentSubjectResult,
 )
 from app.modules.student_academics.repository import StudentAcademicRepository
+from app.modules.student_academics.assessment_repository import AssessmentRepository
 from app.modules.students.models import StudentEnrollment
 
 
@@ -96,7 +97,7 @@ class AcademicResultContinuityService:
             academic_term_id=term.id,
         )
         eligible_subject_ids = {row.curriculum_subject_id for row in target_subjects}
-        active_scheme = await StudentAcademicRepository.get_active_scheme(db, tenant_id)
+        active_scheme = await AssessmentRepository.get_active_scheme(db, tenant_id)
 
         decisions: list[ResultContinuityDecision] = []
         for result in results:
