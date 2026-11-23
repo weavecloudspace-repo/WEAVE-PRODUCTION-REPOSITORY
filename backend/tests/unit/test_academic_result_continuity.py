@@ -129,6 +129,13 @@ async def test_needs_attention_filter_is_applied_before_database_pagination():
     assert "zero_grading_requested_at IS NOT NULL" in sql
     assert "zero_grading_completed_at IS NULL" in sql
     assert "zero_grading_error IS NOT NULL" in sql
+    row_query = db.execute.await_args_list[1].args[0]
+    row_sql = str(row_query.compile(dialect=postgresql.dialect()))
+    assert "zero_grading_requested_at IS NOT NULL" in row_sql
+    assert "zero_grading_completed_at IS NULL" in row_sql
+    assert "zero_grading_error IS NOT NULL" in row_sql
+    assert row_query._limit_clause.value == 24
+    assert row_query._offset_clause.value == 30
 
 
 @pytest.mark.asyncio
