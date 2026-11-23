@@ -129,10 +129,7 @@ class TMAGradingService:
                     or enrollment.student_id != student_id
                     or enrollment.academic_session_id != assignment.academic_session_id
                     or enrollment.started_on > scoring_date
-                    or (
-                        enrollment.ended_on is not None
-                        and enrollment.ended_on < scoring_date
-                    )
+                    or (enrollment.ended_on is not None and enrollment.ended_on < scoring_date)
                     or target_enrollment is None
                     or target_enrollment.tenant_id != tenant_id
                     or target_enrollment.student_id != student_id
