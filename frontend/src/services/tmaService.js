@@ -12,6 +12,7 @@ export const tmaService = {
     if (termId) params.set("academic_term_id", termId);
     if (filters.search?.trim()) params.set("search", filters.search.trim());
     if (filters.status) params.set("status", filters.status);
+    if (filters.needs_attention) params.set("needs_attention", "true");
     if (filters.academic_level_id) params.set("academic_level_id", filters.academic_level_id);
     return read(`/tma/assignments?${params.toString()}`, options);
   },
