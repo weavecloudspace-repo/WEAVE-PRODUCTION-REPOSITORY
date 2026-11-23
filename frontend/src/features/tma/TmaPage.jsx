@@ -411,7 +411,7 @@ export default function TmaPage({ role }) {
       active = false;
       controller.abort();
     };
-  }, [assignmentId, config, termId, offset, debouncedQuery, statusFilter, levelFilter, role, showError]);
+  }, [assignmentId, config, termId, offset, debouncedQuery, statusFilter, levelFilter, needsAttentionOnly, role, showError]);
   // Refresh overview cards only while at least one visible worker is pending.
   useEffect(() => {
     if (assignmentId || !termId || !list.some((item) =>
