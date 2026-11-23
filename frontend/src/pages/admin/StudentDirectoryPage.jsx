@@ -345,6 +345,7 @@ function StudentActions({
   onReset,
   onPlacementHistory,
   onReassignClass,
+  onReconcileResults,
   onReassignLevel,
   onManageUpcoming,
   onLifecycle,
@@ -417,6 +418,14 @@ function StudentActions({
                 onClick={() => choose(onReassignClass)}
               >
                 <School className="h-4 w-4" /> Reassign Class
+              </button>
+              <button
+                type="button"
+                disabled={placementDisabled || !student.class_id}
+                className="flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-text-soft transition hover:bg-surface-muted disabled:opacity-50"
+                onClick={() => choose(onReconcileResults)}
+              >
+                <BookOpen className="h-4 w-4" /> Reconcile Existing Results
               </button>
               <button
                 type="button"
@@ -998,8 +1007,8 @@ function StudentDirectoryPage() {
       carryFinalizedResults: false,
       form: {
         target_academic_level_id:
-          type === "class" ? student.academic_level_id || "" : "",
-        target_class_id: "",
+          type !== "level" ? student.academic_level_id || "" : "",
+        target_class_id: type === "reconcile" ? student.class_id || "" : "",
         academic_session_id: currentSession?.id || student.academic_session_id || "",
         academic_term_id: currentTerm?.id || "",
         effective_date: localDateInputValue(),
@@ -1085,6 +1094,13 @@ function StudentDirectoryPage() {
           carry_finalized_results: Boolean(placementState.carryFinalizedResults),
         });
         showSuccess("Class reassignment recorded as a new placement segment.");
+      } else if (type === "reconcile") {
+        await studentService.reconcileExistingResults(student.id, {
+          academic_session_id: form.academic_session_id,
+          reason: form.reason.trim(),
+          carry_finalized_results: Boolean(placementState.carryFinalizedResults),
+        });
+        showSuccess("Compatible existing results reconciled to the current class.");
       } else {
         await studentService.reassignStudentAcademicLevel(student.id, {
           target_academic_level_id: form.target_academic_level_id,
@@ -1370,6 +1386,7 @@ function StudentDirectoryPage() {
                     onReset={setAccessCodeConfirmation}
                     onPlacementHistory={openPlacementHistory}
                     onReassignClass={(item) => openReassign(item, "class")}
+                    onReconcileResults={(item) => openReassign(item, "reconcile")}
                     onReassignLevel={(item) => openReassign(item, "level")}
                     onManageUpcoming={openUpcomingManager}
                     onLifecycle={openLifecycle}
@@ -1721,9 +1738,9 @@ function StudentDirectoryPage() {
       </Modal>
 
       <Modal
-        open={placementState?.type === "class" || placementState?.type === "level"}
-        title={placementState?.type === "class" ? "Reassign Class" : "Reassign Academic Level"}
-        description="Reassignment remains allowed when academic evidence exists. Review the impact before confirming."
+        open={["class", "level", "reconcile"].includes(placementState?.type)}
+        title={placementState?.type === "reconcile" ? "Reconcile Existing Results" : placementState?.type === "class" ? "Reassign Class" : "Reassign Academic Level"}
+        description={placementState?.type === "reconcile" ? "Reconcile compatible results after a previous class reassignment, without creating a new enrollment." : "Reassignment remains allowed when academic evidence exists. Review the impact before confirming."}
         onClose={() => !busyId && setPlacementState(null)}
         closeOnOverlay={!busyId}
       >
@@ -1742,6 +1759,7 @@ function StudentDirectoryPage() {
                 onChange={(value) => updatePlacementForm("target_academic_level_id", value)}
               />
             ) : null}
+            {placementState.type !== "reconcile" && (
             <SelectField
               label="Destination class"
               value={placementState.form.target_class_id}
@@ -1750,6 +1768,7 @@ function StudentDirectoryPage() {
               disabled={!placementState.form.target_academic_level_id}
               onChange={(value) => updatePlacementForm("target_class_id", value)}
             />
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <SelectField
                 label="Academic session"
@@ -1775,7 +1794,7 @@ function StudentDirectoryPage() {
               {placementState.previewLoading ? "Previewing..." : "Preview placement impact"}
             </Button>
             <ImpactPreview preview={placementState.preview} />
-            {placementState.type === "class" &&
+            {placementState.type !== "level" &&
               placementState.preview?.result_impacts?.some(
                 (result) => result.action === "requires_confirmation"
               ) && (
@@ -1806,7 +1825,7 @@ function StudentDirectoryPage() {
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" disabled={Boolean(busyId)} onClick={() => setPlacementState(null)}>Cancel</Button>
               <Button type="submit" disabled={Boolean(busyId) || !placementState.preview}>
-                {busyId ? "Reassigning..." : "Confirm reassignment"}
+                {busyId ? "Saving..." : placementState.type === "reconcile" ? "Reconcile results" : "Confirm reassignment"}
               </Button>
             </div>
           </form>
