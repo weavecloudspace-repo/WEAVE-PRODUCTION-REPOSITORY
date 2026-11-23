@@ -21,6 +21,7 @@ from app.modules.student_academics.hybrid_scores import component_is_complete
 from app.modules.student_academics.write_guard import ensure_academic_write_window
 from app.modules.student_academics.curriculum_service import CurriculumResolutionService
 from app.modules.students.models import StudentEnrollment
+from app.modules.students.repository import StudentEnrollmentRepository
 from app.modules.tma.models import TMAAssignment, TMAAttempt, TMAQuestion, TMAQuestionOption
 
 
@@ -111,7 +112,35 @@ class TMAGradingService:
             if result.assessment_scheme_id != scheme.id:
                 raise ConflictException("Result uses a different assessment scheme.")
             if result.class_id != enrollment.class_id:
-                raise ConflictException("Result enrollment/class scope does not match.")
+                # Only the deadline worker, using its immutable closure roster,
+                # may grade an older enrollment after a same-level result transfer.
+                # Ordinary TMA submission must still match canonical ownership.
+                if deadline_subject_id is None or scoring_date is None:
+                    raise ConflictException("Result enrollment/class scope does not match.")
+                target_enrollment = (
+                    await StudentEnrollmentRepository.get_by_id(
+                        db, tenant_id, result.student_enrollment_id
+                    )
+                    if result.student_enrollment_id is not None
+                    else None
+                )
+                if (
+                    enrollment.tenant_id != tenant_id
+                    or enrollment.student_id != student_id
+                    or enrollment.academic_session_id != assignment.academic_session_id
+                    or enrollment.started_on > scoring_date
+                    or (enrollment.ended_on is not None and enrollment.ended_on < scoring_date)
+                    or target_enrollment is None
+                    or target_enrollment.tenant_id != tenant_id
+                    or target_enrollment.student_id != student_id
+                    or target_enrollment.academic_session_id != assignment.academic_session_id
+                    or target_enrollment.academic_level_id != enrollment.academic_level_id
+                    or target_enrollment.class_id != result.class_id
+                    or target_enrollment.started_on <= enrollment.started_on
+                    or enrollment.ended_on is None
+                    or enrollment.ended_on >= target_enrollment.started_on
+                ):
+                    raise ConflictException("Result enrollment/class scope does not match.")
             existing = await StudentAcademicRepository.get_component_scores_batch(
                 db,
                 tenant_id,

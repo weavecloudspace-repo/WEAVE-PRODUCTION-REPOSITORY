@@ -27,13 +27,18 @@ from app.modules.report_cards.comment_models import StudentTermTeacherComment, T
 from app.modules.report_cards.comment_service import ReportCommentService
 from app.modules.report_cards.models import ReportCard
 from app.modules.report_cards.cache import ReportReadinessCache
-from app.modules.student_academics.curriculum_models import ClassTermDepartmentAssignment
+from app.modules.student_academics.curriculum_models import (
+    ClassTermDepartmentAssignment,
+    StudentElectiveSelection,
+)
 from app.modules.student_academics.curriculum_service import CurriculumResolutionService
 from app.modules.student_academics.lifecycle_repository import AcademicSessionLifecycleRepository
 from app.modules.student_academics.models import (
     AcademicLifecycleAudit,
     AcademicSession,
     AcademicSessionStatus,
+    AcademicTerm,
+    AcademicTermStatus,
     StudentSubjectResult,
 )
 from app.modules.student_academics.write_guard import ensure_academic_write_window
@@ -233,16 +238,13 @@ class StudentPlacementService:
         student_id: UUID,
         academic_session_id: UUID,
     ) -> None:
-        await ReportReadinessCache.invalidate_student_session(
-            tenant_id=tenant_id,
-            student_id=student_id,
-            academic_session_id=academic_session_id,
-        )
+        # Only invalidate Redis after the database transaction commits.
         await ReportCommentService.invalidate_for_placement_change(
             db,
             tenant_id=tenant_id,
             student_id=student_id,
             academic_session_id=academic_session_id,
+            invalidate_readiness_cache=False,
         )
         cards = list(
             (
@@ -259,6 +261,21 @@ class StudentPlacementService:
         for card in cards:
             card.is_outdated = True
             db.add(card)
+
+    @staticmethod
+    async def _commit_with_readiness_invalidation(
+        db: AsyncSession,
+        *,
+        tenant_id: UUID,
+        student_id: UUID,
+        academic_session_id: UUID,
+    ) -> None:
+        await db.commit()
+        await ReportReadinessCache.invalidate_student_session(
+            tenant_id=tenant_id,
+            student_id=student_id,
+            academic_session_id=academic_session_id,
+        )
 
     @staticmethod
     async def _correct_same_day_placement(
@@ -449,7 +466,12 @@ class StudentPlacementService:
                 student_id=student.id,
                 academic_session_id=current.academic_session_id,
             )
-            await db.commit()
+            await StudentPlacementService._commit_with_readiness_invalidation(
+                db,
+                tenant_id=tenant_id,
+                student_id=student.id,
+                academic_session_id=current.academic_session_id,
+            )
             return await StudentService.get_student_profile(db, actor, student.id)
         if payload.effective_date <= current.started_on:
             raise BadRequestException(
@@ -477,25 +499,52 @@ class StudentPlacementService:
             reason=payload.reason,
             acting_admin_id=actor.id,
         )
-        await AcademicResultContinuityService.apply(
-            db,
-            actor_id=actor.id,
-            tenant_id=tenant_id,
-            student_id=student.id,
-            academic_session_id=current.academic_session_id,
-            source_level_id=current.academic_level_id,
-            destination_enrollment=destination_enrollment,
-            effective_date=payload.effective_date,
-            reason=payload.reason,
-            carry_finalized_results=payload.carry_finalized_results,
-        )
-        await StudentPlacementService._invalidate_derived_context(
-            db,
-            tenant_id=tenant_id,
-            student_id=student.id,
-            academic_session_id=current.academic_session_id,
-        )
-        await db.commit()
+        if payload.effective_date > date.today():
+            # The worker revalidates and transfers results only when this
+            # immutable destination enrollment becomes effective.
+            await StudentAcademicRepository.add_academic_lifecycle_audit(
+                db,
+                AcademicLifecycleAudit(
+                    tenant_id=tenant_id,
+                    entity_type="student_enrollment",
+                    entity_id=destination_enrollment.id,
+                    action="result_continuity_scheduled",
+                    acting_admin_id=actor.id,
+                    reason=payload.reason,
+                    metadata_json={
+                        "student_id": str(student.id),
+                        "academic_session_id": str(current.academic_session_id),
+                        "source_level_id": str(current.academic_level_id),
+                        "carry_finalized_results": payload.carry_finalized_results,
+                    },
+                ),
+            )
+            await db.commit()
+        else:
+            await AcademicResultContinuityService.apply(
+                db,
+                actor_id=actor.id,
+                tenant_id=tenant_id,
+                student_id=student.id,
+                academic_session_id=current.academic_session_id,
+                source_level_id=current.academic_level_id,
+                destination_enrollment=destination_enrollment,
+                effective_date=payload.effective_date,
+                reason=payload.reason,
+                carry_finalized_results=payload.carry_finalized_results,
+            )
+            await StudentPlacementService._invalidate_derived_context(
+                db,
+                tenant_id=tenant_id,
+                student_id=student.id,
+                academic_session_id=current.academic_session_id,
+            )
+            await StudentPlacementService._commit_with_readiness_invalidation(
+                db,
+                tenant_id=tenant_id,
+                student_id=student.id,
+                academic_session_id=current.academic_session_id,
+            )
         return await StudentService.get_student_profile(db, actor, student.id)
 
     @staticmethod
@@ -525,7 +574,7 @@ class StudentPlacementService:
             or current.class_id is None
         ):
             raise ConflictException("No current placement exists for this academic session.")
-        await AcademicResultContinuityService.apply(
+        decisions = await AcademicResultContinuityService.apply(
             db,
             actor_id=actor.id,
             tenant_id=actor.tenant_id,
@@ -537,13 +586,21 @@ class StudentPlacementService:
             reason=reason,
             carry_finalized_results=carry_finalized_results,
         )
-        await StudentPlacementService._invalidate_derived_context(
-            db,
-            tenant_id=actor.tenant_id,
-            student_id=student.id,
-            academic_session_id=academic_session_id,
-        )
-        await db.commit()
+        if any(decision.applied for decision in decisions):
+            await StudentPlacementService._invalidate_derived_context(
+                db,
+                tenant_id=actor.tenant_id,
+                student_id=student.id,
+                academic_session_id=academic_session_id,
+            )
+            await StudentPlacementService._commit_with_readiness_invalidation(
+                db,
+                tenant_id=actor.tenant_id,
+                student_id=student.id,
+                academic_session_id=academic_session_id,
+            )
+        else:
+            await db.commit()
         return await StudentService.get_student_profile(db, actor, student.id)
 
     @staticmethod
@@ -604,7 +661,12 @@ class StudentPlacementService:
                 student_id=student.id,
                 academic_session_id=current.academic_session_id,
             )
-            await db.commit()
+            await StudentPlacementService._commit_with_readiness_invalidation(
+                db,
+                tenant_id=tenant_id,
+                student_id=student.id,
+                academic_session_id=current.academic_session_id,
+            )
             return await StudentService.get_student_profile(db, actor, student.id)
         if payload.effective_date <= current.started_on:
             raise BadRequestException(
@@ -638,7 +700,12 @@ class StudentPlacementService:
             student_id=student.id,
             academic_session_id=current.academic_session_id,
         )
-        await db.commit()
+        await StudentPlacementService._commit_with_readiness_invalidation(
+            db,
+            tenant_id=tenant_id,
+            student_id=student.id,
+            academic_session_id=current.academic_session_id,
+        )
         return await StudentService.get_student_profile(db, actor, student.id)
 
     @staticmethod
@@ -956,6 +1023,23 @@ class StudentPlacementService:
         current = await StudentEnrollmentRepository.get_current(db, tenant_id, student.id)
         if current is None or current.academic_session_id != payload.academic_session_id:
             raise ConflictException("Student has no current enrollment for this session.")
+        preview_term = (
+            await db.execute(
+                select(AcademicTerm).where(
+                    AcademicTerm.tenant_id == tenant_id,
+                    AcademicTerm.id == payload.academic_term_id,
+                    AcademicTerm.academic_session_id == payload.academic_session_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if (
+            preview_term is None
+            or not preview_term.is_current
+            or preview_term.status != AcademicTermStatus.OPEN
+        ):
+            raise BadRequestException(
+                "Result placement previews require the current open academic term."
+            )
         target_class = await StudentPlacementService._require_target_class(
             db, tenant_id=tenant_id, class_id=payload.target_class_id
         )
@@ -979,7 +1063,32 @@ class StudentPlacementService:
             academic_term_id=payload.academic_term_id,
         )
         old_ids = {item.curriculum_subject_id for item in old_subjects}
-        new_ids = {item.curriculum_subject_id for item in new_subjects}
+        destination_electives = {
+            item.curriculum_subject_id
+            for item in new_subjects
+            if item.is_elective and item.elective_group_id is not None
+        }
+        selected_electives: set[UUID] = set()
+        if destination_electives:
+            selected_electives = set(
+                (
+                    await db.execute(
+                        select(StudentElectiveSelection.curriculum_subject_id).where(
+                            StudentElectiveSelection.tenant_id == tenant_id,
+                            StudentElectiveSelection.student_id == student.id,
+                            StudentElectiveSelection.curriculum_subject_id.in_(
+                                destination_electives
+                            ),
+                        )
+                    )
+                ).scalars()
+            )
+        new_ids = {
+            item.curriculum_subject_id
+            for item in new_subjects
+            if item.curriculum_subject_id not in destination_electives
+            or item.curriculum_subject_id in selected_electives
+        }
         result_ids = set(
             (
                 await db.execute(
@@ -1049,6 +1158,10 @@ class StudentPlacementService:
         warnings.append(
             "Class ranking context may change and will be recalculated only on a new draft."
         )
+        if payload.effective_date > date.today():
+            warnings.append(
+                "Scheduled moves retain current result ownership until their effective date."
+            )
         result_decisions = await AcademicResultContinuityService.inspect(
             db,
             tenant_id=tenant_id,
