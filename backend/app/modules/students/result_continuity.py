@@ -221,7 +221,7 @@ class AcademicResultContinuityService:
     async def apply(
         db: AsyncSession,
         *,
-        actor_id: UUID,
+        actor_id: UUID | None,
         tenant_id: UUID,
         student_id: UUID,
         academic_session_id: UUID,
