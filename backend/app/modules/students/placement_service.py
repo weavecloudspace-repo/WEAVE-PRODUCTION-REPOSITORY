@@ -1,8 +1,8 @@
 """Canonical immutable student placement workflow.
 
 Initial class placement is deliberately distinct from reassignment. Academic
-results, attendance and CBT evidence remain attached to the enrollment segment
-that originally produced them; placement only changes which segment is current.
+CBT/TMA attempts and score evidence retain their original enrollment context.
+Compatible canonical DRAFT results follow same-level class reassignments.
 """
 
 from __future__ import annotations
@@ -41,6 +41,7 @@ from app.modules.students.enrollment_schemas import (
     PlacementImpactPreviewRequest,
     PlacementImpactPreviewResponse,
     PlacementImpactSubject,
+    PlacementResultImpact,
     StudentAcademicLevelReassignmentRequest,
     StudentClassPlacementRequest,
     StudentClassPlacementResponse,
@@ -53,6 +54,7 @@ from app.modules.students.models import (
     StudentEnrollmentOutcome,
 )
 from app.modules.students.enrollment_evidence import StudentEnrollmentEvidenceService
+from app.modules.students.result_continuity import AcademicResultContinuityService
 from app.modules.students.repository import StudentEnrollmentRepository, StudentRepository
 from app.modules.students.schemas import (
     StudentDetailResponse,
@@ -457,7 +459,7 @@ class StudentPlacementService:
             reason=payload.reason,
             acting_admin_id=actor.id,
         )
-        await StudentPlacementService._create_segment(
+        destination_enrollment = await StudentPlacementService._create_segment(
             db,
             tenant_id=tenant_id,
             student_id=student.id,
@@ -468,6 +470,18 @@ class StudentPlacementService:
             outcome=StudentEnrollmentOutcome.RECLASSIFIED,
             reason=payload.reason,
             acting_admin_id=actor.id,
+        )
+        await AcademicResultContinuityService.apply(
+            db,
+            actor_id=actor.id,
+            tenant_id=tenant_id,
+            student_id=student.id,
+            academic_session_id=current.academic_session_id,
+            source_level_id=current.academic_level_id,
+            destination_enrollment=destination_enrollment,
+            effective_date=payload.effective_date,
+            reason=payload.reason,
+            carry_finalized_results=payload.carry_finalized_results,
         )
         await StudentPlacementService._invalidate_derived_context(
             db,
@@ -981,6 +995,15 @@ class StudentPlacementService:
         warnings.append(
             "Class ranking context may change and will be recalculated only on a new draft."
         )
+        result_decisions = await AcademicResultContinuityService.inspect(
+            db,
+            tenant_id=tenant_id,
+            student_id=student.id,
+            academic_session_id=payload.academic_session_id,
+            source_level_id=current.academic_level_id,
+            target_class_id=target_class.id,
+            effective_date=payload.effective_date,
+        )
 
         return PlacementImpactPreviewResponse(
             current_academic_level_id=current.academic_level_id,
@@ -1011,4 +1034,14 @@ class StudentPlacementService:
             teacher_comment_requires_review=teacher_comment_exists,
             report_card_affected=report_exists,
             warnings=warnings,
+            result_impacts=[
+                PlacementResultImpact(
+                    result_id=decision.result.id,
+                    curriculum_subject_id=decision.result.curriculum_subject_id,
+                    status=decision.result.status.value,
+                    action=decision.action,
+                    reason=decision.reason,
+                )
+                for decision in result_decisions
+            ],
         )
