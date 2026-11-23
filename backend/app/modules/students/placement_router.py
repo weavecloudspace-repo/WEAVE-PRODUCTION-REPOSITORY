@@ -12,6 +12,7 @@ from app.core.dependencies.route_guards import get_current_tenant_admin
 from app.modules.students.enrollment_schemas import (
     PlacementImpactPreviewRequest,
     PlacementImpactPreviewResponse,
+    ExistingResultReconciliationRequest,
     StudentAcademicLevelReassignmentRequest,
     StudentClassPlacementRequest,
     StudentClassPlacementResponse,
@@ -65,6 +66,23 @@ async def reassign_class(
         actor=current_admin,
         student_id=student_id,
         payload=payload,
+    )
+
+
+@router.post("/{student_id}/reconcile-existing-results", response_model=StudentDetailResponse)
+async def reconcile_existing_results(
+    student_id: UUID,
+    payload: ExistingResultReconciliationRequest,
+    db: DbSession,
+    current_admin: CurrentTenantAdmin,
+) -> StudentDetailResponse:
+    return await StudentPlacementService.reconcile_existing_results(
+        db,
+        actor=current_admin,
+        student_id=student_id,
+        academic_session_id=payload.academic_session_id,
+        reason=payload.reason,
+        carry_finalized_results=payload.carry_finalized_results,
     )
 
 
