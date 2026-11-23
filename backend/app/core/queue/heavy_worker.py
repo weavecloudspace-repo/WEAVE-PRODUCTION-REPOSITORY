@@ -327,7 +327,9 @@ async def poll_due_result_continuity(ctx: dict[str, Any]) -> dict[str, int]:
                 summary["activated"] += 1
                 summary["changed"] += changed
         except Exception:
-            logger.exception("Scheduled result continuity activation failed for audit %s.", audit_id)
+            logger.exception(
+                "Scheduled result continuity activation failed for audit %s.", audit_id
+            )
             summary["failed"] += 1
     return summary
 
