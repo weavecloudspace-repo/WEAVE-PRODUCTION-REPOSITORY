@@ -264,11 +264,7 @@ async def test_derived_context_does_not_evict_readiness_before_commit(monkeypatc
     comments = AsyncMock()
     monkeypatch.setattr(mod.ReportReadinessCache, "invalidate_student_session", cache)
     monkeypatch.setattr(mod.ReportCommentService, "invalidate_for_placement_change", comments)
-    db = SimpleNamespace(
-        execute=AsyncMock(
-            return_value=SimpleNamespace(scalars=lambda: [])
-        )
-    )
+    db = SimpleNamespace(execute=AsyncMock(return_value=SimpleNamespace(scalars=lambda: [])))
     tenant_id, student_id, session_id = (uuid4() for _ in range(3))
     await StudentPlacementService._invalidate_derived_context(
         db,
