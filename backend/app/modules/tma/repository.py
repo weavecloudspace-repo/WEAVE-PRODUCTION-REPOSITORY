@@ -97,6 +97,7 @@ class TMAAssignmentRepository:
         curriculum_subject_id: uuid.UUID | None = None,
         status: TMAAssignmentStatus | None = None,
         statuses: set[TMAAssignmentStatus] | None = None,
+        needs_attention: bool = False,
         teacher_membership_id: uuid.UUID | None = None,
         authorized_scopes: set[tuple[uuid.UUID, uuid.UUID, uuid.UUID]] | None = None,
         search: str | None = None,
@@ -149,6 +150,16 @@ class TMAAssignmentRepository:
             filters.append(TMAAssignment.status == status)
         if statuses is not None:
             filters.append(TMAAssignment.status.in_(statuses))
+        if needs_attention:
+            # Match TMAAssignmentResponse.grading_state == 'needs_attention' in SQL,
+            # before count/pagination, so assignments on later pages are included.
+            filters.extend((
+                TMAAssignment.status == TMAAssignmentStatus.CLOSED,
+                TMAAssignment.zero_grading_requested_at.is_not(None),
+                TMAAssignment.zero_grading_completed_at.is_(None),
+                TMAAssignment.zero_grading_error.is_not(None),
+                TMAAssignment.zero_grading_error != "",
+            ))
         search_term = (search or "").strip()
         if search_term:
             # Correlated EXISTS avoids duplicating assignments before pagination.
