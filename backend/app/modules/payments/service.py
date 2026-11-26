@@ -14,6 +14,14 @@ class PaymentVerificationError(PaymentEngineError):
     """Raised when provider data does not match a backend-owned payment expectation."""
 
 
+class PaymentNotCompletedError(PaymentVerificationError):
+    """A known non-successful transaction outcome, not an integrity mismatch."""
+
+    def __init__(self, status: str) -> None:
+        self.status = status
+        super().__init__("Payment has not completed.")
+
+
 class PaymentEngine:
     """Provider-facing payment engine with no product or pricing knowledge."""
 
@@ -60,6 +68,15 @@ class PaymentEngine:
         expected_metadata: Mapping[str, object] | None = None,
     ) -> VerifiedPayment:
         payload = await PaystackClient().verify_transaction(reference=reference)
+        raw_data = payload.get("data")
+        data = raw_data if isinstance(raw_data, Mapping) else payload
+        provider_status = data.get("status")
+        if (
+            data.get("reference") == reference
+            and isinstance(provider_status, str)
+            and provider_status in {"abandoned", "failed", "pending", "ongoing", "processing", "queued"}
+        ):
+            raise PaymentNotCompletedError(provider_status)
         return cls.validate_successful_payload(
             payload,
             expected_reference=reference,
