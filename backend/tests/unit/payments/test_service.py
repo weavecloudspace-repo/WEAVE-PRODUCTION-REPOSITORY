@@ -6,7 +6,11 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.modules.payments.providers.paystack import PaystackClient
-from app.modules.payments.service import PaymentEngine, PaymentVerificationError
+from app.modules.payments.service import (
+    PaymentEngine,
+    PaymentNotCompletedError,
+    PaymentVerificationError,
+)
 
 
 def test_shared_paystack_client_has_no_legacy_recurring_plan_methods() -> None:
@@ -150,3 +154,34 @@ async def test_verify_transaction_uses_provider_then_validates_backend_expectati
 
     assert result.reference == "term-ref"
     provider.verify_transaction.assert_awaited_once_with(reference="term-ref")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["abandoned", "failed", "pending", "ongoing", "processing", "queued"])
+async def test_verify_transaction_distinguishes_unpaid_status(monkeypatch, status) -> None:
+    provider = SimpleNamespace(
+        verify_transaction=AsyncMock(
+            return_value={"data": {"status": status, "reference": "ref"}}
+        )
+    )
+    monkeypatch.setattr("app.modules.payments.service.PaystackClient", lambda: provider)
+    with pytest.raises(PaymentNotCompletedError) as raised:
+        await PaymentEngine.verify_transaction(
+            reference="ref", expected_amount_kobo=200_000, expected_currency="NGN"
+        )
+    assert raised.value.status == status
+
+
+@pytest.mark.asyncio
+async def test_unpaid_wrong_reference_is_integrity_error(monkeypatch) -> None:
+    provider = SimpleNamespace(
+        verify_transaction=AsyncMock(
+            return_value={"data": {"status": "pending", "reference": "wrong"}}
+        )
+    )
+    monkeypatch.setattr("app.modules.payments.service.PaystackClient", lambda: provider)
+    with pytest.raises(PaymentVerificationError) as raised:
+        await PaymentEngine.verify_transaction(
+            reference="ref", expected_amount_kobo=200_000, expected_currency="NGN"
+        )
+    assert not isinstance(raised.value, PaymentNotCompletedError)
