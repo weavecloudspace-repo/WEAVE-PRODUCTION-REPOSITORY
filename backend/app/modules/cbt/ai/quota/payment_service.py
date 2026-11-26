@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
+from app.core.exceptions import AppException, ConflictException
+from app.modules.cbt.ai.quota.cache import invalidate_quota_cache
 from app.modules.cbt.ai.quota.payment_schemas import (
     AIQuotaPurchaseCheckoutResponse,
     AIQuotaPurchaseQuote,
@@ -13,21 +17,79 @@ from app.modules.cbt.ai.quota.payment_schemas import (
 from app.modules.cbt.ai.quota.pricing import ai_quota_pricing
 from app.modules.cbt.ai.quota.repository import AIQuotaPurchaseRepository
 from app.modules.cbt.ai.quota.schemas import AIQuotaPurchaseResponse
-from app.modules.cbt.ai.quota.cache import invalidate_quota_cache
 from app.modules.cbt.ai.quota.service import (
     AIQuotaConflictError,
     AIQuotaNotFoundError,
     AIQuotaService,
 )
 from app.modules.payments.enums import PaymentPurpose
-from app.modules.payments.service import PaymentEngine
+from app.modules.payments.providers.paystack import PaystackProviderError
+from app.modules.payments.service import (
+    PaymentEngine,
+    PaymentNotCompletedError,
+    PaymentVerificationError,
+)
 from app.modules.payments.webhook import PaymentWebhookSettlementResult
+
+
+logger = logging.getLogger(__name__)
 
 
 class AIQuotaPaymentService:
     """Tenant AI-credit purchase pricing and payment orchestration."""
 
     CURRENCY = "NGN"
+
+    @staticmethod
+    async def _verify_checkout(
+        *,
+        reference: str,
+        expected_amount_kobo: int,
+        expected_currency: str,
+        expected_metadata: dict[str, Any],
+    ) -> None:
+        """Translate provider outcomes without weakening successful-payment checks."""
+        try:
+            await PaymentEngine.verify_transaction(
+                reference=reference,
+                expected_amount_kobo=expected_amount_kobo,
+                expected_currency=expected_currency,
+                expected_metadata=expected_metadata,
+            )
+        except PaymentNotCompletedError as exc:
+            logger.info(
+                "ai_credit.payment_not_completed",
+                extra={"payment_reference": reference, "provider_status": exc.status},
+            )
+            if exc.status == "abandoned":
+                message = "Payment has not been completed. Complete checkout and check again."
+            elif exc.status == "failed":
+                message = "Payment was unsuccessful. No credits were added."
+            else:
+                message = "Payment is awaiting confirmation. Check again shortly."
+            raise ConflictException(
+                message,
+                payload={"code": "AI_PAYMENT_NOT_COMPLETED", "provider_status": exc.status},
+            ) from exc
+        except (PaymentVerificationError, ValueError, TypeError) as exc:
+            logger.warning(
+                "ai_credit.payment_verification_mismatch",
+                extra={"payment_reference": reference},
+            )
+            raise ConflictException(
+                "Payment could not be confirmed. Contact support before paying again.",
+                payload={"code": "AI_PAYMENT_REVIEW_REQUIRED"},
+            ) from exc
+        except (PaystackProviderError, httpx.HTTPError) as exc:
+            logger.warning(
+                "ai_credit.payment_provider_unavailable",
+                extra={"payment_reference": reference},
+            )
+            raise AppException(
+                status_code=503,
+                detail="Payment verification is temporarily unavailable. Check again later.",
+                payload={"code": "AI_PAYMENT_PROVIDER_UNAVAILABLE"},
+            ) from exc
 
     @staticmethod
     def quote_purchase(credits: int) -> AIQuotaPurchaseQuote:
@@ -175,7 +237,7 @@ class AIQuotaPaymentService:
             or purchase.initiated_by_teacher_membership_id != teacher_membership_id
         ):
             raise AIQuotaNotFoundError("Teacher AI credit purchase was not found.")
-        await PaymentEngine.verify_transaction(
+        await cls._verify_checkout(
             reference=purchase.reference,
             expected_amount_kobo=purchase.amount_kobo,
             expected_currency=cls.CURRENCY,
@@ -219,7 +281,7 @@ class AIQuotaPaymentService:
         ):
             raise AIQuotaNotFoundError("Quota purchase was not found.")
 
-        await PaymentEngine.verify_transaction(
+        await cls._verify_checkout(
             reference=purchase.reference,
             expected_amount_kobo=purchase.amount_kobo,
             expected_currency=cls.CURRENCY,

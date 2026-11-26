@@ -195,3 +195,23 @@ test("real HTTP 409 conflicts mentioning cancelled are not mistaken for request 
   assert.equal(getErrorMessage(error), "TMA cannot be reopened while cancellation is pending.");
   assert.equal(isAbortError(new DOMException("The operation was aborted", "AbortError")), true);
 });
+
+
+test("AI payment verification distinguishes unpaid and provider unavailable from network failure", async () => {
+  installBrowserHarness();
+  const { getErrorMessage } = await importFreshApi();
+  assert.equal(
+    getErrorMessage({ response: { status: 409, data: {
+      code: "AI_PAYMENT_NOT_COMPLETED",
+      detail: "Payment has not been completed. Complete checkout and check again.",
+    } } }),
+    "Payment has not been completed. Complete checkout and check again.",
+  );
+  assert.equal(
+    getErrorMessage({ response: { status: 503, data: {
+      code: "AI_PAYMENT_PROVIDER_UNAVAILABLE",
+    } } }),
+    "Payment verification is temporarily unavailable. Check again later.",
+  );
+  assert.match(getErrorMessage(new TypeError("Failed to fetch")), /reach the server/i);
+});
