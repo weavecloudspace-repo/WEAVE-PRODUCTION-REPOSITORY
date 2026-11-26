@@ -302,6 +302,10 @@ const getUserSafeMessage = (status, data, fallback, fieldErrors) => {
     );
   }
 
+  if (status === 503 && data?.code === "AI_PAYMENT_PROVIDER_UNAVAILABLE") {
+    return "Payment verification is temporarily unavailable. Check again later.";
+  }
+
   if (status >= 500) {
     return DEFAULT_USER_SAFE_ERROR;
   }
