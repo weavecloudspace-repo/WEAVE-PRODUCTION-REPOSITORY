@@ -213,5 +213,5 @@ test("AI payment verification distinguishes unpaid and provider unavailable from
     } } }),
     "Payment verification is temporarily unavailable. Check again later.",
   );
-  assert.match(getErrorMessage(new Error("network")), /reach the server/i);
+  assert.match(getErrorMessage(new TypeError("Failed to fetch")), /reach the server/i);
 });
