@@ -162,9 +162,7 @@ async def test_verify_transaction_uses_provider_then_validates_backend_expectati
 )
 async def test_verify_transaction_distinguishes_unpaid_status(monkeypatch, status) -> None:
     provider = SimpleNamespace(
-        verify_transaction=AsyncMock(
-            return_value={"data": {"status": status, "reference": "ref"}}
-        )
+        verify_transaction=AsyncMock(return_value={"data": {"status": status, "reference": "ref"}})
     )
     monkeypatch.setattr("app.modules.payments.service.PaystackClient", lambda: provider)
     with pytest.raises(PaymentNotCompletedError) as raised:
