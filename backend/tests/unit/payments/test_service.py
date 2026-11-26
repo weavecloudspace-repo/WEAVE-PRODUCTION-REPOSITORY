@@ -157,7 +157,9 @@ async def test_verify_transaction_uses_provider_then_validates_backend_expectati
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("status", ["abandoned", "failed", "pending", "ongoing", "processing", "queued"])
+@pytest.mark.parametrize(
+    "status", ["abandoned", "failed", "pending", "ongoing", "processing", "queued"]
+)
 async def test_verify_transaction_distinguishes_unpaid_status(monkeypatch, status) -> None:
     provider = SimpleNamespace(
         verify_transaction=AsyncMock(
