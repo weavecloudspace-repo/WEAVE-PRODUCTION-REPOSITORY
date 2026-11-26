@@ -8,13 +8,19 @@ from uuid import uuid4
 import pytest
 
 from app.config.settings import EnvironmentType
+from app.core.exceptions import AppException, ConflictException
 from app.modules.cbt.ai.quota.models import AIQuotaPurchaseStatus
 from app.modules.cbt.ai.quota.payment_service import AIQuotaPaymentService
 from app.modules.cbt.ai.quota.pricing import ai_quota_pricing
 from app.modules.cbt.ai.quota.repository import AIQuotaPurchaseRepository
 from app.modules.cbt.ai.quota.schemas import AIQuotaPurchaseResponse
 from app.modules.cbt.ai.quota.service import AIQuotaConflictError, AIQuotaService
-from app.modules.payments.service import PaymentEngine, PaymentVerificationError
+from app.modules.payments.providers.paystack import PaystackProviderError
+from app.modules.payments.service import (
+    PaymentEngine,
+    PaymentNotCompletedError,
+    PaymentVerificationError,
+)
 
 
 def _purchase_response(*, tenant_id, admin_id, credits, amount_kobo, reference):
@@ -285,3 +291,56 @@ def test_twenty_naira_credit_price(monkeypatch) -> None:
     monkeypatch.setattr(ai_quota_pricing, "CBT_AI_CREDIT_UNIT_PRICE_KOBO", default_price)
     monkeypatch.setattr(ai_quota_pricing, "CBT_AI_MINIMUM_PURCHASE_CREDITS", 1)
     assert AIQuotaPaymentService.quote_purchase(3).amount_kobo == 6000
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("teacher", [False, True])
+@pytest.mark.parametrize(
+    ("error", "expected_status", "message"),
+    [
+        (PaymentNotCompletedError("abandoned"), 409, "not been completed"),
+        (PaymentNotCompletedError("pending"), 409, "awaiting confirmation"),
+        (PaymentNotCompletedError("failed"), 409, "unsuccessful"),
+        (PaymentVerificationError("mismatch"), 409, "Contact support"),
+        (PaystackProviderError("provider unavailable"), 503, "temporarily unavailable"),
+    ],
+)
+async def test_unverified_purchase_returns_safe_error_without_crediting(
+    monkeypatch, teacher, error, expected_status, message
+) -> None:
+    tenant_id, actor_id = uuid4(), uuid4()
+    purchase = SimpleNamespace(
+        id=uuid4(),
+        tenant_id=tenant_id,
+        initiated_by_admin_id=actor_id if not teacher else None,
+        initiated_by_teacher_membership_id=actor_id if teacher else None,
+        credits=100,
+        amount_kobo=200_000,
+        reference="ai-credit-ref",
+    )
+    monkeypatch.setattr(AIQuotaService, "_ensure_admin_account", AsyncMock())
+    monkeypatch.setattr(
+        AIQuotaPurchaseRepository, "get_by_reference", AsyncMock(return_value=purchase)
+    )
+    monkeypatch.setattr(PaymentEngine, "verify_transaction", AsyncMock(side_effect=error))
+    credit = AsyncMock()
+    monkeypatch.setattr(AIQuotaService, "credit_verified_purchase", credit)
+    with pytest.raises(AppException, match=message) as raised:
+        if teacher:
+            await AIQuotaPaymentService.verify_teacher_checkout(
+                SimpleNamespace(),
+                tenant_id=tenant_id,
+                teacher_membership_id=actor_id,
+                reference=purchase.reference,
+            )
+        else:
+            await AIQuotaPaymentService.verify_purchase_checkout(
+                SimpleNamespace(),
+                tenant_id=tenant_id,
+                tenant_admin_id=actor_id,
+                reference=purchase.reference,
+            )
+    assert raised.value.status_code == expected_status
+    if expected_status == 409:
+        assert isinstance(raised.value, ConflictException)
+    credit.assert_not_awaited()
