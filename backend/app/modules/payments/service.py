@@ -74,9 +74,8 @@ class PaymentEngine:
         if (
             data.get("reference") == reference
             and isinstance(provider_status, str)
-            and provider_status in {
-                "abandoned", "failed", "pending", "ongoing", "processing", "queued"
-            }
+            and provider_status
+            in {"abandoned", "failed", "pending", "ongoing", "processing", "queued"}
         ):
             raise PaymentNotCompletedError(provider_status)
         return cls.validate_successful_payload(
