@@ -4,12 +4,12 @@ import logging
 import uuid
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
 from app.core.exceptions import AppException, ConflictException
+from app.modules.cbt.ai.quota.cache import invalidate_quota_cache
 from app.modules.cbt.ai.quota.payment_schemas import (
     AIQuotaPurchaseCheckoutResponse,
     AIQuotaPurchaseQuote,
@@ -17,7 +17,6 @@ from app.modules.cbt.ai.quota.payment_schemas import (
 from app.modules.cbt.ai.quota.pricing import ai_quota_pricing
 from app.modules.cbt.ai.quota.repository import AIQuotaPurchaseRepository
 from app.modules.cbt.ai.quota.schemas import AIQuotaPurchaseResponse
-from app.modules.cbt.ai.quota.cache import invalidate_quota_cache
 from app.modules.cbt.ai.quota.service import (
     AIQuotaConflictError,
     AIQuotaNotFoundError,
